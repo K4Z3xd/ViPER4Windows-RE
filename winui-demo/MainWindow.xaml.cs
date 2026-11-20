@@ -20,6 +20,7 @@ public sealed partial class MainWindow : Window
         public string Id { get; init; } = "";
         public int DefaultOrder { get; init; }
         public Border Root { get; init; } = null!;
+        public Border IconBox { get; init; } = null!;
         public FontIcon Icon { get; init; } = null!;
         public Button PinBtn { get; init; } = null!;
         public ToggleSwitch? Toggle { get; init; }
@@ -56,6 +57,9 @@ public sealed partial class MainWindow : Window
     private bool _isUpdating = true;
     private bool _settingsOpen = false;
     private string _activeSettingsCategory = "Appearance";
+    private double _currentWindowWidth = 1240;
+    private int _lastModuleCols = 2;
+    private int _lastPresetCols = 4;
 
     // Theme Engine state (Acrylic default + DarkOLED)
     private string _activeTheme = "Acrylic";
@@ -215,18 +219,18 @@ public sealed partial class MainWindow : Window
         if (theme == "DarkOLED")
         {
             RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(255, 0, 0, 0));
-            HeaderBgBrush.Color = Color.FromArgb(255, 5, 5, 7);
-            CardBgBrush.Color = Color.FromArgb(255, 11, 11, 14);
-            CardBorderBrush.Color = Color.FromArgb(255, 36, 36, 44);
-            SubtleBgBrush.Color = Color.FromArgb(255, 6, 6, 8);
+            HeaderBgBrush.Color = Color.FromArgb(255, 6, 6, 8);
+            CardBgBrush.Color = Color.FromArgb(255, 14, 14, 18);
+            CardBorderBrush.Color = Color.FromArgb(255, 52, 52, 64);
+            SubtleBgBrush.Color = Color.FromArgb(255, 8, 8, 11);
         }
-        else // Acrylic (Default)
+        else // Acrylic (Default — high contrast, crisp continuous borders)
         {
-            RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(72, 10, 11, 16));
-            HeaderBgBrush.Color = Color.FromArgb(140, 12, 13, 18);
-            CardBgBrush.Color = Color.FromArgb(150, 18, 20, 28);
-            CardBorderBrush.Color = Color.FromArgb(52, 255, 255, 255);
-            SubtleBgBrush.Color = Color.FromArgb(150, 9, 10, 14);
+            RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(84, 10, 12, 18));
+            HeaderBgBrush.Color = Color.FromArgb(172, 16, 18, 24);
+            CardBgBrush.Color = Color.FromArgb(188, 24, 26, 33);
+            CardBorderBrush.Color = Color.FromArgb(96, 255, 255, 255);
+            SubtleBgBrush.Color = Color.FromArgb(176, 14, 16, 22);
         }
 
         UpdateThemePresetButtons();
@@ -328,10 +332,10 @@ public sealed partial class MainWindow : Window
             Background = SubtleBgBrush,
             BorderBrush = CardBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(4)
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(3)
         };
-        var grid = new Grid { ColumnSpacing = 5 };
+        var grid = new Grid { ColumnSpacing = 4 };
         var buttons = new Button[labels.Length];
 
         for (int i = 0; i < labels.Length; i++)
@@ -342,9 +346,10 @@ public sealed partial class MainWindow : Window
             {
                 Content = labels[i],
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                CornerRadius = new CornerRadius(6),
+                Height = 32,
+                CornerRadius = new CornerRadius(4),
                 FontSize = 12,
-                Padding = new Thickness(6, 6, 6, 6),
+                Padding = new Thickness(6, 0, 6, 0),
                 BorderThickness = new Thickness(1)
             };
             btn.Click += (_, _) =>
@@ -368,10 +373,10 @@ public sealed partial class MainWindow : Window
             Background = SubtleBgBrush,
             BorderBrush = CardBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(5)
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(4)
         };
-        var stack = new StackPanel { Spacing = 5 };
+        var stack = new StackPanel { Spacing = 4 };
         var buttons = new Button[labels.Length];
 
         for (int i = 0; i < labels.Length; i++)
@@ -382,9 +387,10 @@ public sealed partial class MainWindow : Window
                 Content = labels[i],
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
-                CornerRadius = new CornerRadius(7),
+                Height = 34,
+                CornerRadius = new CornerRadius(4),
                 FontSize = 12.5,
-                Padding = new Thickness(12, 8, 12, 8),
+                Padding = new Thickness(12, 0, 12, 0),
                 BorderThickness = new Thickness(1)
             };
             btn.Click += (_, _) =>
@@ -404,15 +410,25 @@ public sealed partial class MainWindow : Window
         string id, int order, string glyph, string title, string tooltip,
         bool hasToggle, Action<StackPanel, DspCardEntry> buildBody)
     {
-        var icon = new FontIcon { Glyph = glyph, FontSize = 16, Foreground = AccentLightBrush };
-        var titleBlock = new TextBlock { Text = title, FontSize = 15.5, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush };
+        var icon = new FontIcon { Glyph = glyph, FontSize = 15, Foreground = AccentLightBrush };
+        var iconBox = new Border
+        {
+            Width = 32,
+            Height = 32,
+            CornerRadius = new CornerRadius(6),
+            Background = AccentBgBrush,
+            BorderBrush = AccentBorderBrush,
+            BorderThickness = new Thickness(1),
+            Child = icon
+        };
+        var titleBlock = new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, VerticalAlignment = VerticalAlignment.Center };
 
-        var leftHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9, VerticalAlignment = VerticalAlignment.Center };
-        leftHeader.Children.Add(icon);
+        var leftHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
+        leftHeader.Children.Add(iconBox);
         leftHeader.Children.Add(titleBlock);
         if (!string.IsNullOrEmpty(tooltip))
         {
-            var tipIcon = new FontIcon { Glyph = "\uE946", FontSize = 13, Foreground = MutedBrush };
+            var tipIcon = new FontIcon { Glyph = "\uE946", FontSize = 13, Foreground = MutedBrush, VerticalAlignment = VerticalAlignment.Center };
             ToolTipService.SetToolTip(tipIcon, tooltip);
             leftHeader.Children.Add(tipIcon);
         }
@@ -420,10 +436,10 @@ public sealed partial class MainWindow : Window
         var pinBtn = new Button
         {
             Content = new FontIcon { Glyph = "\uE718", FontSize = 12 },
-            Padding = new Thickness(6),
-            MinWidth = 28,
-            MinHeight = 28,
-            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(0),
+            Width = 30,
+            Height = 30,
+            CornerRadius = new CornerRadius(4),
             Background = SubtleBgBrush,
             BorderBrush = CardBorderBrush,
             BorderThickness = new Thickness(1),
@@ -460,8 +476,8 @@ public sealed partial class MainWindow : Window
             Background = CardBgBrush,
             BorderBrush = CardBorderBrush,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(18),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16),
             Child = bodyStack
         };
 
@@ -470,6 +486,7 @@ public sealed partial class MainWindow : Window
             Id = id,
             DefaultOrder = order,
             Root = root,
+            IconBox = iconBox,
             Icon = icon,
             PinBtn = pinBtn,
             Toggle = toggle,
@@ -604,11 +621,11 @@ public sealed partial class MainWindow : Window
             true, (body, card) =>
             {
                 _ddcToggle = card.Toggle!;
-                var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, SelectedIndex = 0 };
+                var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, MinHeight = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, SelectedIndex = 0 };
                 combo.Items.Add(new ComboBoxItem { Content = "Moondrop Blessing 3 Harman.vdc (Demo)" });
                 combo.Items.Add(new ComboBoxItem { Content = "Sennheiser HD 600 AutoEQ.vdc (Demo)" });
                 combo.Items.Add(new ComboBoxItem { Content = "Sony IER-M9 Reference.vdc (Demo)" });
-                var uploadBtn = new Button { Content = "Upload .vdc Profile", HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(8), Tag = "VDC file picker opened (dummy preview)" };
+                var uploadBtn = new Button { Content = "Upload .vdc Profile", HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, Tag = "VDC file picker opened (dummy preview)" };
                 uploadBtn.Click += DummyAction_Click;
                 body.Children.Add(combo);
                 body.Children.Add(uploadBtn);
@@ -621,11 +638,11 @@ public sealed partial class MainWindow : Window
             true, (body, card) =>
             {
                 _convToggle = card.Toggle!;
-                var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, SelectedIndex = 0 };
+                var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, MinHeight = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, SelectedIndex = 0 };
                 combo.Items.Add(new ComboBoxItem { Content = "Dolby Pro Logic II Studio.irs (Demo)" });
                 combo.Items.Add(new ComboBoxItem { Content = "Sony ClearAudio+ Hi-Res.irs (Demo)" });
                 combo.Items.Add(new ComboBoxItem { Content = "BBE Sonic Maximizer.irs (Demo)" });
-                var uploadBtn = new Button { Content = "Upload .irs / .wav File", HorizontalAlignment = HorizontalAlignment.Stretch, CornerRadius = new CornerRadius(8), Tag = "IRS/WAV file picker opened (dummy preview)" };
+                var uploadBtn = new Button { Content = "Upload .irs / .wav File", HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, Tag = "IRS/WAV file picker opened (dummy preview)" };
                 uploadBtn.Click += DummyAction_Click;
                 var cross = CreateSliderRow("Cross Channel", "Blends L/R channels across the impulse response (0–100%).", 0, 100, 0, 5, v => $"{v:0}%");
                 var wet = CreateSliderRow("Wet Mix", "Convolver dry/wet balance (0–100%).", 0, 100, 100, 5, v => $"{v:0}%");
@@ -780,12 +797,15 @@ public sealed partial class MainWindow : Window
 
     private void LayoutDspCards()
     {
+        int cols = _currentWindowWidth < 820 ? 1 : 2;
+        _lastModuleCols = cols;
+
         ModulesGrid.Children.Clear();
         ModulesGrid.ColumnDefinitions.Clear();
         ModulesGrid.RowDefinitions.Clear();
 
-        ModulesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        ModulesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int c = 0; c < cols; c++)
+            ModulesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var ordered = _cards
             .OrderBy(c =>
@@ -795,15 +815,15 @@ public sealed partial class MainWindow : Window
             })
             .ToList();
 
-        int rows = (ordered.Count + 1) / 2;
+        int rows = (ordered.Count + cols - 1) / cols;
         for (int r = 0; r < rows; r++)
             ModulesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         for (int i = 0; i < ordered.Count; i++)
         {
             var card = ordered[i];
-            Grid.SetRow(card.Root, i / 2);
-            Grid.SetColumn(card.Root, i % 2);
+            Grid.SetRow(card.Root, i / cols);
+            Grid.SetColumn(card.Root, i % cols);
             ModulesGrid.Children.Add(card.Root);
         }
     }
@@ -814,6 +834,7 @@ public sealed partial class MainWindow : Window
     {
         PinnedPresetsGrid.Children.Clear();
         PinnedPresetsGrid.ColumnDefinitions.Clear();
+        PinnedPresetsGrid.RowDefinitions.Clear();
 
         if (_pinnedPresets.Count == 0)
         {
@@ -822,31 +843,42 @@ public sealed partial class MainWindow : Window
         }
 
         PinnedPresetsGrid.Visibility = Visibility.Visible;
+        int maxCols = _currentWindowWidth >= 960 ? 4 : (_currentWindowWidth >= 560 ? 2 : 1);
+        int cols = Math.Min(maxCols, _pinnedPresets.Count);
+        _lastPresetCols = maxCols;
+
+        for (int c = 0; c < cols; c++)
+            PinnedPresetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        int rows = (_pinnedPresets.Count + cols - 1) / cols;
+        for (int r = 0; r < rows; r++)
+            PinnedPresetsGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
         for (int i = 0; i < _pinnedPresets.Count; i++)
         {
             string name = _pinnedPresets[i];
             var meta = BuiltinPresets.FirstOrDefault(p => p.Name == name);
-            PinnedPresetsGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             bool active = _selectedPreset == name;
             var btn = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(14, 12, 14, 12),
-                CornerRadius = new CornerRadius(_activeTheme == "LiquidGlass" ? 16 : 12),
+                Padding = new Thickness(14, 10, 14, 10),
+                CornerRadius = new CornerRadius(8),
                 BorderThickness = new Thickness(1),
                 Background = active ? AccentBgBrush : CardBgBrush,
                 BorderBrush = active ? AccentBorderBrush : CardBorderBrush
             };
 
-            var stack = new StackPanel { Spacing = 3 };
+            var stack = new StackPanel { Spacing = 2 };
             stack.Children.Add(new TextBlock { Text = name, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush });
             stack.Children.Add(new TextBlock { Text = meta.Subtitle ?? "Custom preset", FontSize = 11.5, Foreground = TextSecondaryBrush, TextTrimming = TextTrimming.CharacterEllipsis });
             btn.Content = stack;
             btn.Click += (_, _) => ApplyPreset(name);
 
-            Grid.SetColumn(btn, i);
+            Grid.SetRow(btn, i / cols);
+            Grid.SetColumn(btn, i % cols);
             PinnedPresetsGrid.Children.Add(btn);
         }
     }
@@ -881,7 +913,7 @@ public sealed partial class MainWindow : Window
 
         var labels = _eqMode == 18 ? EqLabels18 : EqLabels10;
         var values = _eqMode == 18 ? _eq18 : _eq10;
-        EqTitleText.Text = $"{_eqMode}-Band Hi-Res Equalizer";
+        EqTitleText.Text = "Equalizer";
 
         for (int i = 0; i < labels.Length; i++)
         {
@@ -1119,10 +1151,12 @@ public sealed partial class MainWindow : Window
         PinPresetBtn.BorderBrush = isPinnedPreset ? AccentBorderBrush : CardBorderBrush;
         PinPresetBtn.Foreground = isPinnedPreset ? AccentTextBrush : TextDimBrush;
 
-        EqIcon.Foreground = master && EqToggle.IsOn ? AccentLightBrush : MutedBrush;
-        EqSlidersGrid.Opacity = master && EqToggle.IsOn ? 1.0 : 0.5;
-
         bool eqActive = master && EqToggle.IsOn;
+        EqIcon.Foreground = eqActive ? AccentLightBrush : MutedBrush;
+        EqIconBox.Background = eqActive ? AccentBgBrush : SubtleBgBrush;
+        EqIconBox.BorderBrush = eqActive ? AccentBorderBrush : CardBorderBrush;
+        EqSlidersGrid.Opacity = eqActive ? 1.0 : 0.5;
+
         var eqVals = _eqMode == 18 ? _eq18 : _eq10;
         for (int i = 0; i < _eqValueLabels.Count && i < eqVals.Length; i++)
             _eqValueLabels[i].Foreground = Math.Abs(eqVals[i]) > 0.01 && eqActive ? AccentLightBrush : TextSecondaryBrush;
@@ -1131,6 +1165,8 @@ public sealed partial class MainWindow : Window
         {
             bool active = card.IsActive();
             card.Icon.Foreground = active ? AccentLightBrush : MutedBrush;
+            card.IconBox.Background = active ? AccentBgBrush : SubtleBgBrush;
+            card.IconBox.BorderBrush = active ? AccentBorderBrush : CardBorderBrush;
             bool pinned = _pinnedModules.Contains(card.Id);
             card.PinBtn.Background = pinned ? AccentBgBrush : SubtleBgBrush;
             card.PinBtn.BorderBrush = pinned ? AccentBorderBrush : CardBorderBrush;
@@ -1179,6 +1215,42 @@ public sealed partial class MainWindow : Window
     }
 
     // ==================== EVENT HANDLERS ====================
+
+    private void RootBackdropGrid_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        double w = e.NewSize.Width;
+        if (w <= 0) return;
+        _currentWindowWidth = w;
+
+        // 1. Responsive DSP Modules Grid (2 cols >= 820px, 1 col < 820px)
+        int targetModuleCols = w < 820 ? 1 : 2;
+        if (targetModuleCols != _lastModuleCols && _cards.Count > 0)
+        {
+            LayoutDspCards();
+        }
+
+        // 2. Responsive Pinned Presets Strip (4 / 2 / 1 cols)
+        int targetPresetCols = w >= 960 ? 4 : (w >= 560 ? 2 : 1);
+        if (targetPresetCols != _lastPresetCols)
+        {
+            RebuildPinnedPresets();
+        }
+
+        // 3. Responsive Settings Sidebar & Accent Picker stacking
+        SettingsSidebarCol.Width = new GridLength(w < 760 ? 176 : 236);
+        if (w < 900)
+        {
+            Grid.SetRow(AccentPickerPanel, 1);
+            Grid.SetColumn(AccentPickerPanel, 0);
+            AccentPickerCol.Width = new GridLength(0);
+        }
+        else
+        {
+            Grid.SetRow(AccentPickerPanel, 0);
+            Grid.SetColumn(AccentPickerPanel, 1);
+            AccentPickerCol.Width = GridLength.Auto;
+        }
+    }
 
     private void SetSettingsOpen(bool open)
     {

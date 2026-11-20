@@ -10,21 +10,26 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- V4Wa Dynamic Theme Engine Brushes (mutated live by ThemeEngine) -->
+            <!-- Windows 11 Fluent Corner Radius Tokens -->
+            <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+
+            <!-- V4Wa Dynamic Theme Brushes (mutated live by Appearance Engine) -->
             <SolidColorBrush x:Key="V4WaAccentBrush" Color="#FF10B981" />
             <SolidColorBrush x:Key="V4WaAccentLightBrush" Color="#FF34D399" />
             <SolidColorBrush x:Key="V4WaAccentTextBrush" Color="#FFA7F3D0" />
-            <SolidColorBrush x:Key="V4WaAccentBgBrush" Color="#2E10B981" />
-            <SolidColorBrush x:Key="V4WaAccentBorderBrush" Color="#8C34D399" />
+            <SolidColorBrush x:Key="V4WaAccentBgBrush" Color="#3310B981" />
+            <SolidColorBrush x:Key="V4WaAccentBorderBrush" Color="#A034D399" />
 
-            <SolidColorBrush x:Key="V4WaCardBgBrush" Color="#CC121216" />
-            <SolidColorBrush x:Key="V4WaCardBorderBrush" Color="#FF2E2E36" />
-            <SolidColorBrush x:Key="V4WaSubtleBgBrush" Color="#CC0B0B0E" />
-            <SolidColorBrush x:Key="V4WaHeaderBgBrush" Color="#AA09090B" />
-            <SolidColorBrush x:Key="V4WaMutedBrush" Color="#FF71717A" />
-            <SolidColorBrush x:Key="V4WaTextSecondaryBrush" Color="#FFA1A1AA" />
+            <!-- High-contrast continuous Acrylic surface brushes -->
+            <SolidColorBrush x:Key="V4WaCardBgBrush" Color="#BA181A21" />
+            <SolidColorBrush x:Key="V4WaCardBorderBrush" Color="#60FFFFFF" />
+            <SolidColorBrush x:Key="V4WaSubtleBgBrush" Color="#B00E1016" />
+            <SolidColorBrush x:Key="V4WaHeaderBgBrush" Color="#AA101218" />
+            <SolidColorBrush x:Key="V4WaMutedBrush" Color="#FF8A8A96" />
+            <SolidColorBrush x:Key="V4WaTextSecondaryBrush" Color="#FFB4B4BE" />
 
-            <!-- Fluent Control Accent Overrides (also mutated live by ThemeEngine) -->
+            <!-- Fluent Control Accent Overrides (mutated live) -->
             <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#FF10B981" />
             <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FF34D399" />
             <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#FF059669" />
@@ -35,13 +40,38 @@
             <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FFFFFFFF" />
             <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#FF34D399" />
 
-            <!-- Card Border Style -->
+            <!-- Windows 11 Fluent Card Style (8px corners, crisp continuous border) -->
             <Style x:Key="V4WaCardStyle" TargetType="Border">
                 <Setter Property="Background" Value="{StaticResource V4WaCardBgBrush}" />
                 <Setter Property="BorderBrush" Value="{StaticResource V4WaCardBorderBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
-                <Setter Property="CornerRadius" Value="14" />
-                <Setter Property="Padding" Value="18" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="16" />
+            </Style>
+
+            <!-- Unified Toolbar Button Style (34px height, 4px Windows 11 corners) -->
+            <Style x:Key="V4WaToolbarButtonStyle" TargetType="Button">
+                <Setter Property="Height" Value="34" />
+                <Setter Property="Padding" Value="14,0" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="FontWeight" Value="Medium" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Background" Value="{StaticResource V4WaSubtleBgBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource V4WaCardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+            </Style>
+
+            <!-- Unified Toolbar ComboBox Style (34px height, 4px Windows 11 corners) -->
+            <Style x:Key="V4WaToolbarComboStyle" TargetType="ComboBox">
+                <Setter Property="Height" Value="34" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Background" Value="{StaticResource V4WaSubtleBgBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource V4WaCardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>
