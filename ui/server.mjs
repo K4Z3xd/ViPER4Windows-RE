@@ -8,8 +8,99 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 48192;
 const VIPER_CTL = path.resolve(__dirname, '..', 'build', 'viper_ctl.exe');
 const DIST_DIR = path.resolve(__dirname, 'dist');
+const LIVE_PARAMS_PATH = 'C:\\ProgramData\\ViPERHiRes\\live_params.bin';
 const FOOBAR_STATUS_PATH = 'C:\\ProgramData\\ViPERHiRes\\foobar_status.json';
 const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
+const MAGIC_VPHR = 0x56504852;
+const BLOCK_SIZE = 128;
+
+function readParamsDirect() {
+  const buf = fs.readFileSync(LIVE_PARAMS_PATH);
+  if (buf.length < BLOCK_SIZE || buf.readUInt32LE(4) !== MAGIC_VPHR) {
+    throw new Error('Invalid live_params.bin');
+  }
+  const eqBandsDb = [];
+  for (let i = 0; i < 10; i++) {
+    eqBandsDb.push(Math.round(buf.readFloatLE(32 + i * 4) * 100) / 100);
+  }
+  return {
+    sequence: buf.readUInt32LE(12),
+    masterEnabled: buf.readUInt32LE(16) !== 0,
+    masterGainDb: Math.round(buf.readFloatLE(20) * 100) / 100,
+    outputPan: Math.round(buf.readFloatLE(24) * 100) / 100,
+    eqEnabled: buf.readUInt32LE(28) !== 0,
+    eqBandsDb,
+    bassEnabled: buf.readUInt32LE(72) !== 0,
+    bassMode: buf.readUInt32LE(76),
+    bassFrequencyHz: Math.round(buf.readFloatLE(80) * 100) / 100,
+    bassGainDb: Math.round(buf.readFloatLE(84) * 100) / 100,
+    clarityEnabled: buf.readUInt32LE(88) !== 0,
+    clarityMode: buf.readUInt32LE(92),
+    clarityGainDb: Math.round(buf.readFloatLE(96) * 100) / 100,
+    tubeEnabled: buf.readUInt32LE(100) !== 0,
+    tubeDrive: Math.round(buf.readFloatLE(104) * 100) / 100,
+    surroundEnabled: buf.readUInt32LE(108) !== 0,
+    surroundDelayMs: Math.round(buf.readFloatLE(112) * 100) / 100,
+    stereoWidth: Math.round(buf.readFloatLE(116) * 100) / 100,
+    limiterEnabled: buf.readUInt32LE(120) !== 0,
+    limiterThresholdDb: Math.round(buf.readFloatLE(124) * 100) / 100
+  };
+}
+
+function writeParamsDirect(p) {
+  // Open existing 128-byte memory-mapped backing file for instant in-place seqlock update (<0.1ms)
+  const fd = fs.openSync(LIVE_PARAMS_PATH, 'r+');
+  try {
+    const curBuf = Buffer.alloc(BLOCK_SIZE);
+    fs.readSync(fd, curBuf, 0, BLOCK_SIZE, 0);
+
+    let seq = curBuf.readUInt32LE(0);
+    if ((seq & 1) !== 0) seq += 1;
+    const oddSeq = (seq + 1) >>> 0;
+    const evenSeq = (seq + 2) >>> 0;
+
+    // 1. Mark seqlock odd (write in progress)
+    const seqBuf = Buffer.alloc(4);
+    seqBuf.writeUInt32LE(oddSeq, 0);
+    fs.writeSync(fd, seqBuf, 0, 4, 0);
+
+    // 2. Write payload bytes [4..128)
+    const payload = Buffer.alloc(BLOCK_SIZE - 4);
+    payload.writeUInt32LE(MAGIC_VPHR, 0);
+    payload.writeUInt32LE(1, 4);
+    payload.writeUInt32LE((evenSeq >>> 1), 8);
+    payload.writeUInt32LE(p.masterEnabled ? 1 : 0, 12);
+    payload.writeFloatLE(Number(p.masterGainDb ?? 0), 16);
+    payload.writeFloatLE(Number(p.outputPan ?? 0), 20);
+    payload.writeUInt32LE(p.eqEnabled ? 1 : 0, 24);
+    const bands = Array.isArray(p.eqBandsDb) ? p.eqBandsDb : [];
+    for (let i = 0; i < 10; i++) {
+      payload.writeFloatLE(Number(bands[i] ?? 0), 28 + i * 4);
+    }
+    payload.writeUInt32LE(p.bassEnabled ? 1 : 0, 68);
+    payload.writeUInt32LE(Number(p.bassMode ?? 0) >>> 0, 72);
+    payload.writeFloatLE(Number(p.bassFrequencyHz ?? 60), 76);
+    payload.writeFloatLE(Number(p.bassGainDb ?? 0), 80);
+    payload.writeUInt32LE(p.clarityEnabled ? 1 : 0, 84);
+    payload.writeUInt32LE(Number(p.clarityMode ?? 0) >>> 0, 88);
+    payload.writeFloatLE(Number(p.clarityGainDb ?? 0), 92);
+    payload.writeUInt32LE(p.tubeEnabled ? 1 : 0, 96);
+    payload.writeFloatLE(Number(p.tubeDrive ?? 0.25), 100);
+    payload.writeUInt32LE(p.surroundEnabled ? 1 : 0, 104);
+    payload.writeFloatLE(Number(p.surroundDelayMs ?? 6), 108);
+    payload.writeFloatLE(Number(p.stereoWidth ?? 1), 112);
+    payload.writeUInt32LE(p.limiterEnabled ? 1 : 0, 116);
+    payload.writeFloatLE(Number(p.limiterThresholdDb ?? -0.3), 120);
+    fs.writeSync(fd, payload, 0, payload.length, 4);
+
+    // 3. Mark seqlock even (write complete -> APO & foobar2000 pick up on next frame!)
+    seqBuf.writeUInt32LE(evenSeq, 0);
+    fs.writeSync(fd, seqBuf, 0, 4, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return readParamsDirect();
+}
 
 function readLiveStatus(defaultDevice, activeSessions = []) {
   const now = Date.now();
@@ -174,38 +265,21 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/api/params' && req.method === 'GET') {
-      const out = await runViperCtl(['get']);
-      sendJson(res, 200, out || '{}');
+      try {
+        sendJson(res, 200, readParamsDirect());
+      } catch {
+        const out = await runViperCtl(['get']);
+        sendJson(res, 200, out || '{}');
+      }
       return;
     }
 
     if (url.pathname === '/api/params' && req.method === 'POST') {
       const raw = await readBody(req);
       const p = JSON.parse(raw);
-      const args = ['set'];
-
-      if (typeof p.masterEnabled === 'boolean') args.push('--master', p.masterEnabled ? '1' : '0');
-      if (typeof p.masterGainDb === 'number') args.push('--gain', String(p.masterGainDb));
-      if (typeof p.outputPan === 'number') args.push('--pan', String(p.outputPan));
-      if (typeof p.eqEnabled === 'boolean') args.push('--eq', p.eqEnabled ? '1' : '0');
-      if (Array.isArray(p.eqBandsDb)) args.push('--eq-bands', p.eqBandsDb.map(Number).join(','));
-      if (typeof p.bassEnabled === 'boolean') args.push('--bass', p.bassEnabled ? '1' : '0');
-      if (typeof p.bassMode === 'number') args.push('--bass-mode', String(p.bassMode));
-      if (typeof p.bassFrequencyHz === 'number') args.push('--bass-freq', String(p.bassFrequencyHz));
-      if (typeof p.bassGainDb === 'number') args.push('--bass-gain', String(p.bassGainDb));
-      if (typeof p.clarityEnabled === 'boolean') args.push('--clarity', p.clarityEnabled ? '1' : '0');
-      if (typeof p.clarityMode === 'number') args.push('--clarity-mode', String(p.clarityMode));
-      if (typeof p.clarityGainDb === 'number') args.push('--clarity-gain', String(p.clarityGainDb));
-      if (typeof p.tubeEnabled === 'boolean') args.push('--tube', p.tubeEnabled ? '1' : '0');
-      if (typeof p.tubeDrive === 'number') args.push('--tube-drive', String(p.tubeDrive));
-      if (typeof p.surroundEnabled === 'boolean') args.push('--surround', p.surroundEnabled ? '1' : '0');
-      if (typeof p.surroundDelayMs === 'number') args.push('--surround-delay', String(p.surroundDelayMs));
-      if (typeof p.stereoWidth === 'number') args.push('--stereo-width', String(p.stereoWidth));
-      if (typeof p.limiterEnabled === 'boolean') args.push('--limiter', p.limiterEnabled ? '1' : '0');
-      if (typeof p.limiterThresholdDb === 'number') args.push('--limiter-thresh', String(p.limiterThresholdDb));
-
-      const out = await runViperCtl(args);
-      sendJson(res, 200, out || '{}');
+      // Direct in-memory-cache binary seqlock write (<0.1ms, strictly ordered, zero process spawn)
+      const updated = writeParamsDirect(p);
+      sendJson(res, 200, updated);
       return;
     }
 

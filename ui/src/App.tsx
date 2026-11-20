@@ -149,7 +149,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dsp' | 'devices'>('dsp');
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('syncing');
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
-  const debounceRef = useRef<number | null>(null);
+  const inFlightRef = useRef<boolean>(false);
+  const pendingParamsRef = useRef<DspParams | null>(null);
 
   const loadStatus = async () => {
     try {
@@ -191,35 +192,37 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const pushParams = (next: DspParams, immediate = false) => {
-    setParams(next);
-    if (debounceRef.current) {
-      window.clearTimeout(debounceRef.current);
-    }
+  const flushPendingParams = async () => {
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
 
-    const send = async () => {
-      try {
+    try {
+      while (pendingParamsRef.current) {
+        const toSend = pendingParamsRef.current;
+        pendingParamsRef.current = null;
         setSyncStatus('syncing');
         const res = await fetch('/api/params', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(next)
+          body: JSON.stringify(toSend)
         });
-        if (res.ok) {
-          setSyncStatus('connected');
-        } else {
-          setSyncStatus('offline');
-        }
-      } catch {
-        setSyncStatus('offline');
+        setSyncStatus(res.ok ? 'connected' : 'offline');
       }
-    };
-
-    if (immediate) {
-      void send();
-    } else {
-      debounceRef.current = window.setTimeout(() => void send(), 45);
+    } catch {
+      setSyncStatus('offline');
+    } finally {
+      inFlightRef.current = false;
+      if (pendingParamsRef.current) {
+        void flushPendingParams();
+      }
     }
+  };
+
+  const pushParams = (next: DspParams, _immediate = false) => {
+    setParams(next);
+    // Single-flight latest-only coalescing: never overlaps or replays stale steps
+    pendingParamsRef.current = next;
+    void flushPendingParams();
   };
 
   const updateField = <K extends keyof DspParams>(
