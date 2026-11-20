@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Archivo", system-ui, -apple-system, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: #000000;
+    color: #fafafa;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+/* Studio precision range slider */
+input[type="range"].studio-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"].studio-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: #27272a;
+}
+
+input[type="range"].studio-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #fafafa;
+  border: 2px solid #18181b;
+  margin-top: -5px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+
+input[type="range"].studio-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: #34d399;
+}
+
+input[type="range"].studio-slider:focus-visible {
+  outline: 2px solid #fafafa;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+/* Vertical EQ fader */
+input[type="range"].eq-fader {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  width: 24px;
+  height: 168px;
+}
+
+input[type="range"].eq-fader::-webkit-slider-runnable-track {
+  width: 4px;
+  border-radius: 9999px;
+  background: #27272a;
+}
+
+input[type="range"].eq-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 10px;
+  border-radius: 3px;
+  background: #fafafa;
+  border: 1px solid #3f3f46;
+  margin-left: -6px;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+input[type="range"].eq-fader::-webkit-slider-thumb:hover {
+  background: #34d399;
+  transform: scale(1.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
