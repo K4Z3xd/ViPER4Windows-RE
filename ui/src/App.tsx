@@ -606,41 +606,64 @@ export default function App() {
               </button>
             </nav>
 
-            {/* Sync Indicator */}
-            <div
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs"
-              title="Shared Memory IPC status"
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  syncStatus === 'connected'
-                    ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                    : syncStatus === 'syncing'
-                      ? 'bg-amber-400'
-                      : 'bg-red-500'
-                }`}
-              />
-              <span className="font-mono text-[11px] text-zinc-300">
-                {syncStatus === 'connected'
-                  ? 'LIVE'
-                  : syncStatus === 'syncing'
-                    ? 'SYNC'
-                    : 'OFFLINE'}
-              </span>
-            </div>
+            {/* Engine Working / Not Working Status Pill */}
+            {(() => {
+              const isWorking =
+                params.masterEnabled &&
+                syncStatus !== 'offline' &&
+                liveStatus?.mode !== 'Exclusive Mode';
+              return (
+                <div
+                  className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 font-mono text-xs font-semibold tracking-wide transition-colors ${
+                    isWorking
+                      ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-200'
+                      : 'border-zinc-800 bg-zinc-950 text-zinc-400'
+                  }`}
+                  title={
+                    liveStatus?.mode === 'Exclusive Mode'
+                      ? 'Bypassed by WASAPI Exclusive Mode'
+                      : isWorking
+                        ? 'ViPER4Windows RE DSP is actively processing audio'
+                        : 'ViPER4Windows RE DSP is bypassed or offline'
+                  }
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      isWorking
+                        ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]'
+                        : syncStatus === 'offline'
+                          ? 'bg-red-500'
+                          : 'bg-zinc-500'
+                    }`}
+                  />
+                  <span>{isWorking ? 'WORKING' : 'NOT WORKING'}</span>
+                </div>
+              );
+            })()}
 
-            {/* Master Power */}
+            {/* Master Power Switch */}
             <button
               type="button"
+              role="switch"
+              aria-checked={params.masterEnabled}
+              aria-label="Master Engine Power"
+              title={params.masterEnabled ? 'Turn Off Master Engine' : 'Turn On Master Engine'}
               onClick={() => updateField('masterEnabled', !params.masterEnabled, true)}
-              className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3.5 py-2 text-xs font-semibold transition-all ${
+              className={`relative inline-flex h-7 w-13 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
                 params.masterEnabled
-                  ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
-                  : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                  ? 'border-emerald-400/60 bg-emerald-500/25'
+                  : 'border-zinc-700 bg-zinc-900'
               }`}
             >
-              <Power className="h-3.5 w-3.5" />
-              {params.masterEnabled ? 'ENGINE ON' : 'BYPASS'}
+              <span
+                className={`pointer-events-none flex h-5 w-5 items-center justify-center rounded-full transition-transform duration-200 ${
+                  params.masterEnabled
+                    ? 'translate-x-6.5 bg-emerald-400 text-black shadow-[0_0_10px_rgba(52,211,153,0.75)]'
+                    : 'translate-x-1 bg-zinc-500 text-zinc-950'
+                }`}
+              >
+                <Power className="h-3 w-3" />
+              </span>
             </button>
           </div>
         </div>
