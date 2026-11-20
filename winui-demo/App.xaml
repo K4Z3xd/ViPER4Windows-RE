@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="V4Wa.Demo.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- V4Wa Unified Emerald Fluent Accent Overrides -->
+            <Color x:Key="SystemAccentColor">#FF10B981</Color>
+            <Color x:Key="SystemAccentColorLight1">#FF34D399</Color>
+            <Color x:Key="SystemAccentColorLight2">#FF6EE7B7</Color>
+            <Color x:Key="SystemAccentColorLight3">#FFA7F3D0</Color>
+            <Color x:Key="SystemAccentColorDark1">#FF059669</Color>
+            <Color x:Key="SystemAccentColorDark2">#FF047857</Color>
+            <Color x:Key="SystemAccentColorDark3">#FF065F46</Color>
+
+            <SolidColorBrush x:Key="V4WaEmeraldBrush" Color="#FF10B981" />
+            <SolidColorBrush x:Key="V4WaEmeraldLightBrush" Color="#FF34D399" />
+            <SolidColorBrush x:Key="V4WaEmeraldBgBrush" Color="#2810B981" />
+            <SolidColorBrush x:Key="V4WaEmeraldBorderBrush" Color="#8034D399" />
+            <SolidColorBrush x:Key="V4WaCardBgBrush" Color="#CC121216" />
+            <SolidColorBrush x:Key="V4WaCardBorderBrush" Color="#FF2E2E36" />
+            <SolidColorBrush x:Key="V4WaSubtleBgBrush" Color="#FF0B0B0E" />
+            <SolidColorBrush x:Key="V4WaMutedBrush" Color="#FF71717A" />
+            <SolidColorBrush x:Key="V4WaTextSecondaryBrush" Color="#FFA1A1AA" />
+
+            <!-- Fluent Accent Overrides for Controls -->
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#FF10B981" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FF34D399" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#FF059669" />
+            <SolidColorBrush x:Key="SliderTrackValueFill" Color="#FF10B981" />
+            <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#FF34D399" />
+            <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#FF059669" />
+            <SolidColorBrush x:Key="SliderThumbBackground" Color="#FFFAFAFA" />
+            <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FFFFFFFF" />
+            <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#FF34D399" />
+
+            <!-- Card Border Style -->
+            <Style x:Key="V4WaCardStyle" TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource V4WaCardBgBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource V4WaCardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="14" />
+                <Setter Property="Padding" Value="18" />
+            </Style>
+
+            <!-- Compact InfoTip Button Style -->
+            <Style x:Key="InfoTipButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="2" />
+                <Setter Property="MinWidth" Value="22" />
+                <Setter Property="MinHeight" Value="22" />
+                <Setter Property="Foreground" Value="#FFA1A1AA" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

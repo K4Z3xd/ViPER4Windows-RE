@@ -1,0 +1,551 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="V4Wa.Demo.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="V4Wa — Native WinUI 3 Demo">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop Kind="BaseAlt" />
+    </Window.SystemBackdrop>
+
+    <Grid Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="36" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Custom Native Windows 11 Title Bar -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="18,0,140,0" Background="Transparent">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <FontIcon Glyph="&#xE8D6;" FontSize="13" Foreground="{StaticResource V4WaEmeraldLightBrush}" />
+                <TextBlock Text="V4Wa" FontSize="12" FontWeight="SemiBold" Foreground="#FFF4F4F5" />
+                <Border Background="#2410B981" BorderBrush="#5534D399" BorderThickness="1" CornerRadius="4" Padding="6,1">
+                    <TextBlock Text="WINUI 3 NATIVE DEMO" FontSize="9.5" FontWeight="SemiBold" Foreground="#FF6EE7B7" CharacterSpacing="40" />
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- Top Studio Header -->
+        <Border Grid.Row="1" BorderBrush="#26FFFFFF" BorderThickness="0,0,0,1" Background="#AA09090B" Padding="24,12">
+            <Grid MaxWidth="1120">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: Logo + V4Wa + InfoTip + Device Subtitle -->
+                <StackPanel Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
+                    <Border Width="42" Height="42" CornerRadius="11" Background="#FF141418" BorderBrush="#FF2E2E36" BorderThickness="1">
+                        <FontIcon Glyph="&#xE9E9;" FontSize="19" Foreground="{StaticResource V4WaEmeraldLightBrush}" />
+                    </Border>
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="V4Wa" FontSize="20" FontWeight="Bold" Foreground="White" />
+                            <Button x:Name="V4WaInfoBtn" Style="{StaticResource InfoTipButtonStyle}" Click="V4WaInfoBtn_Click" ToolTipService.ToolTip="What does V4Wa mean?">
+                                <FontIcon Glyph="&#xE946;" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock Text="Headphones (CX31993+MAX97220 HiFiAudio) · 384.0 kHz / 32-bit · Dummy Preview"
+                                   FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Right: Nav Tabs + WORKING Pill + Master Power -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <Border Background="#FF141418" BorderBrush="#FF2E2E36" BorderThickness="1" CornerRadius="9" Padding="3">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <Button x:Name="TabDspBtn" Content="DSP Console" Click="TabDspBtn_Click"
+                                    CornerRadius="6" Padding="12,5" FontSize="12" FontWeight="SemiBold"
+                                    Background="#FF27272A" Foreground="White" BorderThickness="0" />
+                            <Button x:Name="TabDevicesBtn" Content="Devices &amp; APO" Click="TabDevicesBtn_Click"
+                                    CornerRadius="6" Padding="12,5" FontSize="12" FontWeight="Medium"
+                                    Background="Transparent" Foreground="#FFA1A1AA" BorderThickness="0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- WORKING / NOT WORKING Status Pill -->
+                    <Border x:Name="StatusPill" CornerRadius="8" BorderThickness="1" Padding="12,6"
+                            Background="#2810B981" BorderBrush="#8034D399">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#FF34D399" />
+                            <TextBlock x:Name="StatusText" Text="WORKING" FontFamily="Consolas" FontSize="12" FontWeight="Bold" Foreground="#FFA7F3D0" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Master Power Toggle -->
+                    <ToggleSwitch x:Name="MasterToggle" IsOn="True" OnContent="" OffContent="" MinWidth="0"
+                                  Toggled="MasterToggle_Toggled" ToolTipService.ToolTip="Master Engine Power" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- TeachingTip explaining V4Wa -->
+        <TeachingTip x:Name="V4WaTeachingTip"
+                     Target="{x:Bind V4WaInfoBtn}"
+                     Title="ViPER4Windows Alternative (V4Wa)"
+                     Subtitle="Why the 'a'?"
+                     PreferredPlacement="BottomLeft"
+                     IsLightDismissEnabled="True">
+            <TeachingTip.Content>
+                <StackPanel Spacing="8" Margin="0,6,0,0" MaxWidth="320">
+                    <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="#FFE4E4E7"
+                               Text="'a' stands for Alternative — a modern, clean-room replacement for the legacy 2013 ViPER4Windows driver." />
+                    <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="#FFA1A1AA"
+                               Text="• Hi-Res Engine: Native Windows 10/11 MFX APO supporting 44.1–384 kHz with 64-bit internal DSP." />
+                    <TextBlock TextWrapping="Wrap" FontSize="12.5" Foreground="#FFA1A1AA"
+                               Text="• Full Parity: Combines all ViPER4Windows and ViPER4Android FX modules in one native Fluent app." />
+                </StackPanel>
+            </TeachingTip.Content>
+        </TeachingTip>
+
+        <!-- Main Scrollable Content -->
+        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="24,20,24,32">
+            <Grid MaxWidth="1120" HorizontalAlignment="Center" Width="1120">
+
+                <!-- DSP CONSOLE TAB -->
+                <StackPanel x:Name="DspConsolePanel" Spacing="18">
+
+                    <!-- Live Signal Path Card (Dummy Telemetry) -->
+                    <Border Style="{StaticResource V4WaCardStyle}" Padding="18,14">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                                <Border Width="38" Height="38" CornerRadius="10" Background="#1F10B981" BorderBrush="#6634D399" BorderThickness="1">
+                                    <FontIcon Glyph="&#xE9D9;" FontSize="16" Foreground="#FF34D399" />
+                                </Border>
+                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock Text="FOOBAR2000" FontSize="12.5" FontWeight="Bold" Foreground="#FFF4F4F5" CharacterSpacing="40" />
+                                        <Border Background="#FF1C1C21" CornerRadius="5" Padding="7,2">
+                                            <TextBlock Text="SHARED MODE" FontFamily="Consolas" FontSize="10.5" FontWeight="SemiBold" Foreground="#FFA1A1AA" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Aimer — us  (Dummy Live Signal Path)" FontSize="12" Foreground="#FFA1A1AA" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Border Background="#2410B981" BorderBrush="#6634D399" BorderThickness="1" CornerRadius="7" Padding="10,4">
+                                    <TextBlock Text="HI-RES AUDIO" FontFamily="Consolas" FontSize="11.5" FontWeight="Bold" Foreground="#FF6EE7B7" />
+                                </Border>
+                                <Border Background="#FF0B0B0E" BorderBrush="#FF3F3F46" BorderThickness="1" CornerRadius="7" Padding="10,4">
+                                    <TextBlock Text="FLAC" FontFamily="Consolas" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFE4E4E7" />
+                                </Border>
+                                <Border Background="#FF0B0B0E" BorderBrush="#5510B981" BorderThickness="1" CornerRadius="7" Padding="10,4">
+                                    <TextBlock Text="192.0 kHz" FontFamily="Consolas" FontSize="12.5" FontWeight="SemiBold" Foreground="#FF6EE7B7" />
+                                </Border>
+                                <Border Background="#FF0B0B0E" BorderBrush="#FF3F3F46" BorderThickness="1" CornerRadius="7" Padding="10,4">
+                                    <TextBlock Text="24-bit" FontFamily="Consolas" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFE4E4E7" />
+                                </Border>
+                                <Border Background="#FF0B0B0E" BorderBrush="#FF3F3F46" BorderThickness="1" CornerRadius="7" Padding="10,4">
+                                    <TextBlock Text="4,608 kbps" FontFamily="Consolas" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFA1A1AA" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- Pinned Presets Strip -->
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button x:Name="PresetFlatBtn" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Padding="14,12" CornerRadius="12" BorderThickness="1" Click="PresetBtn_Click" Tag="Flat Reference">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Flat Reference" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                <TextBlock Text="Transparent bit-clean baseline" FontSize="11.5" Foreground="#FFA1A1AA" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="PresetHiResBtn" Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Padding="14,12" CornerRadius="12" BorderThickness="1" Click="PresetBtn_Click" Tag="Hi-Res Audiophile">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Hi-Res Audiophile" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                <TextBlock Text="Extended sub-bass + XHiFi detail" FontSize="11.5" Foreground="#FFA1A1AA" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="PresetBassBtn" Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Padding="14,12" CornerRadius="12" BorderThickness="1" Click="PresetBtn_Click" Tag="Deep Bass Boost">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Deep Bass Boost" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                <TextBlock Text="Subwoofer harmonic punch" FontSize="11.5" Foreground="#FFA1A1AA" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button x:Name="PresetTubeBtn" Grid.Column="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                Padding="14,12" CornerRadius="12" BorderThickness="1" Click="PresetBtn_Click" Tag="Warm Tube Studio">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="Warm Tube Studio" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                <TextBlock Text="6N1J analog warmth + vocal focus" FontSize="11.5" Foreground="#FFA1A1AA" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <!-- Preset Manager Bar -->
+                    <Border Style="{StaticResource V4WaCardStyle}" Padding="12">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <ComboBox x:Name="PresetCombo" HorizontalAlignment="Stretch" SelectionChanged="PresetCombo_SelectionChanged" SelectedIndex="1">
+                                <ComboBoxItem Content="Flat Reference" />
+                                <ComboBoxItem Content="Hi-Res Audiophile" />
+                                <ComboBoxItem Content="Deep Bass Boost" />
+                                <ComboBoxItem Content="Warm Tube Studio" />
+                            </ComboBox>
+                            <Button Grid.Column="1" Content="Pinned" Padding="14,6" CornerRadius="8"
+                                    Background="#2410B981" BorderBrush="#6634D399" Foreground="#FF6EE7B7" FontWeight="SemiBold" />
+                            <Button Grid.Column="2" Content="Save" Padding="14,6" CornerRadius="8" Click="DummyAction_Click" Tag="Preset saved (dummy preview)" />
+                            <Button Grid.Column="3" Content="Load" Padding="14,6" CornerRadius="8" Click="DummyAction_Click" Tag="Preset loader opened (dummy preview)" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Hi-Res Equalizer Card (Live Interactive Curve + Vertical Sliders) -->
+                    <Border Style="{StaticResource V4WaCardStyle}">
+                        <StackPanel Spacing="16">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <FontIcon x:Name="EqIcon" Glyph="&#xE9E9;" FontSize="16" Foreground="{StaticResource V4WaEmeraldLightBrush}" />
+                                    <TextBlock x:Name="EqTitleText" Text="10-Band Hi-Res Equalizer" FontSize="16" FontWeight="SemiBold" Foreground="White" />
+                                    <Border Background="#FF0B0B0E" BorderBrush="#FF3F3F46" BorderThickness="1" CornerRadius="8" Padding="2">
+                                        <StackPanel Orientation="Horizontal" Spacing="2">
+                                            <Button x:Name="Eq10Btn" Content="10-Band" Padding="10,4" CornerRadius="6" FontFamily="Consolas" FontSize="11.5"
+                                                    Click="EqModeBtn_Click" Tag="10" BorderThickness="0" />
+                                            <Button x:Name="Eq18Btn" Content="18-Band" Padding="10,4" CornerRadius="6" FontFamily="Consolas" FontSize="11.5"
+                                                    Click="EqModeBtn_Click" Tag="18" BorderThickness="0" />
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <ComboBox x:Name="EqPresetCombo" Width="160" SelectionChanged="EqPresetCombo_SelectionChanged" SelectedIndex="0">
+                                        <ComboBoxItem Content="Custom" />
+                                        <ComboBoxItem Content="Flat" />
+                                        <ComboBoxItem Content="V-Shape Fun" />
+                                        <ComboBoxItem Content="Vocal Focus" />
+                                        <ComboBoxItem Content="Deep Basshead" />
+                                    </ComboBox>
+                                    <Button Content="Reset EQ" Click="ResetEqBtn_Click" CornerRadius="8" Padding="12,5" FontSize="12" />
+                                    <ToggleSwitch x:Name="EqToggle" IsOn="True" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- Live Frequency Curve Canvas -->
+                            <Border Background="#FF070709" BorderBrush="#FF27272A" BorderThickness="1" CornerRadius="10" Height="112" Padding="14,10">
+                                <Canvas x:Name="EqCurveCanvas" SizeChanged="EqCurveCanvas_SizeChanged" />
+                            </Border>
+
+                            <!-- Dynamic Vertical Sliders Container -->
+                            <Grid x:Name="EqSlidersGrid" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 2-Column Native DSP Module Cards -->
+                    <Grid ColumnSpacing="16" RowSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- 1. ViPER Bass -->
+                        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource V4WaCardStyle}">
+                            <StackPanel Spacing="14">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                        <FontIcon x:Name="BassIcon" Glyph="&#xE7F5;" FontSize="16" Foreground="{StaticResource V4WaEmeraldLightBrush}" />
+                                        <TextBlock Text="ViPER Bass" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="BassToggle" HorizontalAlignment="Right" IsOn="True" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                </Grid>
+
+                                <Grid ColumnSpacing="6" Background="#FF0B0B0E" Padding="4" CornerRadius="9" BorderBrush="#FF2E2E36" BorderThickness="1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="BassMode0" Grid.Column="0" Content="Natural" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="BassMode_Click" Tag="0" />
+                                    <Button x:Name="BassMode1" Grid.Column="1" Content="PureBass+" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="BassMode_Click" Tag="1" />
+                                    <Button x:Name="BassMode2" Grid.Column="2" Content="Subwoofer" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="BassMode_Click" Tag="2" />
+                                </Grid>
+
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="Bass Frequency" FontSize="13" Foreground="#FFD4D4D8" />
+                                        <TextBlock x:Name="BassFreqVal" Text="55 Hz" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                    </Grid>
+                                    <Slider x:Name="BassFreqSlider" Minimum="30" Maximum="120" Value="55" StepFrequency="5" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="Bass Gain" FontSize="13" Foreground="#FFD4D4D8" />
+                                        <TextBlock x:Name="BassGainVal" Text="+3.5 dB" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                    </Grid>
+                                    <Slider x:Name="BassGainSlider" Minimum="0" Maximum="15" Value="3.5" StepFrequency="0.5" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 2. ViPER Clarity -->
+                        <Border Grid.Row="0" Grid.Column="1" Style="{StaticResource V4WaCardStyle}">
+                            <StackPanel Spacing="14">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                        <FontIcon x:Name="ClarityIcon" Glyph="&#xE767;" FontSize="16" Foreground="{StaticResource V4WaEmeraldLightBrush}" />
+                                        <TextBlock Text="ViPER Clarity" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="ClarityToggle" HorizontalAlignment="Right" IsOn="True" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                </Grid>
+
+                                <Grid ColumnSpacing="6" Background="#FF0B0B0E" Padding="4" CornerRadius="9" BorderBrush="#FF2E2E36" BorderThickness="1">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button x:Name="ClarityMode0" Grid.Column="0" Content="Natural" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="ClarityMode_Click" Tag="0" />
+                                    <Button x:Name="ClarityMode1" Grid.Column="1" Content="OZone+" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="ClarityMode_Click" Tag="1" />
+                                    <Button x:Name="ClarityMode2" Grid.Column="2" Content="XHiFi" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="ClarityMode_Click" Tag="2" />
+                                </Grid>
+
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="Clarity Gain" FontSize="13" Foreground="#FFD4D4D8" />
+                                        <TextBlock x:Name="ClarityGainVal" Text="+3.0 dB" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                    </Grid>
+                                    <Slider x:Name="ClarityGainSlider" Minimum="0" Maximum="15" Value="3.0" StepFrequency="0.5" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+
+                                <TextBlock Text="Restores micro-detail and upper-harmonic air without harsh sibilance." FontSize="12" Foreground="#FF71717A" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 3. Dynamic System (Full-width Stacked Rows) -->
+                        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource V4WaCardStyle}">
+                            <StackPanel Spacing="14">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                        <FontIcon x:Name="DynamicIcon" Glyph="&#xE9D2;" FontSize="16" Foreground="#FF71717A" />
+                                        <TextBlock Text="Dynamic System" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="DynamicToggle" HorizontalAlignment="Right" IsOn="False" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                </Grid>
+
+                                <StackPanel Spacing="5" Background="#FF0B0B0E" Padding="5" CornerRadius="10" BorderBrush="#FF2E2E36" BorderThickness="1">
+                                    <Button x:Name="DynDev0" Content="Common" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,8" CornerRadius="7" Click="DynDev_Click" Tag="0" />
+                                    <Button x:Name="DynDev1" Content="Extreme HP" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,8" CornerRadius="7" Click="DynDev_Click" Tag="1" />
+                                    <Button x:Name="DynDev2" Content="High-End HP" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,8" CornerRadius="7" Click="DynDev_Click" Tag="2" />
+                                    <Button x:Name="DynDev3" Content="Studio" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Padding="12,8" CornerRadius="7" Click="DynDev_Click" Tag="3" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="Dynamic Bass" FontSize="13" Foreground="#FFD4D4D8" />
+                                        <TextBlock x:Name="DynBassVal" Text="25%" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                    </Grid>
+                                    <Slider x:Name="DynBassSlider" Minimum="0" Maximum="100" Value="25" StepFrequency="5" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 4. AnalogX & Tube Simulator Stack -->
+                        <StackPanel Grid.Row="1" Grid.Column="1" Spacing="16">
+                            <!-- AnalogX -->
+                            <Border Style="{StaticResource V4WaCardStyle}">
+                                <StackPanel Spacing="12">
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                            <FontIcon x:Name="AnalogIcon" Glyph="&#xE950;" FontSize="16" Foreground="#FF71717A" />
+                                            <TextBlock Text="AnalogX" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                        </StackPanel>
+                                        <ToggleSwitch x:Name="AnalogToggle" HorizontalAlignment="Right" IsOn="False" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                    </Grid>
+                                    <TextBlock Text="Solid-state harmonic signature for richer body and analog smoothness." FontSize="12" Foreground="#FFA1A1AA" TextWrapping="Wrap" />
+                                    <Grid ColumnSpacing="6" Background="#FF0B0B0E" Padding="4" CornerRadius="9" BorderBrush="#FF2E2E36" BorderThickness="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="AnalogMode0" Grid.Column="0" Content="Slight" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="AnalogMode_Click" Tag="0" />
+                                        <Button x:Name="AnalogMode1" Grid.Column="1" Content="Moderate" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="AnalogMode_Click" Tag="1" />
+                                        <Button x:Name="AnalogMode2" Grid.Column="2" Content="Extreme" HorizontalAlignment="Stretch" CornerRadius="6" FontSize="12" Click="AnalogMode_Click" Tag="2" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Tube Simulator (6N1J) -->
+                            <Border Style="{StaticResource V4WaCardStyle}">
+                                <StackPanel Spacing="12">
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                            <FontIcon x:Name="TubeIcon" Glyph="&#xEA80;" FontSize="16" Foreground="#FF71717A" />
+                                            <TextBlock Text="Tube Simulator (6N1J)" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                        </StackPanel>
+                                        <ToggleSwitch x:Name="TubeToggle" HorizontalAlignment="Right" IsOn="False" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                    </Grid>
+                                    <StackPanel Spacing="4">
+                                        <Grid>
+                                            <TextBlock Text="Harmonic Drive" FontSize="13" Foreground="#FFD4D4D8" />
+                                            <TextBlock x:Name="TubeDriveVal" Text="25%" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                        </Grid>
+                                        <Slider x:Name="TubeDriveSlider" Minimum="0" Maximum="100" Value="25" StepFrequency="1" ValueChanged="Slider_ValueChanged" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- 5. Differential Surround & Stereo Width -->
+                        <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource V4WaCardStyle}">
+                            <StackPanel Spacing="14">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                        <FontIcon x:Name="SurroundIcon" Glyph="&#xE7F6;" FontSize="16" Foreground="{StaticResource V4WaEmeraldLightBrush}" />
+                                        <TextBlock Text="Differential Surround" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="SurroundToggle" HorizontalAlignment="Right" IsOn="True" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                </Grid>
+
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="Haas Delay" FontSize="13" Foreground="#FFD4D4D8" />
+                                        <TextBlock x:Name="SurroundDelayVal" Text="3.5 ms" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                    </Grid>
+                                    <Slider x:Name="SurroundDelaySlider" Minimum="0" Maximum="20" Value="3.5" StepFrequency="0.5" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="4">
+                                    <Grid>
+                                        <TextBlock Text="Stereo Width" FontSize="13" Foreground="#FFD4D4D8" />
+                                        <TextBlock x:Name="StereoWidthVal" Text="115%" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                    </Grid>
+                                    <Slider x:Name="StereoWidthSlider" Minimum="0" Maximum="200" Value="115" StepFrequency="5" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 6. Convolver & ViPER-DDC Preview -->
+                        <Border Grid.Row="2" Grid.Column="1" Style="{StaticResource V4WaCardStyle}">
+                            <StackPanel Spacing="14">
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                        <FontIcon x:Name="ConvolverIcon" Glyph="&#xE9F5;" FontSize="16" Foreground="#FF71717A" />
+                                        <TextBlock Text="Convolver &amp; ViPER-DDC" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                    </StackPanel>
+                                    <ToggleSwitch x:Name="ConvolverToggle" HorizontalAlignment="Right" IsOn="False" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                </Grid>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Impulse Response (.irs / .wav)" FontSize="12.5" Foreground="#FFA1A1AA" />
+                                    <ComboBox HorizontalAlignment="Stretch" SelectedIndex="0">
+                                        <ComboBoxItem Content="Dolby Pro Logic II Studio.irs (Demo)" />
+                                        <ComboBoxItem Content="Sony ClearAudio+ Hi-Res.irs (Demo)" />
+                                        <ComboBoxItem Content="BBE Sonic Maximizer.irs (Demo)" />
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Headphone AutoEQ (.vdc)" FontSize="12.5" Foreground="#FFA1A1AA" />
+                                    <ComboBox HorizontalAlignment="Stretch" SelectedIndex="0">
+                                        <ComboBoxItem Content="Moondrop Blessing 3 Harman.vdc (Demo)" />
+                                        <ComboBoxItem Content="Sennheiser HD 600 Target.vdc (Demo)" />
+                                    </ComboBox>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 7. Output Limiter & Master Gain -->
+                        <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Style="{StaticResource V4WaCardStyle}">
+                            <Grid ColumnSpacing="28">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" Spacing="6">
+                                    <Grid>
+                                        <TextBlock Text="Master Output Gain" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                        <TextBlock x:Name="MasterGainVal" Text="0.0 dB" HorizontalAlignment="Right" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="#FF6EE7B7" />
+                                    </Grid>
+                                    <Slider x:Name="MasterGainSlider" Minimum="-24" Maximum="12" Value="0" StepFrequency="0.5" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="1" Spacing="6">
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <FontIcon x:Name="LimiterIcon" Glyph="&#xE83D;" FontSize="15" Foreground="{StaticResource V4WaEmeraldLightBrush}" />
+                                            <TextBlock Text="Output Brickwall Limiter" FontSize="13.5" FontWeight="SemiBold" Foreground="White" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                            <TextBlock x:Name="LimiterVal" Text="-0.3 dBFS" FontFamily="Consolas" FontSize="13.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                                            <ToggleSwitch x:Name="LimiterToggle" IsOn="True" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
+                                        </StackPanel>
+                                    </Grid>
+                                    <Slider x:Name="LimiterSlider" Minimum="-6" Maximum="0" Value="-0.3" StepFrequency="0.1" ValueChanged="Slider_ValueChanged" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </StackPanel>
+
+                <!-- DEVICES & APO TAB (Dummy Native Windows 11 Settings Layout) -->
+                <StackPanel x:Name="DevicesPanel" Spacing="16" Visibility="Collapsed">
+                    <Border Style="{StaticResource V4WaCardStyle}">
+                        <StackPanel Spacing="12">
+                            <Grid>
+                                <StackPanel Spacing="3">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="Headphones (CX31993+MAX97220 HiFiAudio)" FontSize="16" FontWeight="SemiBold" Foreground="White" />
+                                        <Border Background="#2410B981" BorderBrush="#6634D399" BorderThickness="1" CornerRadius="5" Padding="8,2">
+                                            <TextBlock Text="DEFAULT · APO ATTACHED" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" Foreground="#FF6EE7B7" />
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Endpoint GUID: {d62a84b9-0a81-4d82-891d-d7a6ef88fb4d} · 384.0 kHz / 32-bit IEEE Float"
+                                               FontFamily="Consolas" FontSize="12" Foreground="#FFA1A1AA" />
+                                </StackPanel>
+                                <Button Content="Install / Repair APO" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                        Background="#2410B981" BorderBrush="#6634D399" Foreground="#FF6EE7B7" CornerRadius="8" Padding="14,7"
+                                        Click="DummyAction_Click" Tag="Dummy preview — real APO is already installed!" />
+                            </Grid>
+
+                            <InfoBar x:Name="DemoNoticeBar" IsOpen="True" IsClosable="False" Severity="Informational"
+                                     Title="Native WinUI 3 Dummy App Preview"
+                                     Message="This is a standalone native Windows 11 WinUI 3 UI demo with Mica backdrop. Audio controls here are interactive mockups and do not modify your live APO parameters." />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Bottom Subtle Toast InfoBar for Dummy Actions -->
+        <InfoBar x:Name="ToastBar" Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                 Margin="24" IsOpen="False" Severity="Success" />
+    </Grid>
+</Window>
