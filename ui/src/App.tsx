@@ -66,8 +66,8 @@ function eqFaderFill(db: number, enabled = true): React.CSSProperties {
     const lo = enabled ? '#10b981' : '#52525b';
     bg = `linear-gradient(to bottom, #27272a 0%, #27272a ${pct}%, ${hi} ${pct}%, ${lo} 50%, #27272a 50%, #27272a 100%)`;
   } else if (clamped < -0.01) {
-    const hi = enabled ? '#f59e0b' : '#52525b';
-    const lo = enabled ? '#d97706' : '#52525b';
+    const hi = enabled ? '#10b981' : '#52525b';
+    const lo = enabled ? '#059669' : '#52525b';
     bg = `linear-gradient(to bottom, #27272a 0%, #27272a 50%, ${hi} 50%, ${lo} ${pct}%, #27272a ${pct}%, #27272a 100%)`;
   }
   return { '--track-bg': bg } as React.CSSProperties;
@@ -88,11 +88,7 @@ function sliderFill(
     const zeroPct = Math.max(0, Math.min(100, ((options.bipolarZero - min) / span) * 100));
     const start = Math.min(pct, zeroPct);
     const end = Math.max(pct, zeroPct);
-    const activeColor = isEnabled
-      ? val < options.bipolarZero
-        ? '#f59e0b'
-        : color
-      : '#52525b';
+    const activeColor = isEnabled ? color : '#52525b';
     const bg = `linear-gradient(to right, #27272a 0%, #27272a ${start}%, ${activeColor} ${start}%, ${activeColor} ${end}%, #27272a ${end}%, #27272a 100%)`;
     return { '--track-bg': bg } as React.CSSProperties;
   }
@@ -101,22 +97,18 @@ function sliderFill(
   return { '--track-bg': bg } as React.CSSProperties;
 }
 
-function moduleIconClass(enabled: boolean, accent: 'emerald' | 'amber' | 'white' = 'emerald') {
+function moduleIconClass(enabled: boolean, accent: 'emerald' | 'white' = 'emerald') {
   if (!enabled) return 'text-zinc-500 transition-colors';
-  if (accent === 'amber') return 'text-amber-400 transition-colors';
   if (accent === 'white') return 'text-zinc-100 transition-colors';
   return 'text-emerald-400 transition-colors';
 }
 
-function modeBtnClass(selected: boolean, enabled: boolean, accent: 'emerald' | 'amber' = 'emerald') {
+function modeBtnClass(selected: boolean, enabled: boolean) {
   if (!selected) {
     return 'border border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200';
   }
   if (!enabled) {
     return 'border border-zinc-700 bg-zinc-800/80 text-zinc-300';
-  }
-  if (accent === 'amber') {
-    return 'border border-amber-400/50 bg-amber-500/20 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.12)]';
   }
   return 'border border-emerald-400/50 bg-emerald-500/20 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.12)]';
 }
@@ -828,10 +820,15 @@ export default function App() {
               <AudioLines className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <h1 className="font-display text-lg font-bold tracking-tight text-white">
-                  ViPER4Windows RE
+                  V4Wa
                 </h1>
+                <InfoTip
+                  align="left"
+                  placement="bottom"
+                  text="ViPER4Windows Alternative (V4Wa). Why 'a': 'a' stands for Alternative — a modern, clean-room replacement for the legacy 2013 ViPER4Windows driver; Hi-Res Engine: Native Windows 10/11 MFX APO supporting 44.1–384 kHz with 64-bit internal DSP; Full Parity: Combines all ViPER4Windows and ViPER4Android FX sound modules in one app."
+                />
               </div>
               <p className="text-xs text-zinc-400">
                 {defaultDevice
@@ -887,8 +884,8 @@ export default function App() {
                     liveStatus?.mode === 'Exclusive Mode'
                       ? 'Bypassed by WASAPI Exclusive Mode'
                       : isWorking
-                        ? 'ViPER4Windows RE DSP is actively processing audio'
-                        : 'ViPER4Windows RE DSP is bypassed or offline'
+                        ? 'V4Wa DSP is actively processing audio'
+                        : 'V4Wa DSP is bypassed or offline'
                   }
                 >
                   <span
@@ -977,7 +974,7 @@ export default function App() {
 
             <div className="flex flex-wrap items-center gap-2 font-mono text-[13px] font-semibold tabular-nums">
               {liveStatus.isHiRes && (
-                <span className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+                <span className="rounded-lg border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-semibold text-emerald-300">
                   HI-RES AUDIO
                 </span>
               )}
@@ -1040,7 +1037,7 @@ export default function App() {
                             e.stopPropagation();
                             togglePinPreset(preset.name);
                           }}
-                          className="inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-emerald-400/80 transition-colors hover:bg-zinc-800 hover:text-amber-300"
+                          className="inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-emerald-400/80 transition-colors hover:bg-zinc-800 hover:text-emerald-300"
                         >
                           <PinOff className="h-3.5 w-3.5" />
                         </button>
@@ -1243,7 +1240,7 @@ export default function App() {
                             : val > 0.01
                               ? 'text-emerald-300'
                               : val < -0.01
-                                ? 'text-amber-300'
+                                ? 'text-emerald-300'
                                 : 'text-zinc-200'
                         }`}
                       >
@@ -1429,7 +1426,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4ATubeIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.tubeEnabled, 'amber')}`} />
+                    <V4ATubeIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.tubeEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Tube Simulator (6N1J)
                     </h3>
@@ -1471,7 +1468,7 @@ export default function App() {
                     max={1}
                     step={0.02}
                     value={params.tubeDrive}
-                      style={sliderFill(params.tubeDrive, 0, 1, { color: '#f59e0b' , enabled: params.masterEnabled && params.tubeEnabled })}
+                      style={sliderFill(params.tubeDrive, 0, 1, { enabled: params.masterEnabled && params.tubeEnabled })}
                     onChange={e => updateField('tubeDrive', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
@@ -2341,16 +2338,16 @@ export default function App() {
                 </div>
               </div>
 
-              {/* AnalogX (Class-A) */}
+              {/* AnalogX */}
               <div
                 style={{ order: getModuleOrder('analogx', 13) }}
                 className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AAnalogXIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.analogXEnabled, 'amber')}`} />
+                    <V4AAnalogXIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.analogXEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
-                      AnalogX (Class-A)
+                      AnalogX
                     </h3>
                     <InfoTip
                       align="right"
@@ -2378,7 +2375,7 @@ export default function App() {
                       type="button"
                       onClick={() => updateField('analogXLevel', idx, true)}
                       className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
-                        modeBtnClass(params.analogXLevel === idx, params.masterEnabled && params.analogXEnabled, 'amber')
+                        modeBtnClass(params.analogXLevel === idx, params.masterEnabled && params.analogXEnabled)
                       }`}
                     >
                       {label}
@@ -2697,7 +2694,7 @@ export default function App() {
 
                       <div className="rounded-xl border border-zinc-700/80 bg-zinc-950 p-3">
                         <div className="mb-1.5 flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-amber-300">
+                          <span className="text-[11px] font-semibold text-emerald-300">
                             1-Click Restore Factory Audio (Run as Admin)
                           </span>
                           <button

@@ -4,6 +4,7 @@ import { HelpCircle } from 'lucide-react';
 interface InfoTipProps {
   text: string;
   align?: 'left' | 'center' | 'right';
+  placement?: 'top' | 'bottom';
 }
 
 interface ParsedTip {
@@ -47,7 +48,7 @@ function parseTipText(raw: string): ParsedTip {
   return { summary, bullets };
 }
 
-export function InfoTip({ text, align = 'center' }: InfoTipProps) {
+export function InfoTip({ text, align = 'center', placement = 'top' }: InfoTipProps) {
   const [open, setOpen] = useState(false);
 
   const alignClass =
@@ -63,6 +64,12 @@ export function InfoTip({ text, align = 'center' }: InfoTipProps) {
       : align === 'right'
         ? 'right-2.5'
         : 'left-1/2 -translate-x-1/2';
+
+  const posClass = placement === 'bottom' ? 'top-full mt-2.5' : 'bottom-full mb-2.5';
+  const arrowPosClass =
+    placement === 'bottom'
+      ? 'bottom-full translate-y-1 border-l border-t'
+      : 'top-full -translate-y-1 border-r border-b';
 
   const { summary, bullets } = parseTipText(text);
 
@@ -89,7 +96,7 @@ export function InfoTip({ text, align = 'center' }: InfoTipProps) {
       {open && (
         <span
           role="tooltip"
-          className={`pointer-events-none absolute bottom-full z-50 mb-2.5 block w-80 rounded-xl border border-zinc-600/90 bg-[#0d0d11]/98 px-4 py-3 text-left text-[13px] font-normal leading-relaxed text-zinc-200 shadow-[0_14px_36px_rgba(0,0,0,0.92)] backdrop-blur-md ${alignClass}`}
+          className={`pointer-events-none absolute z-50 block w-80 rounded-xl border border-zinc-600/90 bg-[#0d0d11]/98 px-4 py-3 text-left text-[13px] font-normal leading-relaxed text-zinc-200 shadow-[0_14px_36px_rgba(0,0,0,0.92)] backdrop-blur-md ${posClass} ${alignClass}`}
         >
           <span className="block font-medium text-white">{summary}</span>
 
@@ -110,7 +117,7 @@ export function InfoTip({ text, align = 'center' }: InfoTipProps) {
           )}
 
           <span
-            className={`absolute top-full h-2 w-2 -translate-y-1 rotate-45 border-r border-b border-zinc-600/90 bg-[#0d0d11] ${arrowClass}`}
+            className={`absolute h-2 w-2 rotate-45 border-zinc-600/90 bg-[#0d0d11] ${arrowPosClass} ${arrowClass}`}
           />
         </span>
       )}
