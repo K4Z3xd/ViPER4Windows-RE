@@ -11,7 +11,7 @@ constexpr uint32_t kMaxSampleRate = 384000;
 constexpr size_t kEqBandCount = 10;
 constexpr size_t kEqBand18Count = 18;
 constexpr uint32_t kParamsMagic = 0x56504852; // 'VPHR'
-constexpr uint32_t kParamsVersion = 4;
+constexpr uint32_t kParamsVersion = 5;
 
 // Standard 10-band ISO center frequencies (Hz)
 constexpr std::array<double, kEqBandCount> kEqFrequencies = {
@@ -121,11 +121,40 @@ struct DspParams {
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
     };
+
+    // --- V5 Full ViPER4Android FX Parity Modules ---
+
+    // ViPER-DDC (.vdc Headphone/IEM AutoEQ correction)
+    uint32_t ddcEnabled = 0;
+    uint32_t ddcRevision = 0;
+
+    // Spectrum Extension (VSE)
+    uint32_t vseEnabled = 0;
+    float vseStrength = 0.50f;          // 0.0 to 1.0
+
+    // AnalogX (Class-A solid-state warmth)
+    uint32_t analogXEnabled = 0;
+    uint32_t analogXLevel = 0;          // 0: Slight, 1: Moderate, 2: Extreme
+
+    // Field Surround (Colorful Music)
+    uint32_t fieldSurroundEnabled = 0;
+    float fieldSurroundStrength = 0.40f; // 0.0 to 1.0
+    float fieldSurroundMidImage = 0.50f; // 0.0 to 1.0
+
+    // Headphone Surround+ (VHS+)
+    uint32_t vhsEnabled = 0;
+    uint32_t vhsLevel = 2;              // 1..5
+
+    // Playback Gain Control (AGC)
+    uint32_t agcEnabled = 0;
+    float agcStrength = 0.50f;          // 0.0 to 1.0
+    float agcMaxGainDb = 12.0f;         // 0.0 to 24.0 dB
+    float agcOutputThreshDb = -1.0f;    // -12.0 to 0.0 dBFS
 };
 
 static_assert(std::is_trivially_copyable_v<DspParams>,
               "DspParams must be trivially copyable for Shared Memory IPC");
-static_assert(sizeof(DspParams) == 284,
-              "DspParams v4 binary layout must be exactly 284 bytes (SharedConfigBlock = 288 bytes)");
+static_assert(sizeof(DspParams) == 344,
+              "DspParams v5 binary layout must be exactly 344 bytes (SharedConfigBlock = 348 bytes)");
 
 } // namespace viper

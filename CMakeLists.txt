@@ -8,13 +8,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # 1. DSP Core Static Library (Real-time safe, 44.1kHz - 384kHz, 32-bit float I/O, 64-bit internal math)
 add_library(viper_dsp STATIC
     src/dsp/BiquadFilter.cpp
+    src/dsp/ViperDdc.cpp
     src/dsp/ParametricEq.cpp
     src/dsp/ViperBass.cpp
     src/dsp/DynamicSystem.cpp
+    src/dsp/SpectrumExtension.cpp
     src/dsp/ViperClarity.cpp
     src/dsp/TubeSimulator.cpp
+    src/dsp/AnalogX.cpp
     src/dsp/Compressor.cpp
+    src/dsp/PlaybackGain.cpp
     src/dsp/CureTech.cpp
+    src/dsp/FieldSurround.cpp
+    src/dsp/VhsPlus.cpp
     src/dsp/DifferentialSurround.cpp
     src/dsp/Reverb.cpp
     src/dsp/Convolver.cpp

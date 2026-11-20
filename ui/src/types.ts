@@ -72,6 +72,22 @@ export interface DspParams {
   // V4 Multi-Band EQ
   eqMode: number; // 0 = 10-Band, 1 = 18-Band
   eqBands18Db: number[];
+  // V5 Full V4A Parity Modules
+  ddcEnabled: boolean;
+  ddcRevision: number;
+  vseEnabled: boolean;
+  vseStrength: number;
+  analogXEnabled: boolean;
+  analogXLevel: number; // 0: Slight, 1: Moderate, 2: Extreme
+  fieldSurroundEnabled: boolean;
+  fieldSurroundStrength: number;
+  fieldSurroundMidImage: number;
+  vhsEnabled: boolean;
+  vhsLevel: number; // 1..5
+  agcEnabled: boolean;
+  agcStrength: number;
+  agcMaxGainDb: number;
+  agcOutputThreshDb: number;
 }
 
 export const EQ_LABELS_10 = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
@@ -124,7 +140,22 @@ export const DEFAULT_PARAMS: DspParams = {
   convolverWetMix: 1,
   convolverRevision: 0,
   eqMode: 0,
-  eqBands18Db: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  eqBands18Db: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  ddcEnabled: false,
+  ddcRevision: 0,
+  vseEnabled: false,
+  vseStrength: 0.5,
+  analogXEnabled: false,
+  analogXLevel: 0,
+  fieldSurroundEnabled: false,
+  fieldSurroundStrength: 0.4,
+  fieldSurroundMidImage: 0.5,
+  vhsEnabled: false,
+  vhsLevel: 2,
+  agcEnabled: false,
+  agcStrength: 0.5,
+  agcMaxGainDb: 12,
+  agcOutputThreshDb: -1
 };
 
 export interface EqPreset {

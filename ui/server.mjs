@@ -13,11 +13,29 @@ const FOOBAR_STATUS_PATH = 'C:\\ProgramData\\ViPERHiRes\\foobar_status.json';
 const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
 const IRS_DIR = 'C:\\ProgramData\\ViPERHiRes\\irs';
 const ACTIVE_IR_PATH = 'C:\\ProgramData\\ViPERHiRes\\active_ir.txt';
+const DDC_DIR = 'C:\\ProgramData\\ViPERHiRes\\ddc';
+const ACTIVE_DDC_PATH = 'C:\\ProgramData\\ViPERHiRes\\active_ddc.txt';
 const PRESETS_DIR = 'C:\\ProgramData\\ViPERHiRes\\presets';
 const EQ_PRESETS_DIR = 'C:\\ProgramData\\ViPERHiRes\\eq_presets';
 const MAGIC_VPHR = 0x56504852;
-const PARAMS_VERSION = 4;
-const BLOCK_SIZE = 288; // 4-byte seqlock + 284-byte DspParams v4
+const PARAMS_VERSION = 5;
+const BLOCK_SIZE = 348; // 4-byte seqlock + 344-byte DspParams v5
+
+function listDdcFiles() {
+  fs.mkdirSync(DDC_DIR, { recursive: true });
+  const files = fs.readdirSync(DDC_DIR)
+    .filter(f => /\.vdc$/i.test(f))
+    .sort((a, b) => a.localeCompare(b));
+  let active = '';
+  try {
+    if (fs.existsSync(ACTIVE_DDC_PATH)) {
+      active = path.basename(fs.readFileSync(ACTIVE_DDC_PATH, 'utf8').trim());
+    }
+  } catch {
+    // ignore
+  }
+  return { files, active };
+}
 
 function listJsonItems(dir) {
   fs.mkdirSync(dir, { recursive: true });
@@ -124,7 +142,23 @@ function readParamsDirect() {
         arr.push(Math.round(buf.readFloatLE(216 + i * 4) * 100) / 100);
       }
       return arr;
-    })()
+    })(),
+    // V5 Full V4A Parity Modules (offsets 288..347)
+    ddcEnabled: buf.readUInt32LE(288) !== 0,
+    ddcRevision: buf.readUInt32LE(292),
+    vseEnabled: buf.readUInt32LE(296) !== 0,
+    vseStrength: Math.round(buf.readFloatLE(300) * 100) / 100,
+    analogXEnabled: buf.readUInt32LE(304) !== 0,
+    analogXLevel: buf.readUInt32LE(308),
+    fieldSurroundEnabled: buf.readUInt32LE(312) !== 0,
+    fieldSurroundStrength: Math.round(buf.readFloatLE(316) * 100) / 100,
+    fieldSurroundMidImage: Math.round(buf.readFloatLE(320) * 100) / 100,
+    vhsEnabled: buf.readUInt32LE(324) !== 0,
+    vhsLevel: buf.readUInt32LE(328),
+    agcEnabled: buf.readUInt32LE(332) !== 0,
+    agcStrength: Math.round(buf.readFloatLE(336) * 100) / 100,
+    agcMaxGainDb: Math.round(buf.readFloatLE(340) * 100) / 100,
+    agcOutputThreshDb: Math.round(buf.readFloatLE(344) * 100) / 100
   };
 }
 
@@ -204,6 +238,22 @@ function writeParamsDirect(p) {
     for (let i = 0; i < 18; i++) {
       payload.writeFloatLE(Number(bands18[i] ?? 0), 212 + i * 4);
     }
+    // V5 Full V4A Parity Modules (file offsets 288..347 -> payload offsets 284..343)
+    payload.writeUInt32LE(p.ddcEnabled ? 1 : 0, 284);
+    payload.writeUInt32LE(Number(p.ddcRevision ?? 0) >>> 0, 288);
+    payload.writeUInt32LE(p.vseEnabled ? 1 : 0, 292);
+    payload.writeFloatLE(Number(p.vseStrength ?? 0.5), 296);
+    payload.writeUInt32LE(p.analogXEnabled ? 1 : 0, 300);
+    payload.writeUInt32LE(Number(p.analogXLevel ?? 0) >>> 0, 304);
+    payload.writeUInt32LE(p.fieldSurroundEnabled ? 1 : 0, 308);
+    payload.writeFloatLE(Number(p.fieldSurroundStrength ?? 0.4), 312);
+    payload.writeFloatLE(Number(p.fieldSurroundMidImage ?? 0.5), 316);
+    payload.writeUInt32LE(p.vhsEnabled ? 1 : 0, 320);
+    payload.writeUInt32LE(Number(p.vhsLevel ?? 2) >>> 0, 324);
+    payload.writeUInt32LE(p.agcEnabled ? 1 : 0, 328);
+    payload.writeFloatLE(Number(p.agcStrength ?? 0.5), 332);
+    payload.writeFloatLE(Number(p.agcMaxGainDb ?? 12), 336);
+    payload.writeFloatLE(Number(p.agcOutputThreshDb ?? -1), 340);
 
     fs.writeSync(fd, payload, 0, payload.length, 4);
 
@@ -436,6 +486,53 @@ const server = http.createServer(async (req, res) => {
         }
       }
       sendJson(res, 200, { imported, presets: listJsonItems(EQ_PRESETS_DIR) });
+      return;
+    }
+
+    if (url.pathname === '/api/ddc' && req.method === 'GET') {
+      sendJson(res, 200, listDdcFiles());
+      return;
+    }
+
+    if (url.pathname === '/api/ddc/upload' && req.method === 'POST') {
+      const raw = await readBody(req, 4 * 1024 * 1024);
+      const { filename, text } = JSON.parse(raw);
+      const safeName = path.basename(String(filename || 'headphone.vdc')).replace(/[^a-zA-Z0-9._\- ()]/g, '_');
+      if (!/\.vdc$/i.test(safeName)) {
+        sendJson(res, 400, { error: 'Only .vdc files are supported' });
+        return;
+      }
+      fs.mkdirSync(DDC_DIR, { recursive: true });
+      const destPath = path.join(DDC_DIR, safeName);
+      fs.writeFileSync(destPath, String(text || ''), 'utf8');
+      fs.writeFileSync(ACTIVE_DDC_PATH, destPath, 'utf8');
+
+      const cur = readParamsDirect();
+      const updated = writeParamsDirect({
+        ...cur,
+        ddcEnabled: true,
+        ddcRevision: (cur.ddcRevision || 0) + 1
+      });
+      sendJson(res, 200, { ...listDdcFiles(), params: updated });
+      return;
+    }
+
+    if (url.pathname === '/api/ddc/select' && req.method === 'POST') {
+      const raw = await readBody(req);
+      const { filename } = JSON.parse(raw);
+      const safeName = path.basename(String(filename || ''));
+      const fullPath = path.join(DDC_DIR, safeName);
+      if (!safeName || !fs.existsSync(fullPath)) {
+        sendJson(res, 404, { error: 'VDC file not found' });
+        return;
+      }
+      fs.writeFileSync(ACTIVE_DDC_PATH, fullPath, 'utf8');
+      const cur = readParamsDirect();
+      const updated = writeParamsDirect({
+        ...cur,
+        ddcRevision: (cur.ddcRevision || 0) + 1
+      });
+      sendJson(res, 200, { ...listDdcFiles(), params: updated });
       return;
     }
 

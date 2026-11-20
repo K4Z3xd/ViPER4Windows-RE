@@ -162,6 +162,8 @@ export default function App() {
   const [liveStatus, setLiveStatus] = useState<LiveSourceStatus | null>(null);
   const [irsFiles, setIrsFiles] = useState<string[]>([]);
   const [activeIrs, setActiveIrs] = useState<string>('');
+  const [ddcFiles, setDdcFiles] = useState<string[]>([]);
+  const [activeDdc, setActiveDdc] = useState<string>('');
   const [customPresets, setCustomPresets] = useState<Preset[]>([]);
   const [selectedPresetName, setSelectedPresetName] = useState<string>('Flat Reference');
   const [pinnedPresetNames, setPinnedPresetNames] = useState<string[]>(() => {
@@ -264,11 +266,12 @@ export default function App() {
 
   const loadAll = async () => {
     try {
-      const [devRes, paramRes, statusRes, irsRes, presetsRes, eqPresetsRes] = await Promise.all([
+      const [devRes, paramRes, statusRes, irsRes, ddcRes, presetsRes, eqPresetsRes] = await Promise.all([
         fetch('/api/devices'),
         fetch('/api/params'),
         fetch('/api/status'),
         fetch('/api/irs'),
+        fetch('/api/ddc'),
         fetch('/api/presets'),
         fetch('/api/eq-presets')
       ]);
@@ -287,6 +290,11 @@ export default function App() {
         setIrsFiles(irData.files || []);
         setActiveIrs(irData.active || '');
       }
+      if (ddcRes.ok) {
+        const ddcData = await ddcRes.json();
+        setDdcFiles(ddcData.files || []);
+        setActiveDdc(ddcData.active || '');
+      }
       if (presetsRes.ok) {
         setCustomPresets(await presetsRes.json());
       }
@@ -296,6 +304,35 @@ export default function App() {
       setSyncStatus('connected');
     } catch {
       setSyncStatus('offline');
+    }
+  };
+
+  const handleDdcUpload = async (file: File) => {
+    const text = await file.text();
+    const res = await fetch('/api/ddc/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, text })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setDdcFiles(data.files || []);
+      setActiveDdc(data.active || '');
+      if (data.params) setParams({ ...DEFAULT_PARAMS, ...data.params });
+    }
+  };
+
+  const handleDdcSelect = async (filename: string) => {
+    if (!filename) return;
+    const res = await fetch('/api/ddc/select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setActiveDdc(data.active || filename);
+      if (data.params) setParams({ ...DEFAULT_PARAMS, ...data.params });
     }
   };
 
@@ -1907,6 +1944,394 @@ export default function App() {
                         className="studio-slider w-full"
                       />
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ViPER-DDC (.vdc Headphone/IEM Correction) */}
+              <div
+                style={{ order: getModuleOrder('ddc', 11) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Headphones className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      ViPER-DDC (.vdc)
+                    </h3>
+                    <InfoTip
+                      align="left"
+                      text="Nạp file hiệu chỉnh đáp tuyến tần số chuẩn phòng thu .vdc (từ kho AutoEQ / ViPER4Android) cho đúng mẫu tai nghe/IEM của bạn. Tự động biến đổi bộ lọc chính xác lên tới 384 kHz."
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('ddc')}
+                    <Toggle
+                      checked={params.ddcEnabled}
+                      onChange={v => updateField('ddcEnabled', v, true)}
+                      label="Toggle ViPER-DDC"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+                    Headphone Profile (.vdc)
+                    <InfoTip
+                      align="left"
+                      text="Tải file .vdc từ AutoEQ (autoeq.app -> chọn ViPER4Android DDC) rồi bấm Load .vdc để cân chỉnh chuẩn xác âm sắc tai nghe."
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={activeDdc}
+                      onChange={e => void handleDdcSelect(e.target.value)}
+                      className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+                    >
+                      {ddcFiles.length === 0 ? (
+                        <option value="">No .vdc profile loaded</option>
+                      ) : (
+                        ddcFiles.map(f => (
+                          <option key={f} value={f}>
+                            {f}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-100 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
+                      <Upload className="h-3.5 w-3.5" />
+                      Load .vdc
+                      <input
+                        type="file"
+                        accept=".vdc"
+                        className="hidden"
+                        onChange={e => {
+                          const f = e.target.files?.[0];
+                          if (f) void handleDdcUpload(f);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Spectrum Extension (VSE) */}
+              <div
+                style={{ order: getModuleOrder('vse', 12) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Spectrum Extension
+                    </h3>
+                    <InfoTip text="Tái tạo hài âm tần số cao (> 10 kHz) bị cắt mất ở nhạc nén MP3, YouTube, Spotify — giúp nhạc nghe thoáng và chi tiết hơn." />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('vse')}
+                    <Toggle
+                      checked={params.vseEnabled}
+                      onChange={v => updateField('vseEnabled', v, true)}
+                      label="Toggle Spectrum Extension"
+                    />
+                  </div>
+                </div>
+
+                <p className="mb-4 text-xs text-zinc-400">
+                  Reconstructs upper-octave air & sparkle lost in lossy compressed streams.
+                </p>
+
+                <div>
+                  <div className="mb-1.5 flex justify-between text-xs">
+                    <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                      Extension Strength
+                      <InfoTip text="Cường độ tái tạo dải siêu cao (0–100%). Mức 30–60% là tối ưu cho nhạc YouTube / Spotify." />
+                    </span>
+                    <span className="font-mono tabular-nums text-zinc-200">
+                      {Math.round(params.vseStrength * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.02}
+                    value={params.vseStrength}
+                    onChange={e => updateField('vseStrength', parseFloat(e.target.value))}
+                    className="studio-slider w-full"
+                  />
+                </div>
+              </div>
+
+              {/* AnalogX (Class-A) */}
+              <div
+                style={{ order: getModuleOrder('analogx', 13) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Flame className="h-4 w-4 text-amber-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      AnalogX (Class-A)
+                    </h3>
+                    <InfoTip
+                      align="right"
+                      text="Giả lập độ dày và sự mượt mà đặc trưng của ampli bán dẫn Class-A. Khác với Tube 6N1J, AnalogX cho chất âm cân bằng, chắc tiếng và giàu nhạc tính hơn."
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('analogx')}
+                    <Toggle
+                      checked={params.analogXEnabled}
+                      onChange={v => updateField('analogXEnabled', v, true)}
+                      label="Toggle AnalogX"
+                    />
+                  </div>
+                </div>
+
+                <p className="mb-4 text-xs text-zinc-400">
+                  Pure Class-A solid-state harmonic signature for richer body and analog smoothness.
+                </p>
+
+                <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                  {['Slight', 'Moderate', 'Extreme'].map((label, idx) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => updateField('analogXLevel', idx, true)}
+                      className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
+                        params.analogXLevel === idx
+                          ? 'bg-zinc-800 text-white'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Field Surround (Colorful Music) */}
+              <div
+                style={{ order: getModuleOrder('field', 14) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Waves className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Field Surround
+                    </h3>
+                    <InfoTip
+                      align="left"
+                      text="Mở rộng không gian nhạc cụ sang hai bên (Colorful Music) trong khi vẫn khóa chặt dải trầm ở giữa và chỉnh độ nổi của giọng ca sĩ qua Mid Image."
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('field')}
+                    <Toggle
+                      checked={params.fieldSurroundEnabled}
+                      onChange={v => updateField('fieldSurroundEnabled', v, true)}
+                      label="Toggle Field Surround"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <div className="mb-1.5 flex justify-between text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Field Strength
+                        <InfoTip
+                          align="left"
+                          text="Độ rộng của trường âm stereo (0–100%). Mức 30–50% mở rộng sân khấu tự nhiên mà không bị loãng."
+                        />
+                      </span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {Math.round(params.fieldSurroundStrength * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={params.fieldSurroundStrength}
+                      onChange={e => updateField('fieldSurroundStrength', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1.5 flex justify-between text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Mid Image (Vocal Focus)
+                        <InfoTip
+                          align="left"
+                          text="Độ tập trung của giọng hát ở chính giữa (0–100%). Tăng trên 50% để giọng ca sĩ tiến gần và nổi khối rõ hơn."
+                        />
+                      </span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {Math.round(params.fieldSurroundMidImage * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={params.fieldSurroundMidImage}
+                      onChange={e => updateField('fieldSurroundMidImage', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Headphone Surround+ (VHS+) */}
+              <div
+                style={{ order: getModuleOrder('vhs', 15) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Headphone Surround+ (VHS+)
+                    </h3>
+                    <InfoTip text="Tái tạo phản xạ âm học 3D (early reflections) quanh tai nghe theo 5 cấp độ từ phòng thu nhỏ (Lv1) tới không gian sân khấu rộng lớn (Lv5)." />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('vhs')}
+                    <Toggle
+                      checked={params.vhsEnabled}
+                      onChange={v => updateField('vhsEnabled', v, true)}
+                      label="Toggle VHS+"
+                    />
+                  </div>
+                </div>
+
+                <p className="mb-4 text-xs text-zinc-400">
+                  5-level binaural early-reflection spatializer scaled cleanly up to 384 kHz.
+                </p>
+
+                <div className="grid grid-cols-5 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                  {[1, 2, 3, 4, 5].map(lv => (
+                    <button
+                      key={lv}
+                      type="button"
+                      onClick={() => updateField('vhsLevel', lv, true)}
+                      className={`cursor-pointer rounded-md py-1.5 font-mono text-[11px] font-medium transition-colors ${
+                        params.vhsLevel === lv
+                          ? 'bg-zinc-800 text-emerald-300'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      Lv {lv}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Playback Gain Control (AGC) */}
+              <div
+                style={{ order: getModuleOrder('agc', 16) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Volume2 className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Playback Gain Control
+                    </h3>
+                    <InfoTip
+                      align="right"
+                      text="Tự động cân bằng âm lượng (AGC) mượt mà giữa các bài hát hoặc video YouTube thu âm to/nhỏ khác nhau mà không làm méo động lực bản nhạc."
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('agc')}
+                    <Toggle
+                      checked={params.agcEnabled}
+                      onChange={v => updateField('agcEnabled', v, true)}
+                      label="Toggle Playback Gain Control"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Effect Strength
+                        <InfoTip
+                          align="right"
+                          text="Mức độ can thiệp tự động điều chỉnh âm lượng (0–100%). Mức 40–60% giữ độ tự nhiên cao nhất."
+                        />
+                      </span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {Math.round(params.agcStrength * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={params.agcStrength}
+                      onChange={e => updateField('agcStrength', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Max Gain
+                        <InfoTip
+                          align="right"
+                          text="Mức khuếch đại tối đa cho phép khi gặp bài hát quá nhỏ (0 đến +24 dB, tương đương 1x–16x)."
+                        />
+                      </span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        +{params.agcMaxGainDb.toFixed(0)} dB
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={24}
+                      step={1}
+                      value={params.agcMaxGainDb}
+                      onChange={e => updateField('agcMaxGainDb', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Output Threshold
+                        <InfoTip
+                          align="right"
+                          text="Ngưỡng âm lượng mục tiêu đầu ra (-12 đến 0 dBFS). Nên để -1.0 đến -2.0 dBFS để giữ độ sạch."
+                        />
+                      </span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {params.agcOutputThreshDb.toFixed(1)} dBFS
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={-12}
+                      max={0}
+                      step={0.5}
+                      value={params.agcOutputThreshDb}
+                      onChange={e => updateField('agcOutputThreshDb', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
                   </div>
                 </div>
               </div>
