@@ -4,16 +4,20 @@ import {
   AudioLines,
   Check,
   Copy,
+  Ear,
   Flame,
+  Gauge,
   Headphones,
   Power,
+  Radio,
   RefreshCw,
   RotateCcw,
   ShieldCheck,
   Sliders,
   Sparkles,
   Volume2,
-  Waves
+  Waves,
+  Zap
 } from 'lucide-react';
 import {
   AudioDevice,
@@ -797,6 +801,318 @@ export default function App() {
                     onChange={e => updateField('limiterThresholdDb', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
+                </div>
+              </div>
+
+              {/* Dynamic System */}
+              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Dynamic System
+                    </h3>
+                  </div>
+                  <Toggle
+                    checked={params.dynamicEnabled}
+                    onChange={v => updateField('dynamicEnabled', v, true)}
+                    label="Toggle Dynamic System"
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                    {['Common', 'Extreme HP', 'High-End HP', 'Studio'].map((label, idx) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => updateField('dynamicDevice', idx, true)}
+                        className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
+                          params.dynamicDevice === idx
+                            ? 'bg-zinc-800 text-white'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div>
+                    <div className="mb-1.5 flex justify-between text-xs">
+                      <span className="text-zinc-400">Dynamic Bass</span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {Math.round(params.dynamicBass)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={2}
+                      value={params.dynamicBass}
+                      onChange={e => updateField('dynamicBass', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Reverberation (Room Simulator) */}
+              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Radio className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Reverberation
+                    </h3>
+                  </div>
+                  <Toggle
+                    checked={params.reverbEnabled}
+                    onChange={v => updateField('reverbEnabled', v, true)}
+                    label="Toggle Reverberation"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="text-zinc-400">Room Size</span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {Math.round(params.reverbRoomSize * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={params.reverbRoomSize}
+                      onChange={e => updateField('reverbRoomSize', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="text-zinc-400">Sound Field / Width</span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {Math.round(params.reverbWidth * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={params.reverbWidth}
+                      onChange={e => updateField('reverbWidth', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="text-zinc-400">Damping</span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {Math.round(params.reverbDamping * 100)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={params.reverbDamping}
+                      onChange={e => updateField('reverbDamping', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-zinc-400">Wet</span>
+                        <span className="font-mono tabular-nums text-zinc-200">
+                          {Math.round(params.reverbWet * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.02}
+                        value={params.reverbWet}
+                        onChange={e => updateField('reverbWet', parseFloat(e.target.value))}
+                        className="studio-slider w-full"
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-zinc-400">Dry</span>
+                        <span className="font-mono tabular-nums text-zinc-200">
+                          {Math.round(params.reverbDry * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.02}
+                        value={params.reverbDry}
+                        onChange={e => updateField('reverbDry', parseFloat(e.target.value))}
+                        className="studio-slider w-full"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compressor / Playback Gain Control */}
+              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Gauge className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Compressor / AGC
+                    </h3>
+                  </div>
+                  <Toggle
+                    checked={params.compEnabled}
+                    onChange={v => updateField('compEnabled', v, true)}
+                    label="Toggle Compressor"
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="text-zinc-400">Threshold</span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {params.compThresholdDb.toFixed(0)} dB
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={-40}
+                      max={0}
+                      step={1}
+                      value={params.compThresholdDb}
+                      onChange={e => updateField('compThresholdDb', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="text-zinc-400">Ratio</span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        {params.compRatio.toFixed(1)} : 1
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={20}
+                      step={0.5}
+                      value={params.compRatio}
+                      onChange={e => updateField('compRatio', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-zinc-400">Attack</span>
+                        <span className="font-mono tabular-nums text-zinc-200">
+                          {params.compAttackMs.toFixed(0)} ms
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={100}
+                        step={1}
+                        value={params.compAttackMs}
+                        onChange={e => updateField('compAttackMs', parseFloat(e.target.value))}
+                        className="studio-slider w-full"
+                      />
+                    </div>
+                    <div>
+                      <div className="mb-1 flex justify-between text-xs">
+                        <span className="text-zinc-400">Release</span>
+                        <span className="font-mono tabular-nums text-zinc-200">
+                          {params.compReleaseMs.toFixed(0)} ms
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={20}
+                        max={500}
+                        step={10}
+                        value={params.compReleaseMs}
+                        onChange={e => updateField('compReleaseMs', parseFloat(e.target.value))}
+                        className="studio-slider w-full"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex justify-between text-xs">
+                      <span className="text-zinc-400">Makeup Gain</span>
+                      <span className="font-mono tabular-nums text-zinc-200">
+                        +{params.compMakeupDb.toFixed(1)} dB
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={18}
+                      step={0.5}
+                      value={params.compMakeupDb}
+                      onChange={e => updateField('compMakeupDb', parseFloat(e.target.value))}
+                      className="studio-slider w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cure Tech+ (Binaural Crossfeed) */}
+              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Ear className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Cure Tech+ (Crossfeed)
+                    </h3>
+                  </div>
+                  <Toggle
+                    checked={params.cureEnabled}
+                    onChange={v => updateField('cureEnabled', v, true)}
+                    label="Toggle Cure Tech+"
+                  />
+                </div>
+
+                <p className="mb-4 text-xs text-zinc-400">
+                  Binaural speaker crossfeed with 0.26 ms ITD to reduce headphone ear fatigue during long sessions.
+                </p>
+
+                <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                  {['Slight', 'Moderate', 'Extreme'].map((label, idx) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => updateField('cureLevel', idx, true)}
+                      className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
+                        params.cureLevel === idx
+                          ? 'bg-zinc-800 text-white'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </section>

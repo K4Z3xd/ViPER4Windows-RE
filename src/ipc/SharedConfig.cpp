@@ -181,8 +181,8 @@ bool SharedConfig::writeParams(const DspParams& params) noexcept {
     block->seqlock.store(seq + 1, std::memory_order_release);
 
     DspParams toWrite = params;
-    toWrite.magic = 0x56504852u;
-    toWrite.version = 1;
+    toWrite.magic = kParamsMagic;
+    toWrite.version = kParamsVersion;
     toWrite.sequence = (seq + 2) / 2;
     std::memcpy(&block->params, &toWrite, sizeof(DspParams));
 

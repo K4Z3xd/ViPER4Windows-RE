@@ -10,9 +10,13 @@ add_library(viper_dsp STATIC
     src/dsp/BiquadFilter.cpp
     src/dsp/ParametricEq.cpp
     src/dsp/ViperBass.cpp
+    src/dsp/DynamicSystem.cpp
     src/dsp/ViperClarity.cpp
     src/dsp/TubeSimulator.cpp
+    src/dsp/Compressor.cpp
+    src/dsp/CureTech.cpp
     src/dsp/DifferentialSurround.cpp
+    src/dsp/Reverb.cpp
     src/dsp/Limiter.cpp
     src/dsp/ViperEngine.cpp
 )
@@ -85,9 +89,13 @@ if(MSVC AND EXISTS "${FB2K_SDK_DIR}/foobar2000/SDK/x64/Release/foobar2000_SDK.li
         src/dsp/BiquadFilter.cpp
         src/dsp/ParametricEq.cpp
         src/dsp/ViperBass.cpp
+        src/dsp/DynamicSystem.cpp
         src/dsp/ViperClarity.cpp
         src/dsp/TubeSimulator.cpp
+        src/dsp/Compressor.cpp
+        src/dsp/CureTech.cpp
         src/dsp/DifferentialSurround.cpp
+        src/dsp/Reverb.cpp
         src/dsp/Limiter.cpp
         src/dsp/ViperEngine.cpp
         src/ipc/SharedConfig.cpp

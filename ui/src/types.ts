@@ -46,6 +46,24 @@ export interface DspParams {
   stereoWidth: number;
   limiterEnabled: boolean;
   limiterThresholdDb: number;
+  // V2 Classic ViPER4Windows Modules
+  dynamicEnabled: boolean;
+  dynamicDevice: number; // 0..3
+  dynamicBass: number;   // 0..100
+  reverbEnabled: boolean;
+  reverbRoomSize: number;
+  reverbWidth: number;
+  reverbDamping: number;
+  reverbWet: number;
+  reverbDry: number;
+  compEnabled: boolean;
+  compThresholdDb: number;
+  compRatio: number;
+  compAttackMs: number;
+  compReleaseMs: number;
+  compMakeupDb: number;
+  cureEnabled: boolean;
+  cureLevel: number; // 0: Slight, 1: Moderate, 2: Extreme
 }
 
 export const EQ_LABELS = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
@@ -69,7 +87,24 @@ export const DEFAULT_PARAMS: DspParams = {
   surroundDelayMs: 6.0,
   stereoWidth: 1.0,
   limiterEnabled: true,
-  limiterThresholdDb: -0.3
+  limiterThresholdDb: -0.3,
+  dynamicEnabled: false,
+  dynamicDevice: 0,
+  dynamicBass: 25,
+  reverbEnabled: false,
+  reverbRoomSize: 0.35,
+  reverbWidth: 0.5,
+  reverbDamping: 0.25,
+  reverbWet: 0.2,
+  reverbDry: 0.85,
+  compEnabled: false,
+  compThresholdDb: -18,
+  compRatio: 3,
+  compAttackMs: 10,
+  compReleaseMs: 120,
+  compMakeupDb: 3,
+  cureEnabled: false,
+  cureLevel: 0
 };
 
 export interface Preset {

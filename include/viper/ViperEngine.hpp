@@ -1,9 +1,13 @@
 #pragma once
 
+#include "viper/Compressor.hpp"
+#include "viper/CureTech.hpp"
 #include "viper/DifferentialSurround.hpp"
 #include "viper/DspTypes.hpp"
+#include "viper/DynamicSystem.hpp"
 #include "viper/Limiter.hpp"
 #include "viper/ParametricEq.hpp"
+#include "viper/Reverb.hpp"
 #include "viper/TubeSimulator.hpp"
 #include "viper/ViperBass.hpp"
 #include "viper/ViperClarity.hpp"
@@ -13,11 +17,9 @@ namespace viper {
 
 class ViperEngine {
 public:
-    // Allocates any sample-rate dependent buffers (call from non-RT setup / LockForProcess)
     void prepare(uint32_t sampleRate);
     void reset() noexcept;
 
-    // Applies updated parameters (safe to call from RT thread when sequence changes)
     void setParams(const DspParams& params) noexcept;
 
     [[nodiscard]] uint32_t sampleRate() const noexcept { return sampleRate_; }
@@ -34,9 +36,13 @@ private:
 
     ParametricEq eq_{};
     ViperBass bass_{};
+    DynamicSystem dynamic_{};
     ViperClarity clarity_{};
     TubeSimulator tube_{};
+    Compressor compressor_{};
+    CureTech cure_{};
     DifferentialSurround surround_{};
+    Reverb reverb_{};
     Limiter limiter_{};
 };
 

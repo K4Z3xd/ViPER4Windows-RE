@@ -12,12 +12,13 @@ const LIVE_PARAMS_PATH = 'C:\\ProgramData\\ViPERHiRes\\live_params.bin';
 const FOOBAR_STATUS_PATH = 'C:\\ProgramData\\ViPERHiRes\\foobar_status.json';
 const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
 const MAGIC_VPHR = 0x56504852;
-const BLOCK_SIZE = 128;
+const PARAMS_VERSION = 2;
+const BLOCK_SIZE = 196; // 4-byte seqlock + 192-byte DspParams v2
 
 function readParamsDirect() {
   const buf = fs.readFileSync(LIVE_PARAMS_PATH);
   if (buf.length < BLOCK_SIZE || buf.readUInt32LE(4) !== MAGIC_VPHR) {
-    throw new Error('Invalid live_params.bin');
+    throw new Error('Upgrade needed for live_params.bin');
   }
   const eqBandsDb = [];
   for (let i = 0; i < 10; i++) {
@@ -43,12 +44,33 @@ function readParamsDirect() {
     surroundDelayMs: Math.round(buf.readFloatLE(112) * 100) / 100,
     stereoWidth: Math.round(buf.readFloatLE(116) * 100) / 100,
     limiterEnabled: buf.readUInt32LE(120) !== 0,
-    limiterThresholdDb: Math.round(buf.readFloatLE(124) * 100) / 100
+    limiterThresholdDb: Math.round(buf.readFloatLE(124) * 100) / 100,
+    // V2 modules
+    dynamicEnabled: buf.readUInt32LE(128) !== 0,
+    dynamicDevice: buf.readUInt32LE(132),
+    dynamicBass: Math.round(buf.readFloatLE(136) * 100) / 100,
+    reverbEnabled: buf.readUInt32LE(140) !== 0,
+    reverbRoomSize: Math.round(buf.readFloatLE(144) * 100) / 100,
+    reverbWidth: Math.round(buf.readFloatLE(148) * 100) / 100,
+    reverbDamping: Math.round(buf.readFloatLE(152) * 100) / 100,
+    reverbWet: Math.round(buf.readFloatLE(156) * 100) / 100,
+    reverbDry: Math.round(buf.readFloatLE(160) * 100) / 100,
+    compEnabled: buf.readUInt32LE(164) !== 0,
+    compThresholdDb: Math.round(buf.readFloatLE(168) * 100) / 100,
+    compRatio: Math.round(buf.readFloatLE(172) * 100) / 100,
+    compAttackMs: Math.round(buf.readFloatLE(176) * 100) / 100,
+    compReleaseMs: Math.round(buf.readFloatLE(180) * 100) / 100,
+    compMakeupDb: Math.round(buf.readFloatLE(184) * 100) / 100,
+    cureEnabled: buf.readUInt32LE(188) !== 0,
+    cureLevel: buf.readUInt32LE(192)
   };
 }
 
 function writeParamsDirect(p) {
-  // Open existing 128-byte memory-mapped backing file for instant in-place seqlock update (<0.1ms)
+  if (!fs.existsSync(LIVE_PARAMS_PATH) || fs.statSync(LIVE_PARAMS_PATH).size < BLOCK_SIZE) {
+    fs.writeFileSync(LIVE_PARAMS_PATH, Buffer.alloc(BLOCK_SIZE));
+  }
+
   const fd = fs.openSync(LIVE_PARAMS_PATH, 'r+');
   try {
     const curBuf = Buffer.alloc(BLOCK_SIZE);
@@ -64,10 +86,10 @@ function writeParamsDirect(p) {
     seqBuf.writeUInt32LE(oddSeq, 0);
     fs.writeSync(fd, seqBuf, 0, 4, 0);
 
-    // 2. Write payload bytes [4..128)
+    // 2. Write payload bytes [4..196)
     const payload = Buffer.alloc(BLOCK_SIZE - 4);
     payload.writeUInt32LE(MAGIC_VPHR, 0);
-    payload.writeUInt32LE(1, 4);
+    payload.writeUInt32LE(PARAMS_VERSION, 4);
     payload.writeUInt32LE((evenSeq >>> 1), 8);
     payload.writeUInt32LE(p.masterEnabled ? 1 : 0, 12);
     payload.writeFloatLE(Number(p.masterGainDb ?? 0), 16);
@@ -91,9 +113,28 @@ function writeParamsDirect(p) {
     payload.writeFloatLE(Number(p.stereoWidth ?? 1), 112);
     payload.writeUInt32LE(p.limiterEnabled ? 1 : 0, 116);
     payload.writeFloatLE(Number(p.limiterThresholdDb ?? -0.3), 120);
+    // V2 modules (offsets relative to payload start = file offset - 4)
+    payload.writeUInt32LE(p.dynamicEnabled ? 1 : 0, 124);
+    payload.writeUInt32LE(Number(p.dynamicDevice ?? 0) >>> 0, 128);
+    payload.writeFloatLE(Number(p.dynamicBass ?? 25), 132);
+    payload.writeUInt32LE(p.reverbEnabled ? 1 : 0, 136);
+    payload.writeFloatLE(Number(p.reverbRoomSize ?? 0.35), 140);
+    payload.writeFloatLE(Number(p.reverbWidth ?? 0.5), 144);
+    payload.writeFloatLE(Number(p.reverbDamping ?? 0.25), 148);
+    payload.writeFloatLE(Number(p.reverbWet ?? 0.2), 152);
+    payload.writeFloatLE(Number(p.reverbDry ?? 0.85), 156);
+    payload.writeUInt32LE(p.compEnabled ? 1 : 0, 160);
+    payload.writeFloatLE(Number(p.compThresholdDb ?? -18), 164);
+    payload.writeFloatLE(Number(p.compRatio ?? 3), 168);
+    payload.writeFloatLE(Number(p.compAttackMs ?? 10), 172);
+    payload.writeFloatLE(Number(p.compReleaseMs ?? 120), 176);
+    payload.writeFloatLE(Number(p.compMakeupDb ?? 3), 180);
+    payload.writeUInt32LE(p.cureEnabled ? 1 : 0, 184);
+    payload.writeUInt32LE(Number(p.cureLevel ?? 0) >>> 0, 188);
+
     fs.writeSync(fd, payload, 0, payload.length, 4);
 
-    // 3. Mark seqlock even (write complete -> APO & foobar2000 pick up on next frame!)
+    // 3. Mark seqlock even (write complete)
     seqBuf.writeUInt32LE(evenSeq, 0);
     fs.writeSync(fd, seqBuf, 0, 4, 0);
   } finally {
