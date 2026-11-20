@@ -217,7 +217,11 @@ const server = http.createServer(async (req, res) => {
 
     if (fs.existsSync(filePath)) {
       const ext = path.extname(filePath);
-      res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+      const headers = { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' };
+      if (ext === '.html') {
+        headers['Cache-Control'] = 'no-store, no-cache, must-revalidate';
+      }
+      res.writeHead(200, headers);
       fs.createReadStream(filePath).pipe(res);
       return;
     }

@@ -260,11 +260,8 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="font-display text-lg font-bold tracking-tight text-white">
-                  ViPERHiRes
+                  ViPER4Windows RE
                 </h1>
-                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] font-medium text-emerald-300">
-                  44.1–384 kHz · 32-BIT FLOAT
-                </span>
               </div>
               <p className="text-xs text-zinc-400">
                 {defaultDevice
