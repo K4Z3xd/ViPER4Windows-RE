@@ -1,4 +1,5 @@
 using Microsoft.UI;
+using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -34,23 +35,48 @@ public sealed partial class MainWindow : Window
     private int _analogMode = 0;
     private bool _isUpdating = true;
 
-    private static readonly SolidColorBrush EmeraldBrush = new(Color.FromArgb(255, 16, 185, 129));
-    private static readonly SolidColorBrush EmeraldLightBrush = new(Color.FromArgb(255, 52, 211, 153));
-    private static readonly SolidColorBrush EmeraldTextBrush = new(Color.FromArgb(255, 167, 243, 208));
-    private static readonly SolidColorBrush EmeraldBgBrush = new(Color.FromArgb(46, 16, 185, 129));
-    private static readonly SolidColorBrush EmeraldBorderBrush = new(Color.FromArgb(140, 52, 211, 153));
-    private static readonly SolidColorBrush MutedBrush = new(Color.FromArgb(255, 113, 113, 122));
-    private static readonly SolidColorBrush MutedBgBrush = new(Color.FromArgb(255, 39, 39, 42));
-    private static readonly SolidColorBrush MutedBorderBrush = new(Color.FromArgb(255, 63, 63, 70));
-    private static readonly SolidColorBrush CardBgBrush = new(Color.FromArgb(204, 18, 18, 22));
-    private static readonly SolidColorBrush CardBorderBrush = new(Color.FromArgb(255, 46, 46, 54));
-    private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
-    private static readonly SolidColorBrush TextSecondaryBrush = new(Color.FromArgb(255, 161, 161, 170));
-    private static readonly SolidColorBrush TextDimBrush = new(Color.FromArgb(255, 212, 212, 216));
+    private readonly SolidColorBrush EmeraldBrush;
+    private readonly SolidColorBrush EmeraldLightBrush;
+    private readonly SolidColorBrush EmeraldTextBrush;
+    private readonly SolidColorBrush EmeraldBgBrush;
+    private readonly SolidColorBrush EmeraldBorderBrush;
+    private readonly SolidColorBrush MutedBrush;
+    private readonly SolidColorBrush MutedBgBrush;
+    private readonly SolidColorBrush MutedBorderBrush;
+    private readonly SolidColorBrush CardBgBrush;
+    private readonly SolidColorBrush CardBorderBrush;
+    private readonly SolidColorBrush TransparentBrush;
+    private readonly SolidColorBrush TextSecondaryBrush;
+    private readonly SolidColorBrush TextDimBrush;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        // Create WinRT brushes on the UI thread after XAML initialization
+        EmeraldBrush = new(Color.FromArgb(255, 16, 185, 129));
+        EmeraldLightBrush = new(Color.FromArgb(255, 52, 211, 153));
+        EmeraldTextBrush = new(Color.FromArgb(255, 167, 243, 208));
+        EmeraldBgBrush = new(Color.FromArgb(46, 16, 185, 129));
+        EmeraldBorderBrush = new(Color.FromArgb(140, 52, 211, 153));
+        MutedBrush = new(Color.FromArgb(255, 113, 113, 122));
+        MutedBgBrush = new(Color.FromArgb(255, 39, 39, 42));
+        MutedBorderBrush = new(Color.FromArgb(255, 63, 63, 70));
+        CardBgBrush = new(Color.FromArgb(204, 18, 18, 22));
+        CardBorderBrush = new(Color.FromArgb(255, 46, 46, 54));
+        TransparentBrush = new(Colors.Transparent);
+        TextSecondaryBrush = new(Color.FromArgb(255, 161, 161, 170));
+        TextDimBrush = new(Color.FromArgb(255, 212, 212, 216));
+
+        // Safe Windows 11 Mica backdrop
+        try
+        {
+            if (MicaController.IsSupported())
+            {
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+            }
+        }
+        catch { }
 
         // Native Windows 11 custom title bar + window sizing
         ExtendsContentIntoTitleBar = true;
@@ -423,13 +449,13 @@ public sealed partial class MainWindow : Window
         DrawEqCurve();
     }
 
-    private static void StylePresetCard(Button btn, bool active)
+    private void StylePresetCard(Button btn, bool active)
     {
         btn.Background = active ? EmeraldBgBrush : CardBgBrush;
         btn.BorderBrush = active ? EmeraldBorderBrush : CardBorderBrush;
     }
 
-    private static void StyleModeButtons(Button[] buttons, int selectedIdx, bool moduleActive)
+    private void StyleModeButtons(Button[] buttons, int selectedIdx, bool moduleActive)
     {
         for (int i = 0; i < buttons.Length; i++)
         {
