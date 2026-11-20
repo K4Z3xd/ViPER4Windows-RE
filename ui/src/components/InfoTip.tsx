@@ -46,7 +46,7 @@ export function InfoTip({ text, align = 'center' }: InfoTipProps) {
       {open && (
         <span
           role="tooltip"
-          className={`pointer-events-none absolute bottom-full z-50 mb-2 w-64 rounded-xl border border-zinc-700/90 bg-zinc-950/95 px-3 py-2 text-[11px] font-normal leading-relaxed text-zinc-200 shadow-[0_10px_30px_rgba(0,0,0,0.85)] backdrop-blur-md ${alignClass}`}
+          className={`pointer-events-none absolute bottom-full z-50 mb-2.5 w-72 rounded-xl border border-zinc-700/90 bg-zinc-950/95 px-3.5 py-2.5 text-[13px] font-normal leading-relaxed text-zinc-100 shadow-[0_12px_32px_rgba(0,0,0,0.88)] backdrop-blur-md ${alignClass}`}
         >
           {text}
           <span

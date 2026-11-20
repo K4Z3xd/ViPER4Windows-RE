@@ -37,6 +37,23 @@ import {
   Preset
 } from './types';
 import { InfoTip } from './components/InfoTip';
+import {
+  V4AAnalogXIcon,
+  V4ABassIcon,
+  V4AClarityIcon,
+  V4ACompressorIcon,
+  V4AConvolverIcon,
+  V4ADdcIcon,
+  V4ADiffSurroundIcon,
+  V4ADynamicIcon,
+  V4AEqualizerIcon,
+  V4AFieldSurroundIcon,
+  V4APlaybackGainIcon,
+  V4AReverbIcon,
+  V4ATubeIcon,
+  V4AVhsIcon,
+  V4AVseIcon
+} from './components/V4AIcons';
 
 function Toggle({
   checked,
@@ -345,7 +362,7 @@ export default function App() {
   };
 
   const handleSavePreset = async () => {
-    const name = window.prompt('Nhập tên Preset muốn lưu:', selectedPresetName || 'My Custom Preset');
+    const name = window.prompt('Enter preset name to save:', selectedPresetName || 'My Custom Preset');
     if (!name || !name.trim()) return;
     const presetObj: Preset = {
       name: name.trim(),
@@ -426,7 +443,7 @@ export default function App() {
   };
 
   const handleSaveEqPreset = async () => {
-    const name = window.prompt('Nhập tên EQ Preset muốn lưu:', selectedEqPresetName || 'My EQ');
+    const name = window.prompt('Enter EQ preset name to save:', selectedEqPresetName || 'My EQ');
     if (!name || !name.trim()) return;
     const eqObj: EqPreset = {
       name: name.trim(),
@@ -884,13 +901,13 @@ export default function App() {
             <section className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <Activity className="h-4 w-4 text-emerald-400" />
+                  <V4AEqualizerIcon className="h-4.5 w-4.5 text-emerald-400" />
                   <h2 className="font-display text-base font-semibold text-white">
                     {params.eqMode === 1 ? '18-Band' : '10-Band'} Hi-Res Equalizer
                   </h2>
                   <InfoTip
                     align="left"
-                    text="Bộ cân bằng 10-Band hoặc 18-Band dùng bộ lọc Biquad 64-bit. Chuyển sang 18-Band để tinh chỉnh chi tiết từng nửa quãng tám giống ViPER4Windows gốc."
+                    text="64-bit Biquad parametric equalizer. Switch between 10-Band (1-octave) and 18-Band (1/2-octave) for surgical tonal shaping from 31 Hz sub-bass up to 16 kHz air."
                   />
                   {/* EQ Band Mode Switch */}
                   <div className="flex rounded-lg border border-zinc-800 bg-black p-0.5">
@@ -1034,11 +1051,11 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Waves className="h-4 w-4 text-emerald-400" />
+                    <V4ABassIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">ViPER Bass</h3>
                     <InfoTip
                       align="left"
-                      text="Tăng cường dải siêu trầm sâu và có lực. Natural: tăng trầm tự nhiên; PureBass+: trầm gọn, chắc có hài bậc 2; Subwoofer: tái tạo lực rung sâu như loa sub."
+                      text="Enhances low-end weight and punch. Natural: clean sub-bass shelf; PureBass+: tight punch with subtle 2nd harmonics; Subwoofer: deep sub-harmonic rumble."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1075,7 +1092,7 @@ export default function App() {
                         Bass Frequency
                         <InfoTip
                           align="left"
-                          text="Tần số cắt của dải trầm (30–120Hz). Mức 50–65Hz tập trung vào sub-bass sâu, mức 80–100Hz tăng lực trống mid-bass dày hơn."
+                          text="Low-pass cutoff frequency (30–120 Hz). 50–65 Hz targets deep sub-bass; 80–100 Hz adds fuller mid-bass drum impact."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1099,7 +1116,7 @@ export default function App() {
                         Bass Boost
                         <InfoTip
                           align="left"
-                          text="Độ lớn tăng cường âm trầm (0 đến +15 dB). Nên bắt đầu ở mức +3.5 đến +6 dB để giữ độ sạch cho dải trung."
+                          text="Amount of bass enhancement (0 to +15 dB). Start around +3.5 to +6.0 dB to keep midrange clarity intact."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1126,9 +1143,9 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-emerald-400" />
+                    <V4AClarityIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">ViPER Clarity</h3>
-                    <InfoTip text="Tăng độ trong trẻo và tách bạch chi tiết nhạc cụ/giọng hát. Natural: sáng mượt tự nhiên; OZone+: thêm độ thoáng (air) dải cao; XHiFi: tái tạo chi tiết sắc nét cho tai nghe Hi-Res." />
+                    <InfoTip text="Sharpens vocal presence and instrument separation. Natural: smooth high lift; OZone+: airy harmonic shimmer; XHiFi: crisp micro-detail reconstruction." />
                   </div>
                   <div className="flex items-center gap-2">
                     {renderModulePin('clarity')}
@@ -1162,7 +1179,7 @@ export default function App() {
                     <div className="mb-1.5 flex justify-between text-xs">
                       <span className="inline-flex items-center gap-1.5 text-zinc-400">
                         Clarity Level
-                        <InfoTip text="Mức độ nâng chi tiết dải cao (0 đến +15 dB). Mức +2 đến +4 dB giúp giọng hát và nhạc cụ nổi khối mà không bị chói gắt." />
+                        <InfoTip text="High-frequency clarity intensity (0 to +15 dB). +2.0 to +4.0 dB brings vocals forward without introducing harsh sibilance." />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         +{params.clarityGainDb.toFixed(1)} dB
@@ -1188,13 +1205,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Flame className="h-4 w-4 text-amber-400" />
+                    <V4ATubeIcon className="h-4.5 w-4.5 text-amber-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Tube Simulator (6N1J)
                     </h3>
                     <InfoTip
                       align="right"
-                      text="Giả lập chất âm ấm áp của ampli đèn điện tử 6N1J bằng cách tạo hài âm bậc chẵn nhẹ nhàng, làm mềm các dải cao gắt và dày giọng hát."
+                      text="Emulates the warm, musical even-order harmonics of a 6N1J vacuum tube amplifier, softening digital harshness and enriching vocals."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1217,7 +1234,7 @@ export default function App() {
                       Warmth / Drive
                       <InfoTip
                         align="right"
-                        text="Cường độ giả lập đèn (0–100%). Mức 20–40% cho độ ấm analog mượt mà; cao hơn sẽ nghe rõ độ bão hòa cổ điển (vintage)."
+                        text="Tube saturation intensity (0–100%). 20–40% adds smooth analog warmth; higher values give a richer vintage tube color."
                       />
                     </span>
                     <span className="font-mono tabular-nums text-zinc-200">
@@ -1243,13 +1260,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Headphones className="h-4 w-4 text-emerald-400" />
+                    <V4ADiffSurroundIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Differential Surround
                     </h3>
                     <InfoTip
                       align="left"
-                      text="Mở rộng không gian âm trường (soundstage) bằng hiệu ứng trễ Haas và tách kênh Mid/Side, giúp âm thanh rộng mở ra ngoài đầu khi đeo tai nghe."
+                      text="Expands headphone soundstage using Haas inter-channel delay and Mid/Side stereo widening for an out-of-head listening feel."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1269,7 +1286,7 @@ export default function App() {
                         Haas Delay
                         <InfoTip
                           align="left"
-                          text="Độ trễ nhẹ giữa 2 kênh trái/phải (0–20 ms). Mức 2–6 ms tạo cảm giác không gian rộng tự nhiên; trên 12 ms tạo hiệu ứng vòm rõ rệt."
+                          text="Subtle L/R time offset (0–20 ms). 2–6 ms widens naturally; above 12 ms creates a pronounced surround-hall effect."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1293,7 +1310,7 @@ export default function App() {
                         Stereo Soundstage
                         <InfoTip
                           align="left"
-                          text="Độ rộng âm trường Mid/Side. 100% là nguyên bản, dưới 100% thu hẹp về Mono, trên 100% (115–140%) đẩy nhạc cụ sang hai bên rộng hơn."
+                          text="Mid/Side stereo width. 100% is original stereo, below 100% narrows toward Mono, and 115–140% opens up the soundstage."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1322,7 +1339,7 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <Volume2 className="h-4 w-4 text-zinc-200" />
                     <h3 className="font-display text-sm font-semibold text-white">Master Output</h3>
-                    <InfoTip text="Điều chỉnh tổng âm lượng đầu ra (Pre-amp) và độ cân bằng giữa 2 bên tai nghe Trái / Phải." />
+                    <InfoTip text="Controls final output pre-amp gain and Left/Right stereo balance before the brickwall limiter." />
                   </div>
                   {renderModulePin('master')}
                 </div>
@@ -1332,7 +1349,7 @@ export default function App() {
                     <div className="mb-1.5 flex justify-between text-xs">
                       <span className="inline-flex items-center gap-1.5 text-zinc-400">
                         Output Gain
-                        <InfoTip text="Tăng hoặc giảm tổng độ lớn tín hiệu (-24 đến +12 dB). Nếu tăng EQ hoặc Bass nhiều, có thể giảm nhẹ -2 đến -4 dB để tạo khoảng thở (headroom)." />
+                        <InfoTip text="Master volume trim (-24 to +12 dB). Lowering by -2 to -4 dB adds clean headroom when stacking heavy EQ or Bass boosts." />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.masterGainDb > 0 ? `+${params.masterGainDb.toFixed(1)}` : params.masterGainDb.toFixed(1)} dB
@@ -1353,7 +1370,7 @@ export default function App() {
                     <div className="mb-1.5 flex justify-between text-xs">
                       <span className="inline-flex items-center gap-1.5 text-zinc-400">
                         L / R Balance
-                        <InfoTip text="Cân bằng âm lượng giữa kênh Trái (L) và Phải (R). Hữu ích nếu một bên tai nghe bị lệch âm lượng nhẹ." />
+                        <InfoTip text="Shifts stereo balance toward Left or Right. Useful to compensate for slight driver imbalance in headphones or IEMs." />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.outputPan === 0
@@ -1389,7 +1406,7 @@ export default function App() {
                     </h3>
                     <InfoTip
                       align="right"
-                      text="Bộ giới hạn đỉnh âm lượng (nên luôn bật). Tự động ghìm các đỉnh tín hiệu vượt ngưỡng 0 dBFS để chống rè và vỡ tiếng kỹ thuật số."
+                      text="Brickwall output safety limiter (recommended to stay ON). Smoothly catches peaks above 0 dBFS to prevent digital clipping and distortion."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1412,7 +1429,7 @@ export default function App() {
                       Ceiling Threshold
                       <InfoTip
                         align="right"
-                        text="Ngưỡng trần tối đa cho phép (-6.0 đến 0.0 dBFS). Mức -0.3 dBFS là chuẩn phòng thu giúp chống méo tiếng trên DAC."
+                        text="Maximum allowed peak level (-6.0 to 0.0 dBFS). -0.3 dBFS is the mastering standard to avoid inter-sample DAC clipping."
                       />
                     </span>
                     <span className="font-mono tabular-nums text-zinc-200">
@@ -1438,13 +1455,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-emerald-400" />
+                    <V4ADynamicIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Dynamic System
                     </h3>
                     <InfoTip
                       align="left"
-                      text="Tự động đo nhịp đánh (transient) của bản nhạc để tăng lực nảy của trống và độ sống động theo thời gian thực, chọn đúng loại tai nghe/loa để đạt độ cắt tần hợp lý nhất."
+                      text="Dynamically tracks musical transients to boost drum impact and energy in real time. Pick the listening device profile closest to your headphones."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1481,7 +1498,7 @@ export default function App() {
                         Dynamic Bass
                         <InfoTip
                           align="left"
-                          text="Cường độ lực đánh động (0–100%). Mức 20–35% giúp nhạc EDM/Pop có độ nảy và lực hơn mà không bị ù nền."
+                          text="Dynamic punch intensity (0–100%). 20–35% adds lively rhythmic impact to EDM/Pop without muddying quiet passages."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1508,11 +1525,11 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-emerald-400" />
+                    <V4AReverbIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Reverberation
                     </h3>
-                    <InfoTip text="Giả lập tiếng vang phòng nghe / khán phòng giúp âm thanh có chiều sâu không gian như đang nghe dàn loa thật." />
+                    <InfoTip text="Simulates natural room and hall acoustic reflections to add depth and spatial realism to headphones." />
                   </div>
                   <div className="flex items-center gap-2">
                     {renderModulePin('reverb')}
@@ -1529,7 +1546,7 @@ export default function App() {
                     <div className="mb-1 flex justify-between text-xs">
                       <span className="inline-flex items-center gap-1.5 text-zinc-400">
                         Room Size
-                        <InfoTip text="Kích thước phòng giả lập (0–100%). Thấp = phòng thu nhỏ, Cao = khán phòng rộng với đuôi vang dài hơn." />
+                        <InfoTip text="Virtual room dimensions (0–100%). Lower = intimate studio room; Higher = spacious concert hall with longer decay." />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.reverbRoomSize * 100)}%
@@ -1550,7 +1567,7 @@ export default function App() {
                     <div className="mb-1 flex justify-between text-xs">
                       <span className="inline-flex items-center gap-1.5 text-zinc-400">
                         Sound Field / Width
-                        <InfoTip text="Độ lan tỏa không gian stereo của tiếng vang giữa hai kênh trái và phải." />
+                        <InfoTip text="Stereo spread of the reverb tail between Left and Right channels." />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.reverbWidth * 100)}%
@@ -1571,7 +1588,7 @@ export default function App() {
                     <div className="mb-1 flex justify-between text-xs">
                       <span className="inline-flex items-center gap-1.5 text-zinc-400">
                         Damping
-                        <InfoTip text="Độ tiêu âm dải cao của tường phòng. Tăng Damping làm tiếng vang ấm và mềm hơn, giảm tiếng vang kim loại chói." />
+                        <InfoTip text="High-frequency absorption of virtual walls. Higher damping produces warmer, softer reverb tails." />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.reverbDamping * 100)}%
@@ -1593,7 +1610,7 @@ export default function App() {
                       <div className="mb-1 flex justify-between text-xs">
                         <span className="inline-flex items-center gap-1 text-zinc-400">
                           Wet
-                          <InfoTip text="Tỷ lệ âm lượng của tiếng vang phòng trộn vào nhạc (nên để 10–25% cho tự nhiên)." />
+                          <InfoTip text="Level of reverberated signal blended into the mix (10–25% sounds most natural)." />
                         </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {Math.round(params.reverbWet * 100)}%
@@ -1613,7 +1630,7 @@ export default function App() {
                       <div className="mb-1 flex justify-between text-xs">
                         <span className="inline-flex items-center gap-1 text-zinc-400">
                           Dry
-                          <InfoTip text="Tỷ lệ âm thanh gốc chưa qua tiếng vang (thường giữ ở mức 80–100%)." />
+                          <InfoTip text="Level of direct unprocessed signal (typically kept between 80–100%)." />
                         </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {Math.round(params.reverbDry * 100)}%
@@ -1640,13 +1657,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Gauge className="h-4 w-4 text-emerald-400" />
+                    <V4ACompressorIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
-                      Compressor / AGC
+                      FET Compressor
                     </h3>
                     <InfoTip
                       align="right"
-                      text="Nén dải động thông minh (Soft-Knee): ghìm bớt các đoạn quá to và nâng các đoạn nhỏ lên đều nhau — cực kỳ hữu ích khi xem phim, podcast hoặc nghe nhạc ban đêm."
+                      text="Soft-knee dynamic range compressor: gently tames loud peaks and lifts quiet details—great for movies, podcasts, and late-night listening."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1666,7 +1683,7 @@ export default function App() {
                         Threshold
                         <InfoTip
                           align="right"
-                          text="Ngưỡng âm lượng bắt đầu nén (-40 đến 0 dB). Âm thanh vượt ngưỡng này sẽ bị nén xuống theo tỷ lệ Ratio."
+                          text="Level where compression engages (-40 to 0 dB). Signals louder than this threshold are reduced by Ratio."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1690,7 +1707,7 @@ export default function App() {
                         Ratio
                         <InfoTip
                           align="right"
-                          text="Tỷ lệ nén (1:1 đến 20:1). Mức 2:1–4:1 nén êm tự nhiên cho nhạc; mức 6:1 trở lên nén mạnh để giữ âm lượng đều tăm tắp."
+                          text="Compression slope (1:1 to 20:1). 2:1–4:1 is smooth and musical; 6:1+ keeps loudness tightly controlled."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1713,7 +1730,7 @@ export default function App() {
                       <div className="mb-1 flex justify-between text-xs">
                         <span className="inline-flex items-center gap-1 text-zinc-400">
                           Attack
-                          <InfoTip text="Tốc độ bắt đầu nén khi có tiếng lớn đột ngột (1–100 ms). Thấp = phản ứng nhanh; Cao = giữ lại độ nảy ban đầu của tiếng trống." />
+                          <InfoTip text="How quickly compression clamps down on peaks (1–100 ms). Slower attack preserves crisp drum transients." />
                         </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {params.compAttackMs.toFixed(0)} ms
@@ -1735,7 +1752,7 @@ export default function App() {
                           Release
                           <InfoTip
                             align="right"
-                            text="Thời gian nhả nén sau khi âm thanh giảm dưới ngưỡng (20–500 ms). Mức 100–200 ms giúp âm lượng hồi lại mượt mà."
+                            text="How quickly gain recovers once audio drops below threshold (20–500 ms). 100–200 ms feels smooth and natural."
                           />
                         </span>
                         <span className="font-mono tabular-nums text-zinc-200">
@@ -1760,7 +1777,7 @@ export default function App() {
                         Makeup Gain
                         <InfoTip
                           align="right"
-                          text="Bù lại âm lượng sau khi nén (0 đến +18 dB) giúp tổng thể bản nhạc nghe đầy đặn và rõ chi tiết nhỏ hơn."
+                          text="Post-compression output boost (0 to +18 dB) to restore overall loudness and bring up subtle details."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -1793,7 +1810,7 @@ export default function App() {
                     </h3>
                     <InfoTip
                       align="left"
-                      text="Công nghệ chống mệt tai khi đeo tai nghe lâu: trộn nhẹ một phần âm trầm đã trễ 0.26 ms từ tai này sang tai kia giống cách tai người nghe loa ngoài tự nhiên."
+                      text="Reduces headphone listening fatigue by blending a low-pass filtered, 0.26 ms delayed signal across channels—mimicking natural speaker acoustics."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1835,11 +1852,11 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <AudioLines className="h-4 w-4 text-emerald-400" />
+                    <V4AConvolverIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Convolver (.irs / .wav)
                     </h3>
-                    <InfoTip text="Tích chập (Convolution) mô phỏng chính xác đặc tính âm thanh của các bộ EQ, DAC, ampli đèn hoặc phòng thu nổi tiếng thông qua file xung mẫu .irs / .wav của cộng đồng ViPER." />
+                    <InfoTip text="Partitioned FFT convolution engine that recreates the exact acoustic signature of studio gear, EQs, or rooms via community .irs / .wav impulse files." />
                   </div>
                   <div className="flex items-center gap-2">
                     {renderModulePin('convolver')}
@@ -1855,7 +1872,7 @@ export default function App() {
                   <div className="space-y-3">
                     <label className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
                       Impulse Response File
-                      <InfoTip text="Chọn file .irs hoặc .wav từ máy. Hệ thống tự động resample lên đúng tần số DAC (96/192/384 kHz) để không bị lệch màu âm." />
+                      <InfoTip text="Load any .irs or .wav impulse file. Automatically resamples 44.1/48 kHz impulses to match your active DAC rate (up to 384 kHz)." />
                     </label>
                     <div className="flex gap-2">
                       <select
@@ -1901,7 +1918,7 @@ export default function App() {
                           Cross-Channel
                           <InfoTip
                             align="right"
-                            text="Độ hòa trộn chéo giữa 2 kênh Trái/Phải sau khi qua Convolver (0–100%). 0% giữ nguyên độ tách kênh gốc; 15–30% giúp âm hình tự nhiên hơn."
+                            text="Blends Left and Right convolved channels together (0–100%). 0% keeps full stereo separation; 15–30% creates a cohesive soundstage."
                           />
                         </span>
                         <span className="font-mono tabular-nums text-zinc-200">
@@ -1927,7 +1944,7 @@ export default function App() {
                           Effect Mix (Wet)
                           <InfoTip
                             align="right"
-                            text="Độ đậm nhạt của hiệu ứng file .irs (0–100%). 100% áp dụng toàn bộ file xung; giảm xuống 40–70% nếu muốn pha nhẹ với chất âm gốc."
+                            text="Wet/Dry blend of the impulse response (0–100%). 100% applies the full .irs profile; 40–70% blends it subtly with dry audio."
                           />
                         </span>
                         <span className="font-mono tabular-nums text-zinc-200">
@@ -1955,13 +1972,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Headphones className="h-4 w-4 text-emerald-400" />
+                    <V4ADdcIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       ViPER-DDC (.vdc)
                     </h3>
                     <InfoTip
                       align="left"
-                      text="Nạp file hiệu chỉnh đáp tuyến tần số chuẩn phòng thu .vdc (từ kho AutoEQ / ViPER4Android) cho đúng mẫu tai nghe/IEM của bạn. Tự động biến đổi bộ lọc chính xác lên tới 384 kHz."
+                      text="Loads precision headphone/IEM frequency response correction profiles (.vdc from AutoEQ or ViPER4Android), mathematically transformed for Hi-Res rates up to 384 kHz."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -1979,7 +1996,7 @@ export default function App() {
                     Headphone Profile (.vdc)
                     <InfoTip
                       align="left"
-                      text="Tải file .vdc từ AutoEQ (autoeq.app -> chọn ViPER4Android DDC) rồi bấm Load .vdc để cân chỉnh chuẩn xác âm sắc tai nghe."
+                      text="Download a .vdc file for your exact IEM or headphone model from autoeq.app (ViPER4Android DDC format) and click Load .vdc."
                     />
                   </label>
                   <div className="flex gap-2">
@@ -2023,11 +2040,11 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-emerald-400" />
+                    <V4AVseIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Spectrum Extension
                     </h3>
-                    <InfoTip text="Tái tạo hài âm tần số cao (> 10 kHz) bị cắt mất ở nhạc nén MP3, YouTube, Spotify — giúp nhạc nghe thoáng và chi tiết hơn." />
+                    <InfoTip text="Reconstructs upper-frequency harmonics (> 10 kHz) lost in lossy compressed audio such as MP3, YouTube, and Spotify." />
                   </div>
                   <div className="flex items-center gap-2">
                     {renderModulePin('vse')}
@@ -2047,7 +2064,7 @@ export default function App() {
                   <div className="mb-1.5 flex justify-between text-xs">
                     <span className="inline-flex items-center gap-1.5 text-zinc-400">
                       Extension Strength
-                      <InfoTip text="Cường độ tái tạo dải siêu cao (0–100%). Mức 30–60% là tối ưu cho nhạc YouTube / Spotify." />
+                      <InfoTip text="High-frequency harmonic restoration intensity (0–100%). 30–60% works best for compressed streaming audio." />
                     </span>
                     <span className="font-mono tabular-nums text-zinc-200">
                       {Math.round(params.vseStrength * 100)}%
@@ -2072,13 +2089,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Flame className="h-4 w-4 text-amber-400" />
+                    <V4AAnalogXIcon className="h-4.5 w-4.5 text-amber-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       AnalogX (Class-A)
                     </h3>
                     <InfoTip
                       align="right"
-                      text="Giả lập độ dày và sự mượt mà đặc trưng của ampli bán dẫn Class-A. Khác với Tube 6N1J, AnalogX cho chất âm cân bằng, chắc tiếng và giàu nhạc tính hơn."
+                      text="Models the dense, smooth harmonic signature of a pure Class-A solid-state amplifier—tighter and more balanced than 6N1J tube saturation."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -2120,13 +2137,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Waves className="h-4 w-4 text-emerald-400" />
+                    <V4AFieldSurroundIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Field Surround
                     </h3>
                     <InfoTip
                       align="left"
-                      text="Mở rộng không gian nhạc cụ sang hai bên (Colorful Music) trong khi vẫn khóa chặt dải trầm ở giữa và chỉnh độ nổi của giọng ca sĩ qua Mid Image."
+                      text="Widens stereo instrument separation while keeping sub-bass anchored in mono and independently tuning center vocal focus via Mid Image."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -2146,7 +2163,7 @@ export default function App() {
                         Field Strength
                         <InfoTip
                           align="left"
-                          text="Độ rộng của trường âm stereo (0–100%). Mức 30–50% mở rộng sân khấu tự nhiên mà không bị loãng."
+                          text="Stereo field expansion (0–100%). 30–50% widens the stage naturally without hollowing out the mix."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -2170,7 +2187,7 @@ export default function App() {
                         Mid Image (Vocal Focus)
                         <InfoTip
                           align="left"
-                          text="Độ tập trung của giọng hát ở chính giữa (0–100%). Tăng trên 50% để giọng ca sĩ tiến gần và nổi khối rõ hơn."
+                          text="Center vocal prominence (0–100%). Pushing above 50% brings lead vocals closer and clearer in the center."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -2197,11 +2214,11 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Radio className="h-4 w-4 text-emerald-400" />
+                    <V4AVhsIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Headphone Surround+ (VHS+)
                     </h3>
-                    <InfoTip text="Tái tạo phản xạ âm học 3D (early reflections) quanh tai nghe theo 5 cấp độ từ phòng thu nhỏ (Lv1) tới không gian sân khấu rộng lớn (Lv5)." />
+                    <InfoTip text="Simulates 3D binaural early reflections around your headphones across 5 room-depth levels, from intimate studio (Lv 1) to live hall (Lv 5)." />
                   </div>
                   <div className="flex items-center gap-2">
                     {renderModulePin('vhs')}
@@ -2242,13 +2259,13 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Volume2 className="h-4 w-4 text-emerald-400" />
+                    <V4APlaybackGainIcon className="h-4.5 w-4.5 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Playback Gain Control
                     </h3>
                     <InfoTip
                       align="right"
-                      text="Tự động cân bằng âm lượng (AGC) mượt mà giữa các bài hát hoặc video YouTube thu âm to/nhỏ khác nhau mà không làm méo động lực bản nhạc."
+                      text="Automatic Gain Control (AGC) that smoothly levels loudness differences between quiet and loud songs or YouTube videos."
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -2268,7 +2285,7 @@ export default function App() {
                         Effect Strength
                         <InfoTip
                           align="right"
-                          text="Mức độ can thiệp tự động điều chỉnh âm lượng (0–100%). Mức 40–60% giữ độ tự nhiên cao nhất."
+                          text="How aggressively AGC levels track volume (0–100%). 40–60% preserves natural musical dynamics."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -2292,7 +2309,7 @@ export default function App() {
                         Max Gain
                         <InfoTip
                           align="right"
-                          text="Mức khuếch đại tối đa cho phép khi gặp bài hát quá nhỏ (0 đến +24 dB, tương đương 1x–16x)."
+                          text="Maximum upward boost allowed on very quiet tracks (0 to +24 dB, equivalent to 1x–16x)."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
@@ -2316,7 +2333,7 @@ export default function App() {
                         Output Threshold
                         <InfoTip
                           align="right"
-                          text="Ngưỡng âm lượng mục tiêu đầu ra (-12 đến 0 dBFS). Nên để -1.0 đến -2.0 dBFS để giữ độ sạch."
+                          text="Target output loudness ceiling (-12.0 to 0.0 dBFS). -1.0 to -2.0 dBFS keeps playback clean and balanced."
                         />
                       </span>
                       <span className="font-mono tabular-nums text-zinc-200">
