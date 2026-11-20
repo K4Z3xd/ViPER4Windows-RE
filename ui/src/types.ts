@@ -22,6 +22,7 @@ export interface LiveSourceStatus {
   deviceName: string;
   isHiRes: boolean;
   zeroResample: boolean;
+  extraApps?: string[];
 }
 
 export interface DspParams {

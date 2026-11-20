@@ -11,7 +11,7 @@ const DIST_DIR = path.resolve(__dirname, 'dist');
 const FOOBAR_STATUS_PATH = 'C:\\ProgramData\\ViPERHiRes\\foobar_status.json';
 const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
 
-function readLiveStatus(defaultDevice) {
+function readLiveStatus(defaultDevice, activeSessions = []) {
   const now = Date.now();
   // 1. Prefer live foobar2000 native DSP telemetry if active within last 4 seconds
   try {
@@ -32,7 +32,8 @@ function readLiveStatus(defaultDevice) {
           artist: fb.artist || '',
           deviceName: defaultDevice?.name || 'USB HiFi DAC',
           isHiRes: (fb.sampleRate || 0) >= 88200 || (fb.bitDepth || 0) >= 24,
-          zeroResample: true
+          zeroResample: true,
+          extraApps: []
         };
       }
     }
@@ -40,7 +41,7 @@ function readLiveStatus(defaultDevice) {
     // ignore partial reads
   }
 
-  // 2. Fallback to Windows APO (audiodg.exe) telemetry
+  // 2. Fallback to Windows APO (audiodg.exe) telemetry + Active Windows Audio Sessions (Chrome, Edge, Spotify, etc.)
   let apoSr = defaultDevice?.sampleRate || 48000;
   let apoCh = defaultDevice?.channels || 2;
   let apoLocked = false;
@@ -59,20 +60,30 @@ function readLiveStatus(defaultDevice) {
     // ignore
   }
 
+  const primary = Array.isArray(activeSessions) && activeSessions.length > 0 ? activeSessions[0] : null;
+  const extraApps = Array.isArray(activeSessions) && activeSessions.length > 1
+    ? activeSessions.slice(1).map(s => s.appName)
+    : [];
+
   return {
-    active: apoLocked,
-    source: 'Windows Audio APO',
-    mode: apoLocked ? 'MFX · 32-bit Float' : 'Standby',
+    active: Boolean(primary) || apoLocked,
+    source: primary ? primary.appName : 'Windows Audio APO',
+    mode: primary
+      ? 'Windows APO · MFX Live'
+      : apoLocked
+        ? 'MFX · 32-bit Float (Standby)'
+        : 'Standby',
     sampleRate: apoSr,
     channels: apoCh,
     bitDepth: defaultDevice?.bitsPerSample || 32,
     bitrateKbps: 0,
     codec: '32-BIT FLOAT',
-    title: '',
+    title: primary?.windowTitle || '',
     artist: '',
     deviceName: defaultDevice?.name || 'Windows Default Audio',
     isHiRes: apoSr >= 88200,
-    zeroResample: false
+    zeroResample: false,
+    extraApps
   };
 }
 
@@ -139,14 +150,19 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/status' && req.method === 'GET') {
       let defaultDev = null;
+      let sessions = [];
       try {
-        const devJson = await runViperCtl(['devices']);
+        const [devJson, sessJson] = await Promise.all([
+          runViperCtl(['devices']),
+          runViperCtl(['sessions'])
+        ]);
         const list = JSON.parse(devJson || '[]');
         defaultDev = list.find(d => d.isDefault) || list[0] || null;
+        sessions = JSON.parse(sessJson || '[]');
       } catch {
         // ignore
       }
-      sendJson(res, 200, readLiveStatus(defaultDev));
+      sendJson(res, 200, readLiveStatus(defaultDev, sessions));
       return;
     }
 

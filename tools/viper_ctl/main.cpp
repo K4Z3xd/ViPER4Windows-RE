@@ -10,6 +10,7 @@
 #include <propsys.h>
 #include <mmdeviceapi.h>
 #include <audioclient.h>
+#include <audiopolicy.h>
 #include <functiondiscoverykeys_devpkey.h>
 
 #include "viper/DspTypes.hpp"
@@ -54,6 +55,190 @@ std::string extractGuidFromEndpointId(const std::string& endpointId) {
         return endpointId.substr(dotPos + 1);
     }
     return endpointId;
+}
+
+struct WindowSearchCtx {
+    DWORD targetPid = 0;
+    std::string bestTitle;
+};
+
+BOOL CALLBACK enumWindowsForPid(HWND hwnd, LPARAM lParam) {
+    auto* ctx = reinterpret_cast<WindowSearchCtx*>(lParam);
+    if (!IsWindowVisible(hwnd)) return TRUE;
+
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != ctx->targetPid) return TRUE;
+
+    wchar_t titleBuf[512] = {};
+    const int len = GetWindowTextW(hwnd, titleBuf, 512);
+    if (len > 0) {
+        std::string title = wideToUtf8(titleBuf);
+        if (title.size() > ctx->bestTitle.size()) {
+            ctx->bestTitle = std::move(title);
+        }
+    }
+    return TRUE;
+}
+
+std::string getFriendlyAppName(const std::string& exeName) {
+    std::string lower = exeName;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+
+    if (lower == "chrome.exe") return "Google Chrome";
+    if (lower == "msedge.exe") return "Microsoft Edge";
+    if (lower == "brave.exe") return "Brave Browser";
+    if (lower == "firefox.exe") return "Mozilla Firefox";
+    if (lower == "opera.exe") return "Opera Browser";
+    if (lower == "vivaldi.exe") return "Vivaldi Browser";
+    if (lower == "spotify.exe") return "Spotify";
+    if (lower == "tidal.exe") return "TIDAL";
+    if (lower == "foobar2000.exe") return "foobar2000";
+    if (lower == "discord.exe") return "Discord";
+    if (lower == "vlc.exe") return "VLC Media Player";
+    if (lower == "mpv.exe") return "mpv Player";
+    if (lower == "musicbee.exe") return "MusicBee";
+    if (lower == "aimp.exe") return "AIMP";
+
+    // Strip .exe suffix if present
+    if (exeName.size() > 4 && lower.ends_with(".exe")) {
+        return exeName.substr(0, exeName.size() - 4);
+    }
+    return exeName;
+}
+
+int cmdListSessions() {
+    HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool didInit = SUCCEEDED(hr);
+
+    IMMDeviceEnumerator* enumerator = nullptr;
+    hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                          __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr) || !enumerator) {
+        std::cout << "[]\n";
+        if (didInit) CoUninitialize();
+        return 0;
+    }
+
+    IMMDevice* defaultDev = nullptr;
+    if (FAILED(enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &defaultDev)) || !defaultDev) {
+        enumerator->Release();
+        if (didInit) CoUninitialize();
+        std::cout << "[]\n";
+        return 0;
+    }
+
+    IAudioSessionManager2* mgr = nullptr;
+    if (FAILED(defaultDev->Activate(__uuidof(IAudioSessionManager2), CLSCTX_ALL, nullptr,
+                                    reinterpret_cast<void**>(&mgr))) || !mgr) {
+        defaultDev->Release();
+        enumerator->Release();
+        if (didInit) CoUninitialize();
+        std::cout << "[]\n";
+        return 0;
+    }
+
+    IAudioSessionEnumerator* sessionEnum = nullptr;
+    if (FAILED(mgr->GetSessionEnumerator(&sessionEnum)) || !sessionEnum) {
+        mgr->Release();
+        defaultDev->Release();
+        enumerator->Release();
+        if (didInit) CoUninitialize();
+        std::cout << "[]\n";
+        return 0;
+    }
+
+    int count = 0;
+    sessionEnum->GetCount(&count);
+
+    struct ActiveApp {
+        DWORD pid;
+        std::string appName;
+        std::string exeName;
+        std::string windowTitle;
+    };
+    std::vector<ActiveApp> activeApps;
+
+    for (int i = 0; i < count; ++i) {
+        IAudioSessionControl* ctrl = nullptr;
+        if (FAILED(sessionEnum->GetSession(i, &ctrl)) || !ctrl) continue;
+
+        AudioSessionState state = AudioSessionStateInactive;
+        ctrl->GetState(&state);
+
+        if (state == AudioSessionStateActive) {
+            IAudioSessionControl2* ctrl2 = nullptr;
+            if (SUCCEEDED(ctrl->QueryInterface(__uuidof(IAudioSessionControl2),
+                                               reinterpret_cast<void**>(&ctrl2))) && ctrl2) {
+                DWORD pid = 0;
+                if (SUCCEEDED(ctrl2->GetProcessId(&pid)) && pid != 0) {
+                    // Deduplicate by PID
+                    const bool exists = std::any_of(activeApps.begin(), activeApps.end(),
+                                                    [pid](const ActiveApp& a) { return a.pid == pid; });
+                    if (!exists) {
+                        std::string exeName = "System Audio";
+                        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+                        if (hProc) {
+                            wchar_t pathBuf[MAX_PATH] = {};
+                            DWORD pathLen = MAX_PATH;
+                            if (QueryFullProcessImageNameW(hProc, 0, pathBuf, &pathLen)) {
+                                std::wstring fullPath(pathBuf, pathLen);
+                                const size_t pos = fullPath.find_last_of(L'\\');
+                                std::wstring fname = (pos != std::wstring::npos) ? fullPath.substr(pos + 1) : fullPath;
+                                exeName = wideToUtf8(fname.c_str());
+                            }
+                            CloseHandle(hProc);
+                        }
+
+                        WindowSearchCtx wctx{pid, {}};
+                        EnumWindows(enumWindowsForPid, reinterpret_cast<LPARAM>(&wctx));
+
+                        // Fallback to session display name if window title empty
+                        if (wctx.bestTitle.empty()) {
+                            LPWSTR dispName = nullptr;
+                            if (SUCCEEDED(ctrl->GetDisplayName(&dispName)) && dispName) {
+                                std::string dn = wideToUtf8(dispName);
+                                if (!dn.empty() && dn[0] != '@') {
+                                    wctx.bestTitle = dn;
+                                }
+                                CoTaskMemFree(dispName);
+                            }
+                        }
+
+                        activeApps.push_back(ActiveApp{
+                            pid,
+                            getFriendlyAppName(exeName),
+                            exeName,
+                            wctx.bestTitle
+                        });
+                    }
+                }
+                ctrl2->Release();
+            }
+        }
+        ctrl->Release();
+    }
+
+    std::cout << "[\n";
+    for (size_t i = 0; i < activeApps.size(); ++i) {
+        const auto& a = activeApps[i];
+        std::cout << "  {"
+                  << "\"pid\":" << a.pid << ","
+                  << "\"appName\":\"" << jsonEscape(a.appName) << "\","
+                  << "\"exeName\":\"" << jsonEscape(a.exeName) << "\","
+                  << "\"windowTitle\":\"" << jsonEscape(a.windowTitle) << "\""
+                  << "}" << (i + 1 < activeApps.size() ? "," : "") << "\n";
+    }
+    std::cout << "]\n";
+
+    sessionEnum->Release();
+    mgr->Release();
+    defaultDev->Release();
+    enumerator->Release();
+    if (didInit) CoUninitialize();
+    return 0;
 }
 
 int cmdListDevices() {
@@ -265,6 +450,7 @@ int main(int argc, char** argv) {
 
     const std::string cmd = argv[1];
     if (cmd == "devices") return cmdListDevices();
+    if (cmd == "sessions") return cmdListSessions();
     if (cmd == "get") return cmdGetParams();
     if (cmd == "set") return cmdSetParams(argc, argv);
 

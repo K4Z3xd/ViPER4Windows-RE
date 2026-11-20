@@ -375,6 +375,11 @@ export default function App() {
                       HI-RES AUDIO
                     </span>
                   )}
+                  {liveStatus.extraApps && liveStatus.extraApps.length > 0 && (
+                    <span className="rounded bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+                      + {liveStatus.extraApps.join(', ')}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-zinc-400">
                   {liveStatus.title
