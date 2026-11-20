@@ -63,6 +63,7 @@ target_link_libraries(viper_ctl PRIVATE
     ole32
     propsys
     uuid
+    version
 )
 target_compile_definitions(viper_ctl PRIVATE UNICODE _UNICODE)
 

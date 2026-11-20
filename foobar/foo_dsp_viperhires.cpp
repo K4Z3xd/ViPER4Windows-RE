@@ -1,5 +1,6 @@
 #include <SDK/foobar2000.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -7,21 +8,22 @@
 
 DECLARE_COMPONENT_VERSION(
     "ViPER4Windows RE Status Reporter",
-    "0.4.0",
+    "0.4.1",
     "Bit-transparent telemetry reporter for ViPER4Windows RE.\n"
-    "Does not modify audio samples; only reports active track & quality to ViPER4Windows RE."
+    "Reports instant Play/Pause/Stop state, track info, and audio quality with zero sample modification."
 );
 
 VALIDATE_COMPONENT_FILENAME("foo_dsp_viperhires.dll");
 
 namespace {
 
-// Keep the same GUID so existing foobar2000 DSP Manager entries stay valid automatically
 // {5C3E9A21-8B4D-4F7A-912E-7D4A3B6C8E10}
 constexpr GUID kViperHiResDspGuid = {
     0x5c3e9a21, 0x8b4d, 0x4f7a,
     { 0x91, 0x2e, 0x7d, 0x4a, 0x3b, 0x6c, 0x8e, 0x10 }
 };
+
+std::atomic<bool> g_isPlaying{false};
 
 std::string jsonEscape(const char* s) {
     if (!s) return {};
@@ -46,6 +48,50 @@ int64_t nowEpochMs() noexcept {
     return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
+void writeStoppedStatusJson() noexcept {
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\foobar_status.json", L"wb") == 0 && f) {
+        std::fprintf(f, "{\"source\":\"foobar2000\",\"playing\":false,\"timestampMs\":%lld}",
+                     static_cast<long long>(nowEpochMs()));
+        std::fclose(f);
+    }
+}
+
+// Instant Play / Pause / Stop listener so UI never gets confused between Shared/Exclusive on pause
+class viper_play_callback : public play_callback_static {
+public:
+    unsigned get_flags() override {
+        return flag_on_playback_pause | flag_on_playback_stop | flag_on_playback_starting;
+    }
+
+    void on_playback_starting(play_control::t_track_command, bool p_paused) override {
+        g_isPlaying.store(!p_paused, std::memory_order_release);
+        if (p_paused) writeStoppedStatusJson();
+    }
+
+    void on_playback_pause(bool p_state) override {
+        g_isPlaying.store(!p_state, std::memory_order_release);
+        if (p_state) {
+            writeStoppedStatusJson();
+        }
+    }
+
+    void on_playback_stop(play_control::t_stop_reason) override {
+        g_isPlaying.store(false, std::memory_order_release);
+        writeStoppedStatusJson();
+    }
+
+    void on_playback_new_track(metadb_handle_ptr) override {}
+    void on_playback_seek(double) override {}
+    void on_playback_edited(metadb_handle_ptr) override {}
+    void on_playback_dynamic_info(const file_info&) override {}
+    void on_playback_dynamic_info_track(const file_info&) override {}
+    void on_playback_time(double) override {}
+    void on_volume_change(float) override {}
+};
+
+static play_callback_static_factory_t<viper_play_callback> g_viper_play_callback_factory;
+
 // Pure bit-transparent telemetry pass-through (zero DSP processing, zero sample modification)
 class dsp_viperhires : public dsp_impl_base {
 public:
@@ -61,6 +107,10 @@ public:
 
     bool on_chunk(audio_chunk* chunk, abort_callback&) override {
         if (!chunk) {
+            return true;
+        }
+
+        if (!g_isPlaying.load(std::memory_order_acquire)) {
             return true;
         }
 
@@ -80,16 +130,19 @@ public:
         }
 
         const int64_t nowMs = nowEpochMs();
-        if (telemetryDirty || (nowMs - lastTelemetryWriteMs_) >= 1000) {
+        if (telemetryDirty || (nowMs - lastTelemetryWriteMs_) >= 400) {
             lastTelemetryWriteMs_ = nowMs;
             writeLiveStatusJson(sr, ch, nowMs);
         }
 
-        // Return chunk completely untouched (100% bit-transparent)
         return true;
     }
 
-    void on_endofplayback(abort_callback&) override {}
+    void on_endofplayback(abort_callback&) override {
+        g_isPlaying.store(false, std::memory_order_release);
+        writeStoppedStatusJson();
+    }
+
     void on_endoftrack(abort_callback&) override {}
     void flush() override {}
     double get_latency() override { return 0.0; }
@@ -129,7 +182,7 @@ private:
         if (_wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\foobar_status.json", L"wb") == 0 && f) {
             std::fprintf(
                 f,
-                "{\"source\":\"foobar2000\",\"sampleRate\":%u,\"channels\":%u,"
+                "{\"source\":\"foobar2000\",\"playing\":true,\"sampleRate\":%u,\"channels\":%u,"
                 "\"bitDepth\":%u,\"bitrateKbps\":%u,\"codec\":\"%s\","
                 "\"title\":\"%s\",\"artist\":\"%s\",\"timestampMs\":%lld}",
                 sr,

@@ -11,6 +11,7 @@
 #include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <audiopolicy.h>
+#include <endpointvolume.h>
 #include <functiondiscoverykeys_devpkey.h>
 
 #include "viper/DspTypes.hpp"
@@ -59,16 +60,38 @@ std::string extractGuidFromEndpointId(const std::string& endpointId) {
 
 struct WindowSearchCtx {
     DWORD targetPid = 0;
+    std::wstring targetExeLower;
     std::string bestTitle;
 };
 
-BOOL CALLBACK enumWindowsForPid(HWND hwnd, LPARAM lParam) {
+std::wstring getProcessExeNameLower(DWORD pid) {
+    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProc) return {};
+    wchar_t pathBuf[MAX_PATH] = {};
+    DWORD pathLen = MAX_PATH;
+    std::wstring fname;
+    if (QueryFullProcessImageNameW(hProc, 0, pathBuf, &pathLen)) {
+        std::wstring fullPath(pathBuf, pathLen);
+        const size_t pos = fullPath.find_last_of(L'\\');
+        fname = (pos != std::wstring::npos) ? fullPath.substr(pos + 1) : fullPath;
+        std::transform(fname.begin(), fname.end(), fname.begin(), ::towlower);
+    }
+    CloseHandle(hProc);
+    return fname;
+}
+
+BOOL CALLBACK enumWindowsForPidOrExe(HWND hwnd, LPARAM lParam) {
     auto* ctx = reinterpret_cast<WindowSearchCtx*>(lParam);
     if (!IsWindowVisible(hwnd)) return TRUE;
 
     DWORD pid = 0;
     GetWindowThreadProcessId(hwnd, &pid);
-    if (pid != ctx->targetPid) return TRUE;
+
+    bool matched = (ctx->targetPid != 0 && pid == ctx->targetPid);
+    if (!matched && !ctx->targetExeLower.empty()) {
+        matched = (getProcessExeNameLower(pid) == ctx->targetExeLower);
+    }
+    if (!matched) return TRUE;
 
     wchar_t titleBuf[512] = {};
     const int len = GetWindowTextW(hwnd, titleBuf, 512);
@@ -81,7 +104,51 @@ BOOL CALLBACK enumWindowsForPid(HWND hwnd, LPARAM lParam) {
     return TRUE;
 }
 
-std::string getFriendlyAppName(const std::string& exeName) {
+std::string getExeFileDescription(const std::wstring& fullPath) {
+    DWORD dummy = 0;
+    const DWORD size = GetFileVersionInfoSizeW(fullPath.c_str(), &dummy);
+    if (size == 0) return {};
+
+    std::vector<BYTE> data(size);
+    if (!GetFileVersionInfoW(fullPath.c_str(), 0, size, data.data())) return {};
+
+    struct LangCodePage { WORD lang; WORD codePage; };
+    LangCodePage* trans = nullptr;
+    UINT transLen = 0;
+    if (!VerQueryValueW(data.data(), L"\\VarFileInfo\\Translation",
+                        reinterpret_cast<void**>(&trans), &transLen) || !trans || transLen < sizeof(LangCodePage)) {
+        return {};
+    }
+
+    wchar_t subBlock[128] = {};
+    swprintf_s(subBlock, L"\\StringFileInfo\\%04x%04x\\FileDescription", trans[0].lang, trans[0].codePage);
+    wchar_t* desc = nullptr;
+    UINT descLen = 0;
+    if (VerQueryValueW(data.data(), subBlock, reinterpret_cast<void**>(&desc), &descLen) && desc && descLen > 1) {
+        std::string res = wideToUtf8(desc);
+        if (!res.empty()) return res;
+    }
+
+    swprintf_s(subBlock, L"\\StringFileInfo\\%04x%04x\\ProductName", trans[0].lang, trans[0].codePage);
+    if (VerQueryValueW(data.data(), subBlock, reinterpret_cast<void**>(&desc), &descLen) && desc && descLen > 1) {
+        return wideToUtf8(desc);
+    }
+    return {};
+}
+
+bool isIgnoredSystemProcess(const std::string& lowerExe) {
+    return lowerExe == "explorer.exe" ||
+           lowerExe == "svchost.exe" ||
+           lowerExe == "shellexperiencehost.exe" ||
+           lowerExe == "searchhost.exe" ||
+           lowerExe == "runtimebroker.exe" ||
+           lowerExe == "audiodg.exe" ||
+           lowerExe == "dwm.exe" ||
+           lowerExe == "sihost.exe" ||
+           lowerExe == "startmenuexperiencehost.exe";
+}
+
+std::string getFriendlyAppName(const std::string& exeName, const std::wstring& fullPath) {
     std::string lower = exeName;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
@@ -93,16 +160,24 @@ std::string getFriendlyAppName(const std::string& exeName) {
     if (lower == "firefox.exe") return "Mozilla Firefox";
     if (lower == "opera.exe") return "Opera Browser";
     if (lower == "vivaldi.exe") return "Vivaldi Browser";
+    if (lower == "zen.exe") return "Zen Browser";
     if (lower == "spotify.exe") return "Spotify";
     if (lower == "tidal.exe") return "TIDAL";
+    if (lower == "applemusic.exe") return "Apple Music";
     if (lower == "foobar2000.exe") return "foobar2000";
     if (lower == "discord.exe") return "Discord";
     if (lower == "vlc.exe") return "VLC Media Player";
     if (lower == "mpv.exe") return "mpv Player";
     if (lower == "musicbee.exe") return "MusicBee";
     if (lower == "aimp.exe") return "AIMP";
+    if (lower == "potplayermini64.exe" || lower == "potplayermini.exe") return "PotPlayer";
 
-    // Strip .exe suffix if present
+    // Query Windows PE FileDescription / ProductName for any other real app
+    if (!fullPath.empty()) {
+        std::string desc = getExeFileDescription(fullPath);
+        if (!desc.empty()) return desc;
+    }
+
     if (exeName.size() > 4 && lower.ends_with(".exe")) {
         return exeName.substr(0, exeName.size() - 4);
     }
@@ -155,6 +230,7 @@ int cmdListSessions() {
 
     struct ActiveApp {
         DWORD pid;
+        float peak;
         std::string appName;
         std::string exeName;
         std::string windowTitle;
@@ -169,50 +245,71 @@ int cmdListSessions() {
         ctrl->GetState(&state);
 
         if (state == AudioSessionStateActive) {
+            float peak = 0.0f;
+            IAudioMeterInformation* meter = nullptr;
+            if (SUCCEEDED(ctrl->QueryInterface(__uuidof(IAudioMeterInformation),
+                                               reinterpret_cast<void**>(&meter))) && meter) {
+                meter->GetPeakValue(&peak);
+                meter->Release();
+            }
+
             IAudioSessionControl2* ctrl2 = nullptr;
             if (SUCCEEDED(ctrl->QueryInterface(__uuidof(IAudioSessionControl2),
                                                reinterpret_cast<void**>(&ctrl2))) && ctrl2) {
                 DWORD pid = 0;
                 if (SUCCEEDED(ctrl2->GetProcessId(&pid)) && pid != 0) {
-                    // Deduplicate by PID
-                    const bool exists = std::any_of(activeApps.begin(), activeApps.end(),
-                                                    [pid](const ActiveApp& a) { return a.pid == pid; });
-                    if (!exists) {
-                        std::string exeName = "System Audio";
-                        HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-                        if (hProc) {
-                            wchar_t pathBuf[MAX_PATH] = {};
-                            DWORD pathLen = MAX_PATH;
-                            if (QueryFullProcessImageNameW(hProc, 0, pathBuf, &pathLen)) {
-                                std::wstring fullPath(pathBuf, pathLen);
-                                const size_t pos = fullPath.find_last_of(L'\\');
-                                std::wstring fname = (pos != std::wstring::npos) ? fullPath.substr(pos + 1) : fullPath;
-                                exeName = wideToUtf8(fname.c_str());
-                            }
-                            CloseHandle(hProc);
+                    std::wstring fullPath;
+                    std::string exeName = "Unknown";
+                    HANDLE hProc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+                    if (hProc) {
+                        wchar_t pathBuf[MAX_PATH] = {};
+                        DWORD pathLen = MAX_PATH;
+                        if (QueryFullProcessImageNameW(hProc, 0, pathBuf, &pathLen)) {
+                            fullPath.assign(pathBuf, pathLen);
+                            const size_t pos = fullPath.find_last_of(L'\\');
+                            std::wstring fname = (pos != std::wstring::npos) ? fullPath.substr(pos + 1) : fullPath;
+                            exeName = wideToUtf8(fname.c_str());
                         }
+                        CloseHandle(hProc);
+                    }
 
-                        WindowSearchCtx wctx{pid, {}};
-                        EnumWindows(enumWindowsForPid, reinterpret_cast<LPARAM>(&wctx));
+                    std::string lowerExe = exeName;
+                    std::transform(lowerExe.begin(), lowerExe.end(), lowerExe.begin(), [](unsigned char c) {
+                        return static_cast<char>(std::tolower(c));
+                    });
 
-                        // Fallback to session display name if window title empty
-                        if (wctx.bestTitle.empty()) {
-                            LPWSTR dispName = nullptr;
-                            if (SUCCEEDED(ctrl->GetDisplayName(&dispName)) && dispName) {
-                                std::string dn = wideToUtf8(dispName);
-                                if (!dn.empty() && dn[0] != '@') {
-                                    wctx.bestTitle = dn;
-                                }
-                                CoTaskMemFree(dispName);
-                            }
-                        }
-
-                        activeApps.push_back(ActiveApp{
-                            pid,
-                            getFriendlyAppName(exeName),
-                            exeName,
-                            wctx.bestTitle
+                    // Skip Windows shell / explorer system sound noise
+                    if (!isIgnoredSystemProcess(lowerExe)) {
+                        // Deduplicate by exeName (merges multi-process browser audio subprocesses!)
+                        auto it = std::find_if(activeApps.begin(), activeApps.end(), [&](const ActiveApp& a) {
+                            std::string aLower = a.exeName;
+                            std::transform(aLower.begin(), aLower.end(), aLower.begin(), [](unsigned char c) {
+                                return static_cast<char>(std::tolower(c));
+                            });
+                            return aLower == lowerExe;
                         });
+
+                        if (it != activeApps.end()) {
+                            it->peak = std::max(it->peak, peak);
+                        } else {
+                            // First try exact PID, then fallback to matching executable name (for Chrome/Edge audio subprocesses!)
+                            WindowSearchCtx wctx{pid, {}, {}};
+                            EnumWindows(enumWindowsForPidOrExe, reinterpret_cast<LPARAM>(&wctx));
+                            if (wctx.bestTitle.empty()) {
+                                std::wstring wLower(lowerExe.begin(), lowerExe.end());
+                                WindowSearchCtx exeCtx{0, wLower, {}};
+                                EnumWindows(enumWindowsForPidOrExe, reinterpret_cast<LPARAM>(&exeCtx));
+                                wctx.bestTitle = std::move(exeCtx.bestTitle);
+                            }
+
+                            activeApps.push_back(ActiveApp{
+                                pid,
+                                peak,
+                                getFriendlyAppName(exeName, fullPath),
+                                exeName,
+                                wctx.bestTitle
+                            });
+                        }
                     }
                 }
                 ctrl2->Release();
@@ -221,11 +318,20 @@ int cmdListSessions() {
         ctrl->Release();
     }
 
+    // Sort: apps actively outputting audio (peak > 0.0001) first, highest peak first
+    std::stable_sort(activeApps.begin(), activeApps.end(), [](const ActiveApp& a, const ActiveApp& b) {
+        const bool aSound = a.peak > 0.0001f;
+        const bool bSound = b.peak > 0.0001f;
+        if (aSound != bSound) return aSound > bSound;
+        return a.peak > b.peak;
+    });
+
     std::cout << "[\n";
     for (size_t i = 0; i < activeApps.size(); ++i) {
         const auto& a = activeApps[i];
         std::cout << "  {"
                   << "\"pid\":" << a.pid << ","
+                  << "\"peak\":" << a.peak << ","
                   << "\"appName\":\"" << jsonEscape(a.appName) << "\","
                   << "\"exeName\":\"" << jsonEscape(a.exeName) << "\","
                   << "\"windowTitle\":\"" << jsonEscape(a.windowTitle) << "\""

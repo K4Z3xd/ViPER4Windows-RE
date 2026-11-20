@@ -482,7 +482,7 @@ export default function App() {
 
   useEffect(() => {
     void loadAll();
-    const timer = window.setInterval(() => void loadStatus(), 1500);
+    const timer = window.setInterval(() => void loadStatus(), 800);
     return () => window.clearInterval(timer);
   }, []);
 

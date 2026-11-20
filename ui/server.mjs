@@ -218,12 +218,17 @@ function writeParamsDirect(p) {
 
 function readLiveStatus(defaultDevice, activeSessions = []) {
   const now = Date.now();
-  // 1. Prefer live foobar2000 telemetry if active within last 4 seconds
+  // 1. Prefer live foobar2000 telemetry ONLY when actively playing and fresh (< 1.8s)
   try {
     if (fs.existsSync(FOOBAR_STATUS_PATH)) {
       const raw = fs.readFileSync(FOOBAR_STATUS_PATH, 'utf8');
       const fb = JSON.parse(raw);
-      if (fb && typeof fb.timestampMs === 'number' && now - fb.timestampMs < 4000) {
+      if (
+        fb &&
+        fb.playing !== false &&
+        typeof fb.timestampMs === 'number' &&
+        now - fb.timestampMs < 1800
+      ) {
         // If foobar2000 appears in Windows Shared Audio Sessions -> Shared Mode; otherwise -> Exclusive Mode
         const isShared = Array.isArray(activeSessions) &&
           activeSessions.some(s => (s.exeName || '').toLowerCase() === 'foobar2000.exe');
