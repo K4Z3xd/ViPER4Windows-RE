@@ -55,9 +55,10 @@ public sealed partial class MainWindow : Window
     private readonly List<DspCardEntry> _cards = new();
     private bool _isUpdating = true;
     private bool _settingsOpen = false;
+    private string _activeSettingsCategory = "Appearance";
 
-    // Theme Engine state
-    private string _activeTheme = "Mica";
+    // Theme Engine state (Acrylic default + DarkOLED)
+    private string _activeTheme = "Acrylic";
     private Color _accentBase = Color.FromArgb(255, 16, 185, 129);
     private readonly UISettings _uiSettings = new();
 
@@ -142,11 +143,12 @@ public sealed partial class MainWindow : Window
         BuildAllDspCards();
         LayoutDspCards();
         ApplyAccentColor(_accentBase, syncPicker: true);
-        ApplySurfaceTheme("Mica");
+        ApplySurfaceTheme("Acrylic");
+        SelectSettingsCategory("Appearance");
         ApplyPreset("Hi-Res Audiophile");
     }
 
-    // ==================== THEME ENGINE ====================
+    // ==================== APPEARANCE / THEME ENGINE ====================
 
     private static Color BlendColor(Color a, Color b, double t)
     {
@@ -187,59 +189,16 @@ public sealed partial class MainWindow : Window
             _isUpdating = prev;
         }
 
-        if (_activeTheme == "LiquidGlass")
-        {
-            ApplyLiquidGlassBorders();
-        }
-
         if (!_isUpdating) RefreshVisualStates();
-    }
-
-    private Brush CreateLiquidGlassBorderBrush()
-    {
-        var grad = new LinearGradientBrush
-        {
-            StartPoint = new Point(0, 0),
-            EndPoint = new Point(1, 1)
-        };
-        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(130, 255, 255, 255), Offset = 0.0 });
-        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(30, 255, 255, 255), Offset = 0.48 });
-        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(90, _accentBase.R, _accentBase.G, _accentBase.B), Offset = 1.0 });
-        return grad;
-    }
-
-    private IEnumerable<Border> AllMainCards()
-    {
-        yield return SignalPathCard;
-        yield return PresetBarCard;
-        yield return EqCard;
-        yield return ThemeEngineCard;
-        yield return DevicesApoCard;
-        foreach (var c in _cards) yield return c.Root;
-    }
-
-    private void ApplyLiquidGlassBorders()
-    {
-        foreach (var card in AllMainCards())
-        {
-            card.BorderBrush = CreateLiquidGlassBorderBrush();
-            card.BorderThickness = new Thickness(1.2);
-            card.CornerRadius = new CornerRadius(20);
-        }
     }
 
     private void ApplySurfaceTheme(string theme)
     {
         _activeTheme = theme;
 
-        // 1. Apply Windows 11 SystemBackdrop safely
         try
         {
-            if (theme == "Mica" && MicaController.IsSupported())
-            {
-                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
-            }
-            else if ((theme is "Acrylic" or "FrostedGlass" or "LiquidGlass" or "Blur") && DesktopAcrylicController.IsSupported())
+            if (theme == "Acrylic" && DesktopAcrylicController.IsSupported())
             {
                 SystemBackdrop = new DesktopAcrylicBackdrop();
             }
@@ -253,71 +212,21 @@ public sealed partial class MainWindow : Window
             SystemBackdrop = null;
         }
 
-        // 2. Tune surface translucency, tint, border, and corner radius per material
-        CornerRadius cardRadius = new(14);
-        Thickness cardThickness = new(1);
-        bool useLiquidGradientBorder = false;
-
-        switch (theme)
+        if (theme == "DarkOLED")
         {
-            case "Acrylic":
-                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(72, 10, 11, 16));
-                HeaderBgBrush.Color = Color.FromArgb(140, 12, 13, 18);
-                CardBgBrush.Color = Color.FromArgb(150, 18, 20, 28);
-                CardBorderBrush.Color = Color.FromArgb(52, 255, 255, 255);
-                SubtleBgBrush.Color = Color.FromArgb(150, 9, 10, 14);
-                break;
-
-            case "FrostedGlass":
-                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(95, 20, 24, 32));
-                HeaderBgBrush.Color = Color.FromArgb(135, 24, 28, 38);
-                CardBgBrush.Color = Color.FromArgb(120, 32, 37, 48);
-                CardBorderBrush.Color = Color.FromArgb(78, 255, 255, 255);
-                SubtleBgBrush.Color = Color.FromArgb(135, 16, 19, 26);
-                cardRadius = new CornerRadius(16);
-                break;
-
-            case "LiquidGlass":
-                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(46, 14, 18, 26));
-                HeaderBgBrush.Color = Color.FromArgb(88, 18, 22, 32);
-                CardBgBrush.Color = Color.FromArgb(68, 26, 32, 44);
-                CardBorderBrush.Color = Color.FromArgb(110, 255, 255, 255);
-                SubtleBgBrush.Color = Color.FromArgb(96, 12, 15, 22);
-                cardRadius = new CornerRadius(20);
-                cardThickness = new Thickness(1.2);
-                useLiquidGradientBorder = true;
-                break;
-
-            case "Blur":
-                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(150, 8, 9, 13));
-                HeaderBgBrush.Color = Color.FromArgb(175, 10, 11, 16);
-                CardBgBrush.Color = Color.FromArgb(170, 14, 15, 21);
-                CardBorderBrush.Color = Color.FromArgb(36, 255, 255, 255);
-                SubtleBgBrush.Color = Color.FromArgb(185, 8, 9, 12);
-                break;
-
-            case "SolidDark":
-                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(255, 7, 7, 9));
-                HeaderBgBrush.Color = Color.FromArgb(255, 10, 10, 13);
-                CardBgBrush.Color = Color.FromArgb(255, 18, 18, 22);
-                CardBorderBrush.Color = Color.FromArgb(255, 46, 46, 54);
-                SubtleBgBrush.Color = Color.FromArgb(255, 11, 11, 14);
-                break;
-
-            default: // Mica
-                RootBackdropGrid.Background = TransparentBrush;
-                HeaderBgBrush.Color = Color.FromArgb(170, 9, 9, 11);
-                CardBgBrush.Color = Color.FromArgb(204, 18, 18, 22);
-                CardBorderBrush.Color = Color.FromArgb(255, 46, 46, 54);
-                SubtleBgBrush.Color = Color.FromArgb(204, 11, 11, 14);
-                break;
+            RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(255, 0, 0, 0));
+            HeaderBgBrush.Color = Color.FromArgb(255, 5, 5, 7);
+            CardBgBrush.Color = Color.FromArgb(255, 11, 11, 14);
+            CardBorderBrush.Color = Color.FromArgb(255, 36, 36, 44);
+            SubtleBgBrush.Color = Color.FromArgb(255, 6, 6, 8);
         }
-
-        foreach (var card in AllMainCards())
+        else // Acrylic (Default)
         {
-            card.CornerRadius = cardRadius;
-            card.BorderThickness = cardThickness;
-            card.BorderBrush = useLiquidGradientBorder ? CreateLiquidGlassBorderBrush() : CardBorderBrush;
+            RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(72, 10, 11, 16));
+            HeaderBgBrush.Color = Color.FromArgb(140, 12, 13, 18);
+            CardBgBrush.Color = Color.FromArgb(150, 18, 20, 28);
+            CardBorderBrush.Color = Color.FromArgb(52, 255, 255, 255);
+            SubtleBgBrush.Color = Color.FromArgb(150, 9, 10, 14);
         }
 
         UpdateThemePresetButtons();
@@ -328,12 +237,8 @@ public sealed partial class MainWindow : Window
     {
         var map = new (Button Btn, string Key)[]
         {
-            (ThemeMicaBtn, "Mica"),
             (ThemeAcrylicBtn, "Acrylic"),
-            (ThemeFrostedBtn, "FrostedGlass"),
-            (ThemeLiquidBtn, "LiquidGlass"),
-            (ThemeBlurBtn, "Blur"),
-            (ThemeSolidBtn, "SolidDark")
+            (ThemeOledBtn, "DarkOLED")
         };
 
         foreach (var (btn, key) in map)
@@ -341,6 +246,30 @@ public sealed partial class MainWindow : Window
             bool selected = _activeTheme == key;
             btn.Background = selected ? AccentBgBrush : SubtleBgBrush;
             btn.BorderBrush = selected ? AccentBorderBrush : CardBorderBrush;
+        }
+    }
+
+    private void SelectSettingsCategory(string category)
+    {
+        _activeSettingsCategory = category;
+
+        SettingsAppearancePage.Visibility = category == "Appearance" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsDevicesPage.Visibility = category == "Devices" ? Visibility.Visible : Visibility.Collapsed;
+        SettingsAboutPage.Visibility = category == "About" ? Visibility.Visible : Visibility.Collapsed;
+
+        var items = new (Button Btn, Border Pill, FontIcon Icon, string Key)[]
+        {
+            (NavAppearanceBtn, NavAppearancePill, NavAppearanceIcon, "Appearance"),
+            (NavDevicesBtn, NavDevicesPill, NavDevicesIcon, "Devices"),
+            (NavAboutBtn, NavAboutPill, NavAboutIcon, "About")
+        };
+
+        foreach (var (btn, pill, icon, key) in items)
+        {
+            bool active = category == key;
+            btn.Background = active ? CardBgBrush : TransparentBrush;
+            pill.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+            icon.Foreground = active ? AccentLightBrush : TextSecondaryBrush;
         }
     }
 
@@ -1210,6 +1139,7 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateThemePresetButtons();
+        SelectSettingsCategory(_activeSettingsCategory);
         UpdateEqModeButtons();
         DrawEqCurve();
     }
@@ -1250,20 +1180,26 @@ public sealed partial class MainWindow : Window
 
     // ==================== EVENT HANDLERS ====================
 
-    private void SettingsBtn_Click(object sender, RoutedEventArgs e)
+    private void SetSettingsOpen(bool open)
     {
-        _settingsOpen = !_settingsOpen;
-        DspConsolePanel.Visibility = _settingsOpen ? Visibility.Collapsed : Visibility.Visible;
-        SettingsPanel.Visibility = _settingsOpen ? Visibility.Visible : Visibility.Collapsed;
+        _settingsOpen = open;
+        HeaderAudioInfoPanel.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
+        HeaderSettingsPanel.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        DspScrollViewer.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
+        SettingsSplitGrid.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         RefreshVisualStates();
     }
 
-    private void BackToDspBtn_Click(object sender, RoutedEventArgs e)
+    private void SettingsBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(!_settingsOpen);
+
+    private void BackToDspBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(false);
+
+    private void SettingsNav_Click(object sender, RoutedEventArgs e)
     {
-        _settingsOpen = false;
-        DspConsolePanel.Visibility = Visibility.Visible;
-        SettingsPanel.Visibility = Visibility.Collapsed;
-        RefreshVisualStates();
+        if (sender is Button btn && btn.Tag is string category)
+        {
+            SelectSettingsCategory(category);
+        }
     }
 
     private void ThemePresetBtn_Click(object sender, RoutedEventArgs e)
