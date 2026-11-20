@@ -55,6 +55,41 @@ import {
   V4AVseIcon
 } from './components/V4AIcons';
 
+function eqFaderFill(db: number): React.CSSProperties {
+  const clamped = Math.max(-12, Math.min(12, db));
+  const pct = ((12 - clamped) / 24) * 100; // 0% = +12dB (top), 50% = 0dB, 100% = -12dB (bottom)
+  let bg = '#27272a';
+  if (clamped > 0.01) {
+    bg = `linear-gradient(to bottom, #27272a 0%, #27272a ${pct}%, #34d399 ${pct}%, #10b981 50%, #27272a 50%, #27272a 100%)`;
+  } else if (clamped < -0.01) {
+    bg = `linear-gradient(to bottom, #27272a 0%, #27272a 50%, #f59e0b 50%, #d97706 ${pct}%, #27272a ${pct}%, #27272a 100%)`;
+  }
+  return { '--track-bg': bg } as React.CSSProperties;
+}
+
+function sliderFill(
+  val: number,
+  min: number,
+  max: number,
+  options?: { bipolarZero?: number; color?: string }
+): React.CSSProperties {
+  const span = max - min || 1;
+  const pct = Math.max(0, Math.min(100, ((val - min) / span) * 100));
+  const color = options?.color ?? '#10b981';
+
+  if (typeof options?.bipolarZero === 'number') {
+    const zeroPct = Math.max(0, Math.min(100, ((options.bipolarZero - min) / span) * 100));
+    const start = Math.min(pct, zeroPct);
+    const end = Math.max(pct, zeroPct);
+    const activeColor = val < options.bipolarZero ? '#f59e0b' : color;
+    const bg = `linear-gradient(to right, #27272a 0%, #27272a ${start}%, ${activeColor} ${start}%, ${activeColor} ${end}%, #27272a ${end}%, #27272a 100%)`;
+    return { '--track-bg': bg } as React.CSSProperties;
+  }
+
+  const bg = `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, #27272a ${pct}%, #27272a 100%)`;
+  return { '--track-bg': bg } as React.CSSProperties;
+}
+
 function Toggle({
   checked,
   onChange,
@@ -1031,6 +1066,7 @@ export default function App() {
                         max={12}
                         step={0.5}
                         value={val}
+                        style={eqFaderFill(val)}
                         aria-label={`${freq} Hz gain`}
                         onChange={e => updateEqBand(idx, parseFloat(e.target.value))}
                         className="eq-fader"
