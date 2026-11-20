@@ -13,26 +13,32 @@ const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
 
 function readLiveStatus(defaultDevice, activeSessions = []) {
   const now = Date.now();
-  // 1. Prefer live foobar2000 native DSP telemetry if active within last 4 seconds
+  // 1. Prefer live foobar2000 telemetry if active within last 4 seconds
   try {
     if (fs.existsSync(FOOBAR_STATUS_PATH)) {
       const raw = fs.readFileSync(FOOBAR_STATUS_PATH, 'utf8');
       const fb = JSON.parse(raw);
       if (fb && typeof fb.timestampMs === 'number' && now - fb.timestampMs < 4000) {
+        // If foobar2000 appears in Windows Shared Audio Sessions -> Shared Mode; otherwise -> Exclusive Mode
+        const isShared = Array.isArray(activeSessions) &&
+          activeSessions.some(s => (s.exeName || '').toLowerCase() === 'foobar2000.exe');
+        const sr = fb.sampleRate || 0;
+        const bits = fb.bitDepth || 0;
+
         return {
           active: true,
           source: 'foobar2000',
-          mode: fb.mode || 'Native DSP · 0% Resample',
-          sampleRate: fb.sampleRate || 0,
+          mode: isShared ? 'Shared Mode' : 'Exclusive Mode',
+          sampleRate: sr,
           channels: fb.channels || 2,
-          bitDepth: fb.bitDepth || 0,
+          bitDepth: bits,
           bitrateKbps: fb.bitrateKbps || 0,
           codec: fb.codec || '',
           title: fb.title || '',
           artist: fb.artist || '',
           deviceName: defaultDevice?.name || 'USB HiFi DAC',
-          isHiRes: (fb.sampleRate || 0) >= 88200 || (fb.bitDepth || 0) >= 24,
-          zeroResample: true,
+          isHiRes: sr >= 88200 || bits >= 24,
+          zeroResample: !isShared,
           extraApps: []
         };
       }
@@ -69,9 +75,9 @@ function readLiveStatus(defaultDevice, activeSessions = []) {
     active: Boolean(primary) || apoLocked,
     source: primary ? primary.appName : 'Windows Audio APO',
     mode: primary
-      ? 'Windows APO · MFX Live'
+      ? 'Shared Mode'
       : apoLocked
-        ? 'MFX · 32-bit Float (Standby)'
+        ? 'Standby'
         : 'Standby',
     sampleRate: apoSr,
     channels: apoCh,
@@ -81,7 +87,8 @@ function readLiveStatus(defaultDevice, activeSessions = []) {
     title: primary?.windowTitle || '',
     artist: '',
     deviceName: defaultDevice?.name || 'Windows Default Audio',
-    isHiRes: apoSr >= 88200,
+    // Only mark Hi-Res when source truly delivers Hi-Res (browsers/shared mode resample from 44.1/48k)
+    isHiRes: false,
     zeroResample: false,
     extraApps
   };

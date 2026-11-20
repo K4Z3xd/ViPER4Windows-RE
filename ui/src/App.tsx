@@ -362,19 +362,15 @@ export default function App() {
                   <span className="font-display text-xs font-bold uppercase tracking-wider text-zinc-200">
                     {liveStatus.source}
                   </span>
-                  <span className="rounded bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+                  <span
+                    className={`rounded px-2 py-0.5 font-mono text-[10px] font-semibold uppercase ${
+                      liveStatus.zeroResample
+                        ? 'border border-emerald-500/35 bg-emerald-500/10 text-emerald-300'
+                        : 'bg-zinc-900 text-zinc-400'
+                    }`}
+                  >
                     {liveStatus.mode}
                   </span>
-                  {liveStatus.zeroResample && (
-                    <span className="rounded border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">
-                      0% RESAMPLE
-                    </span>
-                  )}
-                  {liveStatus.isHiRes && (
-                    <span className="rounded border border-amber-400/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
-                      HI-RES AUDIO
-                    </span>
-                  )}
                   {liveStatus.extraApps && liveStatus.extraApps.length > 0 && (
                     <span className="rounded bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
                       + {liveStatus.extraApps.join(', ')}
@@ -390,6 +386,11 @@ export default function App() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 font-mono text-xs tabular-nums">
+              {liveStatus.isHiRes && (
+                <span className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
+                  HI-RES AUDIO
+                </span>
+              )}
               {liveStatus.codec && (
                 <span className="rounded-lg border border-zinc-800 bg-black px-2.5 py-1 text-zinc-200">
                   {liveStatus.codec}
