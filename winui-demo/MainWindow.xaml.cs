@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
+using Windows.UI.ViewManagement;
 
 namespace V4Wa.Demo;
 
@@ -53,8 +54,14 @@ public sealed partial class MainWindow : Window
     private readonly List<string> _pinnedModules = new();
     private readonly List<DspCardEntry> _cards = new();
     private bool _isUpdating = true;
+    private bool _settingsOpen = false;
 
-    // Module state handles for Preset switching
+    // Theme Engine state
+    private string _activeTheme = "Mica";
+    private Color _accentBase = Color.FromArgb(255, 16, 185, 129);
+    private readonly UISettings _uiSettings = new();
+
+    // Module state handles
     private ToggleSwitch _limiterToggle = null!, _bassToggle = null!, _clarityToggle = null!, _dynToggle = null!;
     private ToggleSwitch _tubeToggle = null!, _analogToggle = null!, _ddcToggle = null!, _convToggle = null!;
     private ToggleSwitch _vseToggle = null!, _surroundToggle = null!, _fieldToggle = null!, _vhsToggle = null!;
@@ -72,18 +79,19 @@ public sealed partial class MainWindow : Window
 
     private int _bassMode = 1, _clarityMode = 2, _dynDevice = 0, _analogMode = 0, _vhsLevel = 2, _cureLevel = 0;
 
-    // UI-thread WinRT Brushes
-    private readonly SolidColorBrush EmeraldBrush;
-    private readonly SolidColorBrush EmeraldLightBrush;
-    private readonly SolidColorBrush EmeraldTextBrush;
-    private readonly SolidColorBrush EmeraldBgBrush;
-    private readonly SolidColorBrush EmeraldBorderBrush;
-    private readonly SolidColorBrush MutedBrush;
-    private readonly SolidColorBrush MutedBgBrush;
-    private readonly SolidColorBrush MutedBorderBrush;
+    // Shared mutable Theme Brushes (resolved from App.xaml so XAML & C# stay 100% synced)
+    private readonly SolidColorBrush AccentBrush;
+    private readonly SolidColorBrush AccentLightBrush;
+    private readonly SolidColorBrush AccentTextBrush;
+    private readonly SolidColorBrush AccentBgBrush;
+    private readonly SolidColorBrush AccentBorderBrush;
     private readonly SolidColorBrush CardBgBrush;
     private readonly SolidColorBrush CardBorderBrush;
     private readonly SolidColorBrush SubtleBgBrush;
+    private readonly SolidColorBrush HeaderBgBrush;
+    private readonly SolidColorBrush MutedBrush;
+    private readonly SolidColorBrush MutedBgBrush;
+    private readonly SolidColorBrush MutedBorderBrush;
     private readonly SolidColorBrush TransparentBrush;
     private readonly SolidColorBrush TextPrimaryBrush;
     private readonly SolidColorBrush TextSecondaryBrush;
@@ -93,41 +101,247 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
-        EmeraldBrush = new(Color.FromArgb(255, 16, 185, 129));
-        EmeraldLightBrush = new(Color.FromArgb(255, 52, 211, 153));
-        EmeraldTextBrush = new(Color.FromArgb(255, 167, 243, 208));
-        EmeraldBgBrush = new(Color.FromArgb(46, 16, 185, 129));
-        EmeraldBorderBrush = new(Color.FromArgb(140, 52, 211, 153));
+        var res = Application.Current.Resources;
+        AccentBrush = (SolidColorBrush)res["V4WaAccentBrush"];
+        AccentLightBrush = (SolidColorBrush)res["V4WaAccentLightBrush"];
+        AccentTextBrush = (SolidColorBrush)res["V4WaAccentTextBrush"];
+        AccentBgBrush = (SolidColorBrush)res["V4WaAccentBgBrush"];
+        AccentBorderBrush = (SolidColorBrush)res["V4WaAccentBorderBrush"];
+        CardBgBrush = (SolidColorBrush)res["V4WaCardBgBrush"];
+        CardBorderBrush = (SolidColorBrush)res["V4WaCardBorderBrush"];
+        SubtleBgBrush = (SolidColorBrush)res["V4WaSubtleBgBrush"];
+        HeaderBgBrush = (SolidColorBrush)res["V4WaHeaderBgBrush"];
+
         MutedBrush = new(Color.FromArgb(255, 113, 113, 122));
         MutedBgBrush = new(Color.FromArgb(255, 39, 39, 42));
         MutedBorderBrush = new(Color.FromArgb(255, 63, 63, 70));
-        CardBgBrush = new(Color.FromArgb(204, 18, 18, 22));
-        CardBorderBrush = new(Color.FromArgb(255, 46, 46, 54));
-        SubtleBgBrush = new(Color.FromArgb(255, 11, 11, 14));
         TransparentBrush = new(Colors.Transparent);
         TextPrimaryBrush = new(Colors.White);
         TextSecondaryBrush = new(Color.FromArgb(255, 161, 161, 170));
         TextDimBrush = new(Color.FromArgb(255, 212, 212, 216));
 
-        try
-        {
-            if (MicaController.IsSupported())
-            {
-                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
-            }
-        }
-        catch { }
-
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.Resize(new SizeInt32(1260, 880));
+
+        // Listen for live Windows Accent Color changes when Auto Sync is ON
+        _uiSettings.ColorValuesChanged += (sender, _) =>
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (AutoAccentToggle.IsOn)
+                {
+                    ApplyAccentColor(_uiSettings.GetColorValue(UIColorType.Accent), syncPicker: true);
+                }
+            });
+        };
 
         _eq18 = Interpolate10To18(_eq10);
         RebuildPinnedPresets();
         RebuildEqSliders();
         BuildAllDspCards();
         LayoutDspCards();
+        ApplyAccentColor(_accentBase, syncPicker: true);
+        ApplySurfaceTheme("Mica");
         ApplyPreset("Hi-Res Audiophile");
+    }
+
+    // ==================== THEME ENGINE ====================
+
+    private static Color BlendColor(Color a, Color b, double t)
+    {
+        byte lerp(byte x, byte y) => (byte)Math.Clamp(Math.Round(x + (y - x) * t), 0, 255);
+        return Color.FromArgb(255, lerp(a.R, b.R), lerp(a.G, b.G), lerp(a.B, b.B));
+    }
+
+    private void ApplyAccentColor(Color baseColor, bool syncPicker)
+    {
+        _accentBase = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
+        var light = BlendColor(_accentBase, Colors.White, 0.28);
+        var text = BlendColor(_accentBase, Colors.White, 0.62);
+        var dark = BlendColor(_accentBase, Colors.Black, 0.22);
+
+        AccentBrush.Color = _accentBase;
+        AccentLightBrush.Color = light;
+        AccentTextBrush.Color = text;
+        AccentBgBrush.Color = Color.FromArgb(48, _accentBase.R, _accentBase.G, _accentBase.B);
+        AccentBorderBrush.Color = Color.FromArgb(145, light.R, light.G, light.B);
+
+        // Mutate native WinUI 3 ToggleSwitch & Slider brushes live
+        var res = Application.Current.Resources;
+        if (res["ToggleSwitchFillOn"] is SolidColorBrush t1) t1.Color = _accentBase;
+        if (res["ToggleSwitchFillOnPointerOver"] is SolidColorBrush t2) t2.Color = light;
+        if (res["ToggleSwitchFillOnPressed"] is SolidColorBrush t3) t3.Color = dark;
+        if (res["SliderTrackValueFill"] is SolidColorBrush s1) s1.Color = _accentBase;
+        if (res["SliderTrackValueFillPointerOver"] is SolidColorBrush s2) s2.Color = light;
+        if (res["SliderTrackValueFillPressed"] is SolidColorBrush s3) s3.Color = dark;
+        if (res["SliderThumbBackgroundPressed"] is SolidColorBrush s4) s4.Color = light;
+
+        ActiveAccentHexText.Text = $"#{_accentBase.R:X2}{_accentBase.G:X2}{_accentBase.B:X2} · RGB({_accentBase.R}, {_accentBase.G}, {_accentBase.B})";
+
+        if (syncPicker)
+        {
+            bool prev = _isUpdating;
+            _isUpdating = true;
+            AccentColorPicker.Color = _accentBase;
+            _isUpdating = prev;
+        }
+
+        if (_activeTheme == "LiquidGlass")
+        {
+            ApplyLiquidGlassBorders();
+        }
+
+        if (!_isUpdating) RefreshVisualStates();
+    }
+
+    private Brush CreateLiquidGlassBorderBrush()
+    {
+        var grad = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(1, 1)
+        };
+        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(130, 255, 255, 255), Offset = 0.0 });
+        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(30, 255, 255, 255), Offset = 0.48 });
+        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(90, _accentBase.R, _accentBase.G, _accentBase.B), Offset = 1.0 });
+        return grad;
+    }
+
+    private IEnumerable<Border> AllMainCards()
+    {
+        yield return SignalPathCard;
+        yield return PresetBarCard;
+        yield return EqCard;
+        yield return ThemeEngineCard;
+        yield return DevicesApoCard;
+        foreach (var c in _cards) yield return c.Root;
+    }
+
+    private void ApplyLiquidGlassBorders()
+    {
+        foreach (var card in AllMainCards())
+        {
+            card.BorderBrush = CreateLiquidGlassBorderBrush();
+            card.BorderThickness = new Thickness(1.2);
+            card.CornerRadius = new CornerRadius(20);
+        }
+    }
+
+    private void ApplySurfaceTheme(string theme)
+    {
+        _activeTheme = theme;
+
+        // 1. Apply Windows 11 SystemBackdrop safely
+        try
+        {
+            if (theme == "Mica" && MicaController.IsSupported())
+            {
+                SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+            }
+            else if ((theme is "Acrylic" or "FrostedGlass" or "LiquidGlass" or "Blur") && DesktopAcrylicController.IsSupported())
+            {
+                SystemBackdrop = new DesktopAcrylicBackdrop();
+            }
+            else
+            {
+                SystemBackdrop = null;
+            }
+        }
+        catch
+        {
+            SystemBackdrop = null;
+        }
+
+        // 2. Tune surface translucency, tint, border, and corner radius per material
+        CornerRadius cardRadius = new(14);
+        Thickness cardThickness = new(1);
+        bool useLiquidGradientBorder = false;
+
+        switch (theme)
+        {
+            case "Acrylic":
+                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(72, 10, 11, 16));
+                HeaderBgBrush.Color = Color.FromArgb(140, 12, 13, 18);
+                CardBgBrush.Color = Color.FromArgb(150, 18, 20, 28);
+                CardBorderBrush.Color = Color.FromArgb(52, 255, 255, 255);
+                SubtleBgBrush.Color = Color.FromArgb(150, 9, 10, 14);
+                break;
+
+            case "FrostedGlass":
+                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(95, 20, 24, 32));
+                HeaderBgBrush.Color = Color.FromArgb(135, 24, 28, 38);
+                CardBgBrush.Color = Color.FromArgb(120, 32, 37, 48);
+                CardBorderBrush.Color = Color.FromArgb(78, 255, 255, 255);
+                SubtleBgBrush.Color = Color.FromArgb(135, 16, 19, 26);
+                cardRadius = new CornerRadius(16);
+                break;
+
+            case "LiquidGlass":
+                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(46, 14, 18, 26));
+                HeaderBgBrush.Color = Color.FromArgb(88, 18, 22, 32);
+                CardBgBrush.Color = Color.FromArgb(68, 26, 32, 44);
+                CardBorderBrush.Color = Color.FromArgb(110, 255, 255, 255);
+                SubtleBgBrush.Color = Color.FromArgb(96, 12, 15, 22);
+                cardRadius = new CornerRadius(20);
+                cardThickness = new Thickness(1.2);
+                useLiquidGradientBorder = true;
+                break;
+
+            case "Blur":
+                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(150, 8, 9, 13));
+                HeaderBgBrush.Color = Color.FromArgb(175, 10, 11, 16);
+                CardBgBrush.Color = Color.FromArgb(170, 14, 15, 21);
+                CardBorderBrush.Color = Color.FromArgb(36, 255, 255, 255);
+                SubtleBgBrush.Color = Color.FromArgb(185, 8, 9, 12);
+                break;
+
+            case "SolidDark":
+                RootBackdropGrid.Background = new SolidColorBrush(Color.FromArgb(255, 7, 7, 9));
+                HeaderBgBrush.Color = Color.FromArgb(255, 10, 10, 13);
+                CardBgBrush.Color = Color.FromArgb(255, 18, 18, 22);
+                CardBorderBrush.Color = Color.FromArgb(255, 46, 46, 54);
+                SubtleBgBrush.Color = Color.FromArgb(255, 11, 11, 14);
+                break;
+
+            default: // Mica
+                RootBackdropGrid.Background = TransparentBrush;
+                HeaderBgBrush.Color = Color.FromArgb(170, 9, 9, 11);
+                CardBgBrush.Color = Color.FromArgb(204, 18, 18, 22);
+                CardBorderBrush.Color = Color.FromArgb(255, 46, 46, 54);
+                SubtleBgBrush.Color = Color.FromArgb(204, 11, 11, 14);
+                break;
+        }
+
+        foreach (var card in AllMainCards())
+        {
+            card.CornerRadius = cardRadius;
+            card.BorderThickness = cardThickness;
+            card.BorderBrush = useLiquidGradientBorder ? CreateLiquidGlassBorderBrush() : CardBorderBrush;
+        }
+
+        UpdateThemePresetButtons();
+        if (!_isUpdating) RefreshVisualStates();
+    }
+
+    private void UpdateThemePresetButtons()
+    {
+        var map = new (Button Btn, string Key)[]
+        {
+            (ThemeMicaBtn, "Mica"),
+            (ThemeAcrylicBtn, "Acrylic"),
+            (ThemeFrostedBtn, "FrostedGlass"),
+            (ThemeLiquidBtn, "LiquidGlass"),
+            (ThemeBlurBtn, "Blur"),
+            (ThemeSolidBtn, "SolidDark")
+        };
+
+        foreach (var (btn, key) in map)
+        {
+            bool selected = _activeTheme == key;
+            btn.Background = selected ? AccentBgBrush : SubtleBgBrush;
+            btn.BorderBrush = selected ? AccentBorderBrush : CardBorderBrush;
+        }
     }
 
     // ==================== HELPER BUILDERS ====================
@@ -261,7 +475,7 @@ public sealed partial class MainWindow : Window
         string id, int order, string glyph, string title, string tooltip,
         bool hasToggle, Action<StackPanel, DspCardEntry> buildBody)
     {
-        var icon = new FontIcon { Glyph = glyph, FontSize = 16, Foreground = EmeraldLightBrush };
+        var icon = new FontIcon { Glyph = glyph, FontSize = 16, Foreground = AccentLightBrush };
         var titleBlock = new TextBlock { Text = title, FontSize = 15.5, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush };
 
         var leftHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 9, VerticalAlignment = VerticalAlignment.Center };
@@ -382,13 +596,13 @@ public sealed partial class MainWindow : Window
                 };
             });
 
-        // 3. Dynamic System (Full-width stacked rows)
+        // 3. Dynamic System (HP removed!)
         RegisterCard("dynamic", 3, "\uE9D2", "Dynamic System",
             "Optimizes dynamic excursion and bass response for your listening hardware.",
             true, (body, card) =>
             {
                 _dynToggle = card.Toggle!;
-                var (stacked, btns) = CreateStackedRowButtons(new[] { "Common", "Extreme HP", "High-End HP", "Studio" }, () => _dynDevice, v => _dynDevice = v);
+                var (stacked, btns) = CreateStackedRowButtons(new[] { "Common", "Extreme", "High-End", "Studio" }, () => _dynDevice, v => _dynDevice = v);
                 var bass = CreateSliderRow("Dynamic Bass", "Transient bass punch percentage (0–100%).", 0, 100, 25, 5, v => $"{v:0}%");
                 _dynBassSlider = bass.Slider;
                 body.Children.Add(stacked);
@@ -400,13 +614,13 @@ public sealed partial class MainWindow : Window
                 };
             });
 
-        // 4. Master Output, Pan & Brickwall Limiter
+        // 4. Output Gain, Pan & Limiter
         RegisterCard("master", 4, "\uE83D", "Output Gain, Pan & Limiter",
             "Controls master output volume, L/R channel balance, and zero-clipping brickwall limiter.",
             false, (body, card) =>
             {
                 var gain = CreateSliderRow("Master Gain", "Pre-limiter output level (-24 to +12 dB).", -24, 12, 0, 0.5, v => v > 0 ? $"+{v:0.0} dB" : $"{v:0.0} dB");
-                var pan = CreateSliderRow("Output Pan (L / R)", "Stereo channel balance (-100% Left to +100% Right).", -100, 100, 0, 5, v => Math.Abs(v) < 1 ? "Center" : (v < 0 ? $"L {Math.Abs(v):0}%" : $"R {v:0}%"));
+                var pan = CreateSliderRow("Output Pan", "Stereo channel balance (-100% Left to +100% Right).", -100, 100, 0, 5, v => Math.Abs(v) < 1 ? "Center" : (v < 0 ? $"L {Math.Abs(v):0}%" : $"R {v:0}%"));
                 _masterGainSlider = gain.Slider;
                 _panSlider = pan.Slider;
 
@@ -442,7 +656,7 @@ public sealed partial class MainWindow : Window
                 card.RefreshVisual = active => StyleModeButtons(btns, _analogMode, active);
             });
 
-        // 6. Tube Simulator (6N1J)
+        // 6. Tube Simulator (6N1J) — keep (6N1J) per user request
         RegisterCard("tube", 6, "\uEA80", "Tube Simulator (6N1J)",
             "Simulates even-order vacuum tube harmonics of a classic 6N1J preamp for lush, warm vocals.",
             true, (body, card) =>
@@ -457,7 +671,7 @@ public sealed partial class MainWindow : Window
 
         // 7. ViPER-DDC
         RegisterCard("ddc", 7, "\uE7F6", "ViPER-DDC",
-            "Loads ViPER4Android / AutoEQ .vdc biquad profiles to correct headphone frequency response with exact bilinear mapping up to 384 kHz.",
+            "Loads ViPER4Android / AutoEQ .vdc biquad profiles to correct headphone frequency response up to 384 kHz.",
             true, (body, card) =>
             {
                 _ddcToggle = card.Toggle!;
@@ -499,8 +713,8 @@ public sealed partial class MainWindow : Window
                 };
             });
 
-        // 9. Spectrum Extension (VSE)
-        RegisterCard("vse", 9, "\uE9D9", "Spectrum Extension (VSE)",
+        // 9. Spectrum Extension (no parenthetical)
+        RegisterCard("vse", 9, "\uE9D9", "Spectrum Extension",
             "Synthesizes missing upper-harmonic air above 8 kHz for compressed streams (MP3, AAC, YouTube, Spotify).",
             true, (body, card) =>
             {
@@ -512,7 +726,7 @@ public sealed partial class MainWindow : Window
                 card.RefreshVisual = active => str.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
-        // 10. Differential Surround & Stereo Width
+        // 10. Differential Surround
         RegisterCard("surround", 10, "\uE8D6", "Differential Surround",
             "Expands stereo soundstage using subtle Haas inter-aural delay and Mid/Side stereo widening.",
             true, (body, card) =>
@@ -527,9 +741,9 @@ public sealed partial class MainWindow : Window
                 card.RefreshVisual = active => delay.Slider.Opacity = width.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
-        // 11. Field Surround (Colorful Music)
+        // 11. Field Surround
         RegisterCard("field", 11, "\uE774", "Field Surround",
-            "Colorful Music psychoacoustic soundstage enhancer with independent center vocal image control.",
+            "Psychoacoustic soundstage enhancer with independent center vocal image control.",
             true, (body, card) =>
             {
                 _fieldToggle = card.Toggle!;
@@ -542,8 +756,8 @@ public sealed partial class MainWindow : Window
                 card.RefreshVisual = active => str.Slider.Opacity = mid.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
-        // 12. Headphone Surround+ (VHS+)
-        RegisterCard("vhs", 12, "\uE7F6", "Headphone Surround+ (VHS+)",
+        // 12. Headphone Surround+ (no parenthetical)
+        RegisterCard("vhs", 12, "\uE7F6", "Headphone Surround+",
             "5-level early-reflection virtualizer simulating out-of-head loudspeaker staging on headphones.",
             true, (body, card) =>
             {
@@ -554,7 +768,7 @@ public sealed partial class MainWindow : Window
                 card.RefreshVisual = active => StyleModeButtons(btns, _vhsLevel - 1, active);
             });
 
-        // 13. Reverberation (Room Simulator)
+        // 13. Reverberation
         RegisterCard("reverb", 13, "\uE8F1", "Reverberation",
             "Sample-rate invariant 8-comb + 4-allpass stereo room simulator.",
             true, (body, card) =>
@@ -604,13 +818,13 @@ public sealed partial class MainWindow : Window
                     thresh.Slider.Opacity = ratio.Slider.Opacity = atk.Slider.Opacity = rel.Slider.Opacity = makeup.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
-        // 15. Playback Gain Control (AGC)
-        RegisterCard("agc", 15, "\uE767", "Playback Gain Control (AGC)",
+        // 15. Playback Gain Control (no parenthetical)
+        RegisterCard("agc", 15, "\uE767", "Playback Gain Control",
             "Automatically levels quiet and loud tracks to a comfortable target loudness.",
             true, (body, card) =>
             {
                 _agcToggle = card.Toggle!;
-                var str = CreateSliderRow("Effect Strength", "AGC leveling responsiveness (0–100%).", 0, 100, 50, 5, v => $"{v:0}%");
+                var str = CreateSliderRow("Effect Strength", "Leveling responsiveness (0–100%).", 0, 100, 50, 5, v => $"{v:0}%");
                 var maxG = CreateSliderRow("Max Gain", "Maximum boost applied to quiet tracks.", 0, 24, 12, 1, v => $"+{v:0} dB");
                 var thresh = CreateSliderRow("Output Threshold", "Target output loudness ceiling.", -12, 0, -1, 0.5, v => $"{v:0.0} dBFS");
                 _agcStrengthSlider = str.Slider;
@@ -622,8 +836,8 @@ public sealed partial class MainWindow : Window
                 card.RefreshVisual = active => str.Slider.Opacity = maxG.Slider.Opacity = thresh.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
-        // 16. Cure Tech+ (Crossfeed)
-        RegisterCard("cure", 16, "\uE95E", "Cure Tech+ (Crossfeed)",
+        // 16. Cure Tech+ (no parenthetical)
+        RegisterCard("cure", 16, "\uE95E", "Cure Tech+",
             "Binaural 0.26 ms ITD crossfeed that reduces long-session headphone listening fatigue.",
             true, (body, card) =>
             {
@@ -691,10 +905,10 @@ public sealed partial class MainWindow : Window
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 Padding = new Thickness(14, 12, 14, 12),
-                CornerRadius = new CornerRadius(12),
+                CornerRadius = new CornerRadius(_activeTheme == "LiquidGlass" ? 16 : 12),
                 BorderThickness = new Thickness(1),
-                Background = active ? EmeraldBgBrush : CardBgBrush,
-                BorderBrush = active ? EmeraldBorderBrush : CardBorderBrush
+                Background = active ? AccentBgBrush : CardBgBrush,
+                BorderBrush = active ? AccentBorderBrush : CardBorderBrush
             };
 
             var stack = new StackPanel { Spacing = 3 };
@@ -752,7 +966,7 @@ public sealed partial class MainWindow : Window
                 FontSize = _eqMode == 18 ? 10.5 : 12,
                 FontWeight = FontWeights.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = values[i] != 0 ? EmeraldLightBrush : TextSecondaryBrush
+                Foreground = values[i] != 0 ? AccentLightBrush : TextSecondaryBrush
             };
 
             int bandIdx = i;
@@ -781,7 +995,7 @@ public sealed partial class MainWindow : Window
                 }
                 valText.Text = FormatDb(e.NewValue);
                 bool eqActive = MasterToggle.IsOn && EqToggle.IsOn;
-                valText.Foreground = Math.Abs(e.NewValue) > 0.01 && eqActive ? EmeraldLightBrush : TextSecondaryBrush;
+                valText.Foreground = Math.Abs(e.NewValue) > 0.01 && eqActive ? AccentLightBrush : TextSecondaryBrush;
                 _isUpdating = true;
                 EqPresetCombo.SelectedIndex = 0;
                 _isUpdating = false;
@@ -835,7 +1049,7 @@ public sealed partial class MainWindow : Window
 
         var polyline = new Polyline
         {
-            Stroke = active ? EmeraldLightBrush : MutedBrush,
+            Stroke = active ? AccentLightBrush : MutedBrush,
             StrokeThickness = 2.4,
             StrokeLineJoin = PenLineJoin.Round
         };
@@ -851,9 +1065,10 @@ public sealed partial class MainWindow : Window
         }
         fillPoints.Add(new Point(w - padX, h - padY));
 
+        var light = AccentLightBrush.Color;
         var grad = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        grad.GradientStops.Add(new GradientStop { Color = active ? Color.FromArgb(65, 52, 211, 153) : Color.FromArgb(35, 113, 113, 122), Offset = 0 });
-        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(0, 16, 185, 129), Offset = 1 });
+        grad.GradientStops.Add(new GradientStop { Color = active ? Color.FromArgb(70, light.R, light.G, light.B) : Color.FromArgb(35, 113, 113, 122), Offset = 0 });
+        grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(0, _accentBase.R, _accentBase.G, _accentBase.B), Offset = 1 });
 
         EqCurveCanvas.Children.Add(new Polygon { Points = fillPoints, Fill = grad });
         EqCurveCanvas.Children.Add(polyline);
@@ -864,7 +1079,7 @@ public sealed partial class MainWindow : Window
             {
                 Width = 7, Height = 7,
                 Fill = active ? TextPrimaryBrush : MutedBrush,
-                Stroke = active ? EmeraldBrush : MutedBorderBrush,
+                Stroke = active ? AccentBrush : MutedBorderBrush,
                 StrokeThickness = 1.5
             };
             Canvas.SetLeft(dot, pt.X - 3.5);
@@ -878,7 +1093,6 @@ public sealed partial class MainWindow : Window
         _isUpdating = true;
         _selectedPreset = name;
 
-        // Clean baseline reset of all 17 modules
         EqToggle.IsOn = false;
         _eq10 = new double[10];
         _masterGainSlider.Value = 0;
@@ -960,37 +1174,43 @@ public sealed partial class MainWindow : Window
     {
         bool master = MasterToggle.IsOn;
 
-        StatusPill.Background = master ? EmeraldBgBrush : CardBgBrush;
-        StatusPill.BorderBrush = master ? EmeraldBorderBrush : CardBorderBrush;
-        StatusDot.Fill = master ? EmeraldLightBrush : MutedBrush;
+        StatusPill.Background = master ? AccentBgBrush : CardBgBrush;
+        StatusPill.BorderBrush = master ? AccentBorderBrush : CardBorderBrush;
+        StatusDot.Fill = master ? AccentLightBrush : MutedBrush;
         StatusText.Text = master ? "WORKING" : "NOT WORKING";
-        StatusText.Foreground = master ? EmeraldTextBrush : TextSecondaryBrush;
+        StatusText.Foreground = master ? AccentTextBrush : TextSecondaryBrush;
+
+        SettingsBtn.Background = _settingsOpen ? AccentBgBrush : CardBgBrush;
+        SettingsBtn.BorderBrush = _settingsOpen ? AccentBorderBrush : CardBorderBrush;
+        SettingsGearIcon.Foreground = _settingsOpen ? AccentLightBrush : TextDimBrush;
 
         bool isPinnedPreset = _pinnedPresets.Contains(_selectedPreset);
         PinPresetBtn.Content = isPinnedPreset ? "Pinned" : "Pin";
-        PinPresetBtn.Background = isPinnedPreset ? EmeraldBgBrush : SubtleBgBrush;
-        PinPresetBtn.BorderBrush = isPinnedPreset ? EmeraldBorderBrush : CardBorderBrush;
-        PinPresetBtn.Foreground = isPinnedPreset ? EmeraldTextBrush : TextDimBrush;
+        PinPresetBtn.Background = isPinnedPreset ? AccentBgBrush : SubtleBgBrush;
+        PinPresetBtn.BorderBrush = isPinnedPreset ? AccentBorderBrush : CardBorderBrush;
+        PinPresetBtn.Foreground = isPinnedPreset ? AccentTextBrush : TextDimBrush;
 
-        EqIcon.Foreground = master && EqToggle.IsOn ? EmeraldLightBrush : MutedBrush;
+        EqIcon.Foreground = master && EqToggle.IsOn ? AccentLightBrush : MutedBrush;
         EqSlidersGrid.Opacity = master && EqToggle.IsOn ? 1.0 : 0.5;
 
         bool eqActive = master && EqToggle.IsOn;
         var eqVals = _eqMode == 18 ? _eq18 : _eq10;
         for (int i = 0; i < _eqValueLabels.Count && i < eqVals.Length; i++)
-            _eqValueLabels[i].Foreground = Math.Abs(eqVals[i]) > 0.01 && eqActive ? EmeraldLightBrush : TextSecondaryBrush;
+            _eqValueLabels[i].Foreground = Math.Abs(eqVals[i]) > 0.01 && eqActive ? AccentLightBrush : TextSecondaryBrush;
 
         foreach (var card in _cards)
         {
             bool active = card.IsActive();
-            card.Icon.Foreground = active ? EmeraldLightBrush : MutedBrush;
+            card.Icon.Foreground = active ? AccentLightBrush : MutedBrush;
             bool pinned = _pinnedModules.Contains(card.Id);
-            card.PinBtn.Background = pinned ? EmeraldBgBrush : SubtleBgBrush;
-            card.PinBtn.BorderBrush = pinned ? EmeraldBorderBrush : CardBorderBrush;
-            card.PinBtn.Foreground = pinned ? EmeraldLightBrush : MutedBrush;
+            card.PinBtn.Background = pinned ? AccentBgBrush : SubtleBgBrush;
+            card.PinBtn.BorderBrush = pinned ? AccentBorderBrush : CardBorderBrush;
+            card.PinBtn.Foreground = pinned ? AccentLightBrush : MutedBrush;
             card.RefreshVisual(active);
         }
 
+        UpdateThemePresetButtons();
+        UpdateEqModeButtons();
         DrawEqCurve();
     }
 
@@ -1013,9 +1233,9 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                buttons[i].Background = EmeraldBgBrush;
-                buttons[i].BorderBrush = EmeraldBorderBrush;
-                buttons[i].Foreground = EmeraldTextBrush;
+                buttons[i].Background = AccentBgBrush;
+                buttons[i].BorderBrush = AccentBorderBrush;
+                buttons[i].Foreground = AccentTextBrush;
             }
         }
     }
@@ -1023,33 +1243,74 @@ public sealed partial class MainWindow : Window
     private void UpdateEqModeButtons()
     {
         Eq10Btn.Background = _eqMode == 10 ? MutedBgBrush : TransparentBrush;
-        Eq10Btn.Foreground = _eqMode == 10 ? EmeraldLightBrush : TextSecondaryBrush;
+        Eq10Btn.Foreground = _eqMode == 10 ? AccentLightBrush : TextSecondaryBrush;
         Eq18Btn.Background = _eqMode == 18 ? MutedBgBrush : TransparentBrush;
-        Eq18Btn.Foreground = _eqMode == 18 ? EmeraldLightBrush : TextSecondaryBrush;
+        Eq18Btn.Foreground = _eqMode == 18 ? AccentLightBrush : TextSecondaryBrush;
     }
 
     // ==================== EVENT HANDLERS ====================
 
-    private void V4WaInfoBtn_Click(object sender, RoutedEventArgs e) => V4WaTeachingTip.IsOpen = true;
-
-    private void TabDspBtn_Click(object sender, RoutedEventArgs e)
+    private void SettingsBtn_Click(object sender, RoutedEventArgs e)
     {
-        DspConsolePanel.Visibility = Visibility.Visible;
-        DevicesPanel.Visibility = Visibility.Collapsed;
-        TabDspBtn.Background = MutedBgBrush;
-        TabDspBtn.Foreground = TextPrimaryBrush;
-        TabDevicesBtn.Background = TransparentBrush;
-        TabDevicesBtn.Foreground = TextSecondaryBrush;
+        _settingsOpen = !_settingsOpen;
+        DspConsolePanel.Visibility = _settingsOpen ? Visibility.Collapsed : Visibility.Visible;
+        SettingsPanel.Visibility = _settingsOpen ? Visibility.Visible : Visibility.Collapsed;
+        RefreshVisualStates();
     }
 
-    private void TabDevicesBtn_Click(object sender, RoutedEventArgs e)
+    private void BackToDspBtn_Click(object sender, RoutedEventArgs e)
     {
-        DspConsolePanel.Visibility = Visibility.Collapsed;
-        DevicesPanel.Visibility = Visibility.Visible;
-        TabDevicesBtn.Background = MutedBgBrush;
-        TabDevicesBtn.Foreground = TextPrimaryBrush;
-        TabDspBtn.Background = TransparentBrush;
-        TabDspBtn.Foreground = TextSecondaryBrush;
+        _settingsOpen = false;
+        DspConsolePanel.Visibility = Visibility.Visible;
+        SettingsPanel.Visibility = Visibility.Collapsed;
+        RefreshVisualStates();
+    }
+
+    private void ThemePresetBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string theme)
+        {
+            ApplySurfaceTheme(theme);
+            RebuildPinnedPresets();
+        }
+    }
+
+    private void AutoAccentToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdating) return;
+        AccentColorPicker.IsEnabled = !AutoAccentToggle.IsOn;
+        if (AutoAccentToggle.IsOn)
+        {
+            var winAccent = _uiSettings.GetColorValue(UIColorType.Accent);
+            ApplyAccentColor(winAccent, syncPicker: true);
+        }
+    }
+
+    private void Swatch_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string hex && hex.Length == 7)
+        {
+            _isUpdating = true;
+            AutoAccentToggle.IsOn = false;
+            AccentColorPicker.IsEnabled = true;
+            _isUpdating = false;
+            byte r = Convert.ToByte(hex.Substring(1, 2), 16);
+            byte g = Convert.ToByte(hex.Substring(3, 2), 16);
+            byte b = Convert.ToByte(hex.Substring(5, 2), 16);
+            ApplyAccentColor(Color.FromArgb(255, r, g, b), syncPicker: true);
+        }
+    }
+
+    private void AccentColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        if (_isUpdating) return;
+        if (AutoAccentToggle.IsOn)
+        {
+            _isUpdating = true;
+            AutoAccentToggle.IsOn = false;
+            _isUpdating = false;
+        }
+        ApplyAccentColor(args.NewColor, syncPicker: false);
     }
 
     private void MasterToggle_Toggled(object sender, RoutedEventArgs e) { if (!_isUpdating) RefreshVisualStates(); }
@@ -1125,10 +1386,10 @@ public sealed partial class MainWindow : Window
     {
         if (sender is Button btn && btn.Tag is string msg)
         {
-            ToastBar.Title = "V4Wa Demo";
+            ToastBar.Title = "V4Wa";
             ToastBar.Message = msg;
             ToastBar.IsOpen = true;
-            await Task.Delay(2500);
+            await Task.Delay(2400);
             ToastBar.IsOpen = false;
         }
     }

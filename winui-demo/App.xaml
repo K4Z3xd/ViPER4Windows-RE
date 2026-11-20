@@ -10,26 +10,21 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- V4Wa Unified Emerald Fluent Accent Overrides -->
-            <Color x:Key="SystemAccentColor">#FF10B981</Color>
-            <Color x:Key="SystemAccentColorLight1">#FF34D399</Color>
-            <Color x:Key="SystemAccentColorLight2">#FF6EE7B7</Color>
-            <Color x:Key="SystemAccentColorLight3">#FFA7F3D0</Color>
-            <Color x:Key="SystemAccentColorDark1">#FF059669</Color>
-            <Color x:Key="SystemAccentColorDark2">#FF047857</Color>
-            <Color x:Key="SystemAccentColorDark3">#FF065F46</Color>
+            <!-- V4Wa Dynamic Theme Engine Brushes (mutated live by ThemeEngine) -->
+            <SolidColorBrush x:Key="V4WaAccentBrush" Color="#FF10B981" />
+            <SolidColorBrush x:Key="V4WaAccentLightBrush" Color="#FF34D399" />
+            <SolidColorBrush x:Key="V4WaAccentTextBrush" Color="#FFA7F3D0" />
+            <SolidColorBrush x:Key="V4WaAccentBgBrush" Color="#2E10B981" />
+            <SolidColorBrush x:Key="V4WaAccentBorderBrush" Color="#8C34D399" />
 
-            <SolidColorBrush x:Key="V4WaEmeraldBrush" Color="#FF10B981" />
-            <SolidColorBrush x:Key="V4WaEmeraldLightBrush" Color="#FF34D399" />
-            <SolidColorBrush x:Key="V4WaEmeraldBgBrush" Color="#2810B981" />
-            <SolidColorBrush x:Key="V4WaEmeraldBorderBrush" Color="#8034D399" />
             <SolidColorBrush x:Key="V4WaCardBgBrush" Color="#CC121216" />
             <SolidColorBrush x:Key="V4WaCardBorderBrush" Color="#FF2E2E36" />
-            <SolidColorBrush x:Key="V4WaSubtleBgBrush" Color="#FF0B0B0E" />
+            <SolidColorBrush x:Key="V4WaSubtleBgBrush" Color="#CC0B0B0E" />
+            <SolidColorBrush x:Key="V4WaHeaderBgBrush" Color="#AA09090B" />
             <SolidColorBrush x:Key="V4WaMutedBrush" Color="#FF71717A" />
             <SolidColorBrush x:Key="V4WaTextSecondaryBrush" Color="#FFA1A1AA" />
 
-            <!-- Fluent Accent Overrides for Controls -->
+            <!-- Fluent Control Accent Overrides (also mutated live by ThemeEngine) -->
             <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#FF10B981" />
             <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FF34D399" />
             <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#FF059669" />
@@ -47,17 +42,6 @@
                 <Setter Property="BorderThickness" Value="1" />
                 <Setter Property="CornerRadius" Value="14" />
                 <Setter Property="Padding" Value="18" />
-            </Style>
-
-            <!-- Compact InfoTip Button Style -->
-            <Style x:Key="InfoTipButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="Transparent" />
-                <Setter Property="BorderThickness" Value="0" />
-                <Setter Property="Padding" Value="2" />
-                <Setter Property="MinWidth" Value="22" />
-                <Setter Property="MinHeight" Value="22" />
-                <Setter Property="Foreground" Value="#FFA1A1AA" />
-                <Setter Property="VerticalAlignment" Value="Center" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>
