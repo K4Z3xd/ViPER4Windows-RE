@@ -57,14 +57,18 @@ import {
   V4AVseIcon
 } from './components/V4AIcons';
 
-function eqFaderFill(db: number): React.CSSProperties {
+function eqFaderFill(db: number, enabled = true): React.CSSProperties {
   const clamped = Math.max(-12, Math.min(12, db));
   const pct = ((12 - clamped) / 24) * 100; // 0% = +12dB (top), 50% = 0dB, 100% = -12dB (bottom)
   let bg = '#27272a';
   if (clamped > 0.01) {
-    bg = `linear-gradient(to bottom, #27272a 0%, #27272a ${pct}%, #34d399 ${pct}%, #10b981 50%, #27272a 50%, #27272a 100%)`;
+    const hi = enabled ? '#34d399' : '#52525b';
+    const lo = enabled ? '#10b981' : '#52525b';
+    bg = `linear-gradient(to bottom, #27272a 0%, #27272a ${pct}%, ${hi} ${pct}%, ${lo} 50%, #27272a 50%, #27272a 100%)`;
   } else if (clamped < -0.01) {
-    bg = `linear-gradient(to bottom, #27272a 0%, #27272a 50%, #f59e0b 50%, #d97706 ${pct}%, #27272a ${pct}%, #27272a 100%)`;
+    const hi = enabled ? '#f59e0b' : '#52525b';
+    const lo = enabled ? '#d97706' : '#52525b';
+    bg = `linear-gradient(to bottom, #27272a 0%, #27272a 50%, ${hi} 50%, ${lo} ${pct}%, #27272a ${pct}%, #27272a 100%)`;
   }
   return { '--track-bg': bg } as React.CSSProperties;
 }
@@ -73,23 +77,48 @@ function sliderFill(
   val: number,
   min: number,
   max: number,
-  options?: { bipolarZero?: number; color?: string }
+  options?: { bipolarZero?: number; color?: string; enabled?: boolean }
 ): React.CSSProperties {
   const span = max - min || 1;
   const pct = Math.max(0, Math.min(100, ((val - min) / span) * 100));
-  const color = options?.color ?? '#10b981';
+  const isEnabled = options?.enabled !== false;
+  const color = isEnabled ? (options?.color ?? '#10b981') : '#52525b';
 
   if (typeof options?.bipolarZero === 'number') {
     const zeroPct = Math.max(0, Math.min(100, ((options.bipolarZero - min) / span) * 100));
     const start = Math.min(pct, zeroPct);
     const end = Math.max(pct, zeroPct);
-    const activeColor = val < options.bipolarZero ? '#f59e0b' : color;
+    const activeColor = isEnabled
+      ? val < options.bipolarZero
+        ? '#f59e0b'
+        : color
+      : '#52525b';
     const bg = `linear-gradient(to right, #27272a 0%, #27272a ${start}%, ${activeColor} ${start}%, ${activeColor} ${end}%, #27272a ${end}%, #27272a 100%)`;
     return { '--track-bg': bg } as React.CSSProperties;
   }
 
   const bg = `linear-gradient(to right, ${color} 0%, ${color} ${pct}%, #27272a ${pct}%, #27272a 100%)`;
   return { '--track-bg': bg } as React.CSSProperties;
+}
+
+function moduleIconClass(enabled: boolean, accent: 'emerald' | 'amber' | 'white' = 'emerald') {
+  if (!enabled) return 'text-zinc-500 transition-colors';
+  if (accent === 'amber') return 'text-amber-400 transition-colors';
+  if (accent === 'white') return 'text-zinc-100 transition-colors';
+  return 'text-emerald-400 transition-colors';
+}
+
+function modeBtnClass(selected: boolean, enabled: boolean, accent: 'emerald' | 'amber' = 'emerald') {
+  if (!selected) {
+    return 'border border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200';
+  }
+  if (!enabled) {
+    return 'border border-zinc-700 bg-zinc-800/80 text-zinc-300';
+  }
+  if (accent === 'amber') {
+    return 'border border-amber-400/50 bg-amber-500/20 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.12)]';
+  }
+  return 'border border-emerald-400/50 bg-emerald-500/20 text-emerald-200 shadow-[0_0_12px_rgba(16,185,129,0.12)]';
 }
 
 function Toggle({
@@ -996,7 +1025,9 @@ export default function App() {
             <section className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <V4AEqualizerIcon className="h-4.5 w-4.5 text-emerald-400" />
+                  <V4AEqualizerIcon
+                    className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.eqEnabled)}`}
+                  />
                   <h2 className="font-display text-base font-semibold text-white">
                     {params.eqMode === 1 ? '18-Band' : '10-Band'} Hi-Res Equalizer
                   </h2>
@@ -1112,15 +1143,18 @@ export default function App() {
               >
                 {activeEqLabels.map((freq, idx) => {
                   const val = activeEqValues[idx] ?? 0;
+                  const eqOn = params.masterEnabled && params.eqEnabled;
                   return (
                     <div key={`${params.eqMode}-${freq}`} className="flex flex-col items-center gap-2">
                       <span
                         className={`font-mono text-xs font-semibold tabular-nums ${
-                          val > 0.01
-                            ? 'text-emerald-300'
-                            : val < -0.01
-                              ? 'text-amber-300'
-                              : 'text-zinc-200'
+                          !eqOn
+                            ? 'text-zinc-400'
+                            : val > 0.01
+                              ? 'text-emerald-300'
+                              : val < -0.01
+                                ? 'text-amber-300'
+                                : 'text-zinc-200'
                         }`}
                       >
                         {val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1)}
@@ -1131,7 +1165,7 @@ export default function App() {
                         max={12}
                         step={0.5}
                         value={val}
-                        style={eqFaderFill(val)}
+                        style={eqFaderFill(val, eqOn)}
                         aria-label={`${freq} Hz gain`}
                         onChange={e => updateEqBand(idx, parseFloat(e.target.value))}
                         className="eq-fader"
@@ -1152,7 +1186,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4ABassIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4ABassIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.bassEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">ViPER Bass</h3>
                     <InfoTip
                       align="left"
@@ -1177,9 +1211,7 @@ export default function App() {
                         type="button"
                         onClick={() => updateField('bassMode', idx, true)}
                         className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
-                          params.bassMode === idx
-                            ? 'bg-zinc-800 text-white'
-                            : 'text-zinc-400 hover:text-zinc-200'
+                          modeBtnClass(params.bassMode === idx, params.masterEnabled && params.bassEnabled)
                         }`}
                       >
                         {label}
@@ -1206,7 +1238,7 @@ export default function App() {
                       max={120}
                       step={5}
                       value={params.bassFrequencyHz}
-                      style={sliderFill(params.bassFrequencyHz, 30, 120)}
+                      style={sliderFill(params.bassFrequencyHz, 30, 120, { enabled: params.masterEnabled && params.bassEnabled })}
                       onChange={e => updateField('bassFrequencyHz', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1231,7 +1263,7 @@ export default function App() {
                       max={15}
                       step={0.5}
                       value={params.bassGainDb}
-                      style={sliderFill(params.bassGainDb, 0, 15)}
+                      style={sliderFill(params.bassGainDb, 0, 15, { enabled: params.masterEnabled && params.bassEnabled })}
                       onChange={e => updateField('bassGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1246,7 +1278,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AClarityIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4AClarityIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.clarityEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">ViPER Clarity</h3>
                     <InfoTip text="Sharpens vocal presence and instrument separation. Natural: smooth high lift; OZone+: airy harmonic shimmer; XHiFi: crisp micro-detail reconstruction." />
                   </div>
@@ -1268,9 +1300,7 @@ export default function App() {
                         type="button"
                         onClick={() => updateField('clarityMode', idx, true)}
                         className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
-                          params.clarityMode === idx
-                            ? 'bg-zinc-800 text-white'
-                            : 'text-zinc-400 hover:text-zinc-200'
+                          modeBtnClass(params.clarityMode === idx, params.masterEnabled && params.clarityEnabled)
                         }`}
                       >
                         {label}
@@ -1294,7 +1324,7 @@ export default function App() {
                       max={15}
                       step={0.5}
                       value={params.clarityGainDb}
-                      style={sliderFill(params.clarityGainDb, 0, 15)}
+                      style={sliderFill(params.clarityGainDb, 0, 15, { enabled: params.masterEnabled && params.clarityEnabled })}
                       onChange={e => updateField('clarityGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1309,7 +1339,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4ATubeIcon className="h-4.5 w-4.5 text-amber-400" />
+                    <V4ATubeIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.tubeEnabled, 'amber')}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Tube Simulator (6N1J)
                     </h3>
@@ -1351,7 +1381,7 @@ export default function App() {
                     max={1}
                     step={0.02}
                     value={params.tubeDrive}
-                      style={sliderFill(params.tubeDrive, 0, 1, { color: '#f59e0b' })}
+                      style={sliderFill(params.tubeDrive, 0, 1, { color: '#f59e0b' , enabled: params.masterEnabled && params.tubeEnabled })}
                     onChange={e => updateField('tubeDrive', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
@@ -1365,7 +1395,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4ADiffSurroundIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4ADiffSurroundIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.surroundEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Differential Surround
                     </h3>
@@ -1404,7 +1434,7 @@ export default function App() {
                       max={20}
                       step={0.5}
                       value={params.surroundDelayMs}
-                      style={sliderFill(params.surroundDelayMs, 0, 20)}
+                      style={sliderFill(params.surroundDelayMs, 0, 20, { enabled: params.masterEnabled && params.surroundEnabled })}
                       onChange={e => updateField('surroundDelayMs', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1429,7 +1459,7 @@ export default function App() {
                       max={2}
                       step={0.05}
                       value={params.stereoWidth}
-                      style={sliderFill(params.stereoWidth, 0, 2)}
+                      style={sliderFill(params.stereoWidth, 0, 2, { enabled: params.masterEnabled && params.surroundEnabled })}
                       onChange={e => updateField('stereoWidth', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1444,7 +1474,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Volume2 className="h-4 w-4 text-zinc-200" />
+                    <Volume2 className={`h-4 w-4 ${moduleIconClass(params.masterEnabled, 'white')}`} />
                     <h3 className="font-display text-sm font-semibold text-white">Master Output</h3>
                     <InfoTip text="Controls final output pre-amp gain and Left/Right stereo balance before the brickwall limiter." />
                   </div>
@@ -1468,7 +1498,7 @@ export default function App() {
                       max={12}
                       step={0.5}
                       value={params.masterGainDb}
-                      style={sliderFill(params.masterGainDb, -24, 12, { bipolarZero: 0 })}
+                      style={sliderFill(params.masterGainDb, -24, 12, { bipolarZero: 0 , enabled: params.masterEnabled })}
                       onChange={e => updateField('masterGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1494,7 +1524,7 @@ export default function App() {
                       max={1}
                       step={0.05}
                       value={params.outputPan}
-                      style={sliderFill(params.outputPan, -1, 1, { bipolarZero: 0 })}
+                      style={sliderFill(params.outputPan, -1, 1, { bipolarZero: 0 , enabled: params.masterEnabled })}
                       onChange={e => updateField('outputPan', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1509,7 +1539,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                    <ShieldCheck className={`h-4 w-4 ${moduleIconClass(params.masterEnabled && params.limiterEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Peak Limiter
                     </h3>
@@ -1551,7 +1581,7 @@ export default function App() {
                     max={0}
                     step={0.1}
                     value={params.limiterThresholdDb}
-                      style={sliderFill(params.limiterThresholdDb, -6, 0)}
+                      style={sliderFill(params.limiterThresholdDb, -6, 0, { enabled: params.masterEnabled && params.limiterEnabled })}
                     onChange={e => updateField('limiterThresholdDb', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
@@ -1565,7 +1595,9 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4ADynamicIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4ADynamicIcon
+                      className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.dynamicEnabled)}`}
+                    />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Dynamic System
                     </h3>
@@ -1585,19 +1617,32 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-950 p-1">
-                    {['Common', 'Extreme HP', 'High-End HP', 'Studio'].map((label, idx) => (
+                  <div className="flex flex-col gap-1.5 rounded-xl border border-zinc-700/80 bg-zinc-950 p-1.5">
+                    {[
+                      'Common Earphone',
+                      'Extreme Headphone',
+                      'High-End Headphone',
+                      'Studio Monitor'
+                    ].map((label, idx) => (
                       <button
                         key={label}
                         type="button"
                         onClick={() => updateField('dynamicDevice', idx, true)}
-                        className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
-                          params.dynamicDevice === idx
-                            ? 'bg-zinc-800 text-white'
-                            : 'text-zinc-400 hover:text-zinc-200'
-                        }`}
+                        className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors ${modeBtnClass(
+                          params.dynamicDevice === idx,
+                          params.masterEnabled && params.dynamicEnabled
+                        )}`}
                       >
-                        {label}
+                        <span>{label}</span>
+                        {params.dynamicDevice === idx && (
+                          <span
+                            className={`h-2 w-2 rounded-full ${
+                              params.masterEnabled && params.dynamicEnabled
+                                ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.85)]'
+                                : 'bg-zinc-500'
+                            }`}
+                          />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1621,7 +1666,9 @@ export default function App() {
                       max={100}
                       step={2}
                       value={params.dynamicBass}
-                      style={sliderFill(params.dynamicBass, 0, 100)}
+                      style={sliderFill(params.dynamicBass, 0, 100, {
+                        enabled: params.masterEnabled && params.dynamicEnabled
+                      })}
                       onChange={e => updateField('dynamicBass', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1636,7 +1683,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AReverbIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4AReverbIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.reverbEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Reverberation
                     </h3>
@@ -1669,7 +1716,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.reverbRoomSize}
-                      style={sliderFill(params.reverbRoomSize, 0, 1)}
+                      style={sliderFill(params.reverbRoomSize, 0, 1, { enabled: params.masterEnabled && params.reverbEnabled })}
                       onChange={e => updateField('reverbRoomSize', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1691,7 +1738,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.reverbWidth}
-                      style={sliderFill(params.reverbWidth, 0, 1)}
+                      style={sliderFill(params.reverbWidth, 0, 1, { enabled: params.masterEnabled && params.reverbEnabled })}
                       onChange={e => updateField('reverbWidth', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1713,7 +1760,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.reverbDamping}
-                      style={sliderFill(params.reverbDamping, 0, 1)}
+                      style={sliderFill(params.reverbDamping, 0, 1, { enabled: params.masterEnabled && params.reverbEnabled })}
                       onChange={e => updateField('reverbDamping', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1736,7 +1783,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.reverbWet}
-                      style={sliderFill(params.reverbWet, 0, 1)}
+                      style={sliderFill(params.reverbWet, 0, 1, { enabled: params.masterEnabled && params.reverbEnabled })}
                         onChange={e => updateField('reverbWet', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1757,7 +1804,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.reverbDry}
-                      style={sliderFill(params.reverbDry, 0, 1)}
+                      style={sliderFill(params.reverbDry, 0, 1, { enabled: params.masterEnabled && params.reverbEnabled })}
                         onChange={e => updateField('reverbDry', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1773,7 +1820,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4ACompressorIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4ACompressorIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.compEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       FET Compressor
                     </h3>
@@ -1812,7 +1859,7 @@ export default function App() {
                       max={0}
                       step={1}
                       value={params.compThresholdDb}
-                      style={sliderFill(params.compThresholdDb, -40, 0)}
+                      style={sliderFill(params.compThresholdDb, -40, 0, { enabled: params.masterEnabled && params.compEnabled })}
                       onChange={e => updateField('compThresholdDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1837,7 +1884,7 @@ export default function App() {
                       max={20}
                       step={0.5}
                       value={params.compRatio}
-                      style={sliderFill(params.compRatio, 1, 20)}
+                      style={sliderFill(params.compRatio, 1, 20, { enabled: params.masterEnabled && params.compEnabled })}
                       onChange={e => updateField('compRatio', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1860,7 +1907,7 @@ export default function App() {
                         max={100}
                         step={1}
                         value={params.compAttackMs}
-                      style={sliderFill(params.compAttackMs, 1, 100)}
+                      style={sliderFill(params.compAttackMs, 1, 100, { enabled: params.masterEnabled && params.compEnabled })}
                         onChange={e => updateField('compAttackMs', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1884,7 +1931,7 @@ export default function App() {
                         max={500}
                         step={10}
                         value={params.compReleaseMs}
-                      style={sliderFill(params.compReleaseMs, 20, 500)}
+                      style={sliderFill(params.compReleaseMs, 20, 500, { enabled: params.masterEnabled && params.compEnabled })}
                         onChange={e => updateField('compReleaseMs', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1910,7 +1957,7 @@ export default function App() {
                       max={18}
                       step={0.5}
                       value={params.compMakeupDb}
-                      style={sliderFill(params.compMakeupDb, 0, 18)}
+                      style={sliderFill(params.compMakeupDb, 0, 18, { enabled: params.masterEnabled && params.compEnabled })}
                       onChange={e => updateField('compMakeupDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1925,7 +1972,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Ear className="h-4 w-4 text-emerald-400" />
+                    <Ear className={`h-4 w-4 ${moduleIconClass(params.masterEnabled && params.cureEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Cure Tech+ (Crossfeed)
                     </h3>
@@ -1955,9 +2002,7 @@ export default function App() {
                       type="button"
                       onClick={() => updateField('cureLevel', idx, true)}
                       className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
-                        params.cureLevel === idx
-                          ? 'bg-zinc-800 text-white'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                        modeBtnClass(params.cureLevel === idx, params.masterEnabled && params.cureEnabled)
                       }`}
                     >
                       {label}
@@ -1973,7 +2018,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AConvolverIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4AConvolverIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.convolverEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Convolver (.irs / .wav)
                     </h3>
@@ -2052,7 +2097,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.convolverCrossChannel}
-                      style={sliderFill(params.convolverCrossChannel, 0, 1)}
+                      style={sliderFill(params.convolverCrossChannel, 0, 1, { enabled: params.masterEnabled && params.convolverEnabled })}
                         onChange={e =>
                           updateField('convolverCrossChannel', parseFloat(e.target.value))
                         }
@@ -2079,7 +2124,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.convolverWetMix}
-                      style={sliderFill(params.convolverWetMix, 0, 1)}
+                      style={sliderFill(params.convolverWetMix, 0, 1, { enabled: params.masterEnabled && params.convolverEnabled })}
                         onChange={e => updateField('convolverWetMix', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -2095,7 +2140,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4ADdcIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4ADdcIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.ddcEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       ViPER-DDC (.vdc)
                     </h3>
@@ -2163,7 +2208,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AVseIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4AVseIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.vseEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Spectrum Extension
                     </h3>
@@ -2199,7 +2244,7 @@ export default function App() {
                     max={1}
                     step={0.02}
                     value={params.vseStrength}
-                      style={sliderFill(params.vseStrength, 0, 1)}
+                      style={sliderFill(params.vseStrength, 0, 1, { enabled: params.masterEnabled && params.vseEnabled })}
                     onChange={e => updateField('vseStrength', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
@@ -2213,7 +2258,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AAnalogXIcon className="h-4.5 w-4.5 text-amber-400" />
+                    <V4AAnalogXIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.analogXEnabled, 'amber')}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       AnalogX (Class-A)
                     </h3>
@@ -2243,9 +2288,7 @@ export default function App() {
                       type="button"
                       onClick={() => updateField('analogXLevel', idx, true)}
                       className={`cursor-pointer rounded-md py-1.5 text-[11px] font-medium transition-colors ${
-                        params.analogXLevel === idx
-                          ? 'bg-zinc-800 text-white'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                        modeBtnClass(params.analogXLevel === idx, params.masterEnabled && params.analogXEnabled, 'amber')
                       }`}
                     >
                       {label}
@@ -2261,7 +2304,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AFieldSurroundIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4AFieldSurroundIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.fieldSurroundEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Field Surround
                     </h3>
@@ -2300,7 +2343,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.fieldSurroundStrength}
-                      style={sliderFill(params.fieldSurroundStrength, 0, 1)}
+                      style={sliderFill(params.fieldSurroundStrength, 0, 1, { enabled: params.masterEnabled && params.fieldSurroundEnabled })}
                       onChange={e => updateField('fieldSurroundStrength', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2325,7 +2368,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.fieldSurroundMidImage}
-                      style={sliderFill(params.fieldSurroundMidImage, 0, 1)}
+                      style={sliderFill(params.fieldSurroundMidImage, 0, 1, { enabled: params.masterEnabled && params.fieldSurroundEnabled })}
                       onChange={e => updateField('fieldSurroundMidImage', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2340,7 +2383,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4AVhsIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4AVhsIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.vhsEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Headphone Surround+ (VHS+)
                     </h3>
@@ -2367,9 +2410,7 @@ export default function App() {
                       type="button"
                       onClick={() => updateField('vhsLevel', lv, true)}
                       className={`cursor-pointer rounded-md py-1.5 font-mono text-[11px] font-medium transition-colors ${
-                        params.vhsLevel === lv
-                          ? 'bg-zinc-800 text-emerald-300'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                        modeBtnClass(params.vhsLevel === lv, params.masterEnabled && params.vhsEnabled)
                       }`}
                     >
                       Lv {lv}
@@ -2385,7 +2426,7 @@ export default function App() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <V4APlaybackGainIcon className="h-4.5 w-4.5 text-emerald-400" />
+                    <V4APlaybackGainIcon className={`h-4.5 w-4.5 ${moduleIconClass(params.masterEnabled && params.agcEnabled)}`} />
                     <h3 className="font-display text-sm font-semibold text-white">
                       Playback Gain Control
                     </h3>
@@ -2424,7 +2465,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.agcStrength}
-                      style={sliderFill(params.agcStrength, 0, 1)}
+                      style={sliderFill(params.agcStrength, 0, 1, { enabled: params.masterEnabled && params.agcEnabled })}
                       onChange={e => updateField('agcStrength', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2449,7 +2490,7 @@ export default function App() {
                       max={24}
                       step={1}
                       value={params.agcMaxGainDb}
-                      style={sliderFill(params.agcMaxGainDb, 0, 24)}
+                      style={sliderFill(params.agcMaxGainDb, 0, 24, { enabled: params.masterEnabled && params.agcEnabled })}
                       onChange={e => updateField('agcMaxGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2474,7 +2515,7 @@ export default function App() {
                       max={0}
                       step={0.5}
                       value={params.agcOutputThreshDb}
-                      style={sliderFill(params.agcOutputThreshDb, -12, 0)}
+                      style={sliderFill(params.agcOutputThreshDb, -12, 0, { enabled: params.masterEnabled && params.agcEnabled })}
                       onChange={e => updateField('agcOutputThreshDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
