@@ -1141,6 +1141,7 @@ export default function App() {
                       max={120}
                       step={5}
                       value={params.bassFrequencyHz}
+                      style={sliderFill(params.bassFrequencyHz, 30, 120)}
                       onChange={e => updateField('bassFrequencyHz', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1165,6 +1166,7 @@ export default function App() {
                       max={15}
                       step={0.5}
                       value={params.bassGainDb}
+                      style={sliderFill(params.bassGainDb, 0, 15)}
                       onChange={e => updateField('bassGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1227,6 +1229,7 @@ export default function App() {
                       max={15}
                       step={0.5}
                       value={params.clarityGainDb}
+                      style={sliderFill(params.clarityGainDb, 0, 15)}
                       onChange={e => updateField('clarityGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1283,6 +1286,7 @@ export default function App() {
                     max={1}
                     step={0.02}
                     value={params.tubeDrive}
+                      style={sliderFill(params.tubeDrive, 0, 1, { color: '#f59e0b' })}
                     onChange={e => updateField('tubeDrive', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
@@ -1335,6 +1339,7 @@ export default function App() {
                       max={20}
                       step={0.5}
                       value={params.surroundDelayMs}
+                      style={sliderFill(params.surroundDelayMs, 0, 20)}
                       onChange={e => updateField('surroundDelayMs', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1359,6 +1364,7 @@ export default function App() {
                       max={2}
                       step={0.05}
                       value={params.stereoWidth}
+                      style={sliderFill(params.stereoWidth, 0, 2)}
                       onChange={e => updateField('stereoWidth', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1397,6 +1403,7 @@ export default function App() {
                       max={12}
                       step={0.5}
                       value={params.masterGainDb}
+                      style={sliderFill(params.masterGainDb, -24, 12, { bipolarZero: 0 })}
                       onChange={e => updateField('masterGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1422,6 +1429,7 @@ export default function App() {
                       max={1}
                       step={0.05}
                       value={params.outputPan}
+                      style={sliderFill(params.outputPan, -1, 1, { bipolarZero: 0 })}
                       onChange={e => updateField('outputPan', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1478,6 +1486,7 @@ export default function App() {
                     max={0}
                     step={0.1}
                     value={params.limiterThresholdDb}
+                      style={sliderFill(params.limiterThresholdDb, -6, 0)}
                     onChange={e => updateField('limiterThresholdDb', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
@@ -1547,6 +1556,7 @@ export default function App() {
                       max={100}
                       step={2}
                       value={params.dynamicBass}
+                      style={sliderFill(params.dynamicBass, 0, 100)}
                       onChange={e => updateField('dynamicBass', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1594,6 +1604,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.reverbRoomSize}
+                      style={sliderFill(params.reverbRoomSize, 0, 1)}
                       onChange={e => updateField('reverbRoomSize', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1615,6 +1626,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.reverbWidth}
+                      style={sliderFill(params.reverbWidth, 0, 1)}
                       onChange={e => updateField('reverbWidth', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1636,6 +1648,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.reverbDamping}
+                      style={sliderFill(params.reverbDamping, 0, 1)}
                       onChange={e => updateField('reverbDamping', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1658,6 +1671,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.reverbWet}
+                      style={sliderFill(params.reverbWet, 0, 1)}
                         onChange={e => updateField('reverbWet', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1678,6 +1692,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.reverbDry}
+                      style={sliderFill(params.reverbDry, 0, 1)}
                         onChange={e => updateField('reverbDry', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1732,6 +1747,7 @@ export default function App() {
                       max={0}
                       step={1}
                       value={params.compThresholdDb}
+                      style={sliderFill(params.compThresholdDb, -40, 0)}
                       onChange={e => updateField('compThresholdDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1756,6 +1772,7 @@ export default function App() {
                       max={20}
                       step={0.5}
                       value={params.compRatio}
+                      style={sliderFill(params.compRatio, 1, 20)}
                       onChange={e => updateField('compRatio', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1778,6 +1795,7 @@ export default function App() {
                         max={100}
                         step={1}
                         value={params.compAttackMs}
+                      style={sliderFill(params.compAttackMs, 1, 100)}
                         onChange={e => updateField('compAttackMs', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1801,6 +1819,7 @@ export default function App() {
                         max={500}
                         step={10}
                         value={params.compReleaseMs}
+                      style={sliderFill(params.compReleaseMs, 20, 500)}
                         onChange={e => updateField('compReleaseMs', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -1826,6 +1845,7 @@ export default function App() {
                       max={18}
                       step={0.5}
                       value={params.compMakeupDb}
+                      style={sliderFill(params.compMakeupDb, 0, 18)}
                       onChange={e => updateField('compMakeupDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -1967,6 +1987,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.convolverCrossChannel}
+                      style={sliderFill(params.convolverCrossChannel, 0, 1)}
                         onChange={e =>
                           updateField('convolverCrossChannel', parseFloat(e.target.value))
                         }
@@ -1993,6 +2014,7 @@ export default function App() {
                         max={1}
                         step={0.02}
                         value={params.convolverWetMix}
+                      style={sliderFill(params.convolverWetMix, 0, 1)}
                         onChange={e => updateField('convolverWetMix', parseFloat(e.target.value))}
                         className="studio-slider w-full"
                       />
@@ -2112,6 +2134,7 @@ export default function App() {
                     max={1}
                     step={0.02}
                     value={params.vseStrength}
+                      style={sliderFill(params.vseStrength, 0, 1)}
                     onChange={e => updateField('vseStrength', parseFloat(e.target.value))}
                     className="studio-slider w-full"
                   />
@@ -2212,6 +2235,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.fieldSurroundStrength}
+                      style={sliderFill(params.fieldSurroundStrength, 0, 1)}
                       onChange={e => updateField('fieldSurroundStrength', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2236,6 +2260,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.fieldSurroundMidImage}
+                      style={sliderFill(params.fieldSurroundMidImage, 0, 1)}
                       onChange={e => updateField('fieldSurroundMidImage', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2334,6 +2359,7 @@ export default function App() {
                       max={1}
                       step={0.02}
                       value={params.agcStrength}
+                      style={sliderFill(params.agcStrength, 0, 1)}
                       onChange={e => updateField('agcStrength', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2358,6 +2384,7 @@ export default function App() {
                       max={24}
                       step={1}
                       value={params.agcMaxGainDb}
+                      style={sliderFill(params.agcMaxGainDb, 0, 24)}
                       onChange={e => updateField('agcMaxGainDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
@@ -2382,6 +2409,7 @@ export default function App() {
                       max={0}
                       step={0.5}
                       value={params.agcOutputThreshDb}
+                      style={sliderFill(params.agcOutputThreshDb, -12, 0)}
                       onChange={e => updateField('agcOutputThreshDb', parseFloat(e.target.value))}
                       className="studio-slider w-full"
                     />
