@@ -419,16 +419,51 @@ export default function App() {
     }
   };
 
-  const applyPresetByName = (name: string) => {
+  const matchEqPresetName = (bands10: number[], bands18: number[], eqMode: number): string => {
+    const close = (a: number[], b: number[]) =>
+      a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.05);
+    for (const ep of allEqPresets) {
+      if (eqMode === 1) {
+        const target18 = ep.eqBands18Db && ep.eqBands18Db.length === 18
+          ? ep.eqBands18Db
+          : ep.eqBandsDb && ep.eqBandsDb.length === 10
+            ? interpolate10to18(ep.eqBandsDb)
+            : null;
+        if (target18 && close(bands18, target18)) return ep.name;
+      } else {
+        const target10 = ep.eqBandsDb && ep.eqBandsDb.length === 10
+          ? ep.eqBandsDb
+          : ep.eqBands18Db && ep.eqBands18Db.length === 18
+            ? downsample18to10(ep.eqBands18Db)
+            : null;
+        if (target10 && close(bands10, target10)) return ep.name;
+      }
+    }
+    return '';
+  };
+
+  const applyPresetByName = async (name: string) => {
     setSelectedPresetName(name);
     const found = allPresets.find(p => p.name === name);
     if (!found) return;
 
-    const merged: DspParams = { ...params, ...found.params };
+    // Reset all unspecified modules to clean DEFAULT_PARAMS baseline so previous state never leaks across presets
+    const merged: DspParams = {
+      ...DEFAULT_PARAMS,
+      eqBandsDb: [...DEFAULT_PARAMS.eqBandsDb],
+      eqBands18Db: [...DEFAULT_PARAMS.eqBands18Db],
+      ...found.params,
+      masterEnabled: params.masterEnabled,
+      convolverRevision: params.convolverRevision,
+      ddcRevision: params.ddcRevision
+    };
+
     // Keep 10-band and 18-band EQ curves synced when loading any full preset
     if (found.params.eqBands18Db && found.params.eqBands18Db.length === 18) {
       merged.eqBands18Db = [...found.params.eqBands18Db];
-      if (!found.params.eqBandsDb || found.params.eqBandsDb.length !== 10) {
+      if (found.params.eqBandsDb && found.params.eqBandsDb.length === 10) {
+        merged.eqBandsDb = [...found.params.eqBandsDb];
+      } else {
         merged.eqBandsDb = downsample18to10(merged.eqBands18Db);
       }
     } else if (found.params.eqBandsDb && found.params.eqBandsDb.length === 10) {
@@ -436,6 +471,46 @@ export default function App() {
       merged.eqBands18Db = interpolate10to18(merged.eqBandsDb);
     }
 
+    // Restore saved IRS / DDC file selections if present in custom preset
+    if (found.activeIrs && found.activeIrs !== activeIrs && irsFiles.includes(found.activeIrs)) {
+      try {
+        const res = await fetch('/api/irs/select', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: found.activeIrs })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActiveIrs(data.active || found.activeIrs);
+          if (data.params?.convolverRevision !== undefined) {
+            merged.convolverRevision = data.params.convolverRevision;
+          }
+        }
+      } catch {
+        // ignore selection errors
+      }
+    }
+
+    if (found.activeDdc && found.activeDdc !== activeDdc && ddcFiles.includes(found.activeDdc)) {
+      try {
+        const res = await fetch('/api/ddc/select', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: found.activeDdc })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActiveDdc(data.active || found.activeDdc);
+          if (data.params?.ddcRevision !== undefined) {
+            merged.ddcRevision = data.params.ddcRevision;
+          }
+        }
+      } catch {
+        // ignore selection errors
+      }
+    }
+
+    setSelectedEqPresetName(matchEqPresetName(merged.eqBandsDb, merged.eqBands18Db, merged.eqMode));
     pushParams(merged, true);
   };
 
@@ -445,7 +520,13 @@ export default function App() {
     const presetObj: Preset = {
       name: name.trim(),
       subtitle: 'Custom saved preset',
-      params: { ...params }
+      params: {
+        ...params,
+        eqBandsDb: [...params.eqBandsDb],
+        eqBands18Db: [...params.eqBands18Db]
+      },
+      ...(activeIrs ? { activeIrs } : {}),
+      ...(activeDdc ? { activeDdc } : {})
     };
     const res = await fetch('/api/presets/save', {
       method: 'POST',
@@ -471,7 +552,9 @@ export default function App() {
               items.push({
                 name: entry.name || file.name.replace(/\.json$/i, ''),
                 subtitle: entry.subtitle || 'Imported preset',
-                params: entry.params || entry
+                params: entry.params || entry,
+                ...(entry.activeIrs ? { activeIrs: entry.activeIrs } : {}),
+                ...(entry.activeDdc ? { activeDdc: entry.activeDdc } : {})
               });
             }
           }
@@ -479,7 +562,9 @@ export default function App() {
           items.push({
             name: parsed.name || file.name.replace(/\.json$/i, ''),
             subtitle: parsed.subtitle || 'Imported preset',
-            params: parsed.params || parsed
+            params: parsed.params || parsed,
+            ...(parsed.activeIrs ? { activeIrs: parsed.activeIrs } : {}),
+            ...(parsed.activeDdc ? { activeDdc: parsed.activeDdc } : {})
           });
         }
       } catch {
@@ -673,6 +758,7 @@ export default function App() {
   };
 
   const updateEqBand = (index: number, db: number) => {
+    setSelectedEqPresetName('');
     if (params.eqMode === 1) {
       const next18 = [...params.eqBands18Db];
       next18[index] = db;
@@ -1067,9 +1153,12 @@ export default function App() {
                   <select
                     aria-label="EQ Preset"
                     value={selectedEqPresetName}
-                    onChange={e => applyEqPresetByName(e.target.value)}
+                    onChange={e => {
+                      if (e.target.value) applyEqPresetByName(e.target.value);
+                    }}
                     className="w-40 cursor-pointer rounded-lg border border-zinc-700/80 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none sm:w-48"
                   >
+                    {selectedEqPresetName === '' && <option value="">Custom</option>}
                     {allEqPresets.map(ep => (
                       <option key={ep.name} value={ep.name}>
                         {ep.name}
@@ -1106,6 +1195,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
+                      setSelectedEqPresetName('Flat');
                       pushParams(
                         {
                           ...params,

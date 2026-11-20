@@ -234,6 +234,8 @@ export interface Preset {
   name: string;
   subtitle: string;
   params: Partial<DspParams>;
+  activeIrs?: string;
+  activeDdc?: string;
 }
 
 export const BUILTIN_PRESETS: Preset[] = [
