@@ -13,9 +13,39 @@ const FOOBAR_STATUS_PATH = 'C:\\ProgramData\\ViPERHiRes\\foobar_status.json';
 const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
 const IRS_DIR = 'C:\\ProgramData\\ViPERHiRes\\irs';
 const ACTIVE_IR_PATH = 'C:\\ProgramData\\ViPERHiRes\\active_ir.txt';
+const PRESETS_DIR = 'C:\\ProgramData\\ViPERHiRes\\presets';
+const EQ_PRESETS_DIR = 'C:\\ProgramData\\ViPERHiRes\\eq_presets';
 const MAGIC_VPHR = 0x56504852;
-const PARAMS_VERSION = 3;
-const BLOCK_SIZE = 212; // 4-byte seqlock + 208-byte DspParams v3
+const PARAMS_VERSION = 4;
+const BLOCK_SIZE = 288; // 4-byte seqlock + 284-byte DspParams v4
+
+function listJsonItems(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  const files = fs.readdirSync(dir).filter(f => /\.json$/i.test(f)).sort((a, b) => a.localeCompare(b));
+  const items = [];
+  for (const f of files) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+      if (parsed && typeof parsed === 'object') {
+        items.push({
+          ...parsed,
+          name: parsed.name || f.replace(/\.json$/i, '')
+        });
+      }
+    } catch {
+      // skip malformed preset file
+    }
+  }
+  return items;
+}
+
+function saveJsonItem(dir, item) {
+  fs.mkdirSync(dir, { recursive: true });
+  const safeName = String(item.name || 'Custom Preset').replace(/[^a-zA-Z0-9._\- \u00C0-\u024F\u1E00-\u1EFF]/g, '_').trim() || 'Custom Preset';
+  const filePath = path.join(dir, `${safeName}.json`);
+  fs.writeFileSync(filePath, JSON.stringify({ ...item, name: safeName }, null, 2), 'utf8');
+  return safeName;
+}
 
 function listIrsFiles() {
   fs.mkdirSync(IRS_DIR, { recursive: true });
@@ -85,7 +115,16 @@ function readParamsDirect() {
     convolverEnabled: buf.readUInt32LE(196) !== 0,
     convolverCrossChannel: Math.round(buf.readFloatLE(200) * 100) / 100,
     convolverWetMix: Math.round(buf.readFloatLE(204) * 100) / 100,
-    convolverRevision: buf.readUInt32LE(208)
+    convolverRevision: buf.readUInt32LE(208),
+    // V4 Multi-Band EQ
+    eqMode: buf.readUInt32LE(212),
+    eqBands18Db: (() => {
+      const arr = [];
+      for (let i = 0; i < 18; i++) {
+        arr.push(Math.round(buf.readFloatLE(216 + i * 4) * 100) / 100);
+      }
+      return arr;
+    })()
   };
 }
 
@@ -159,6 +198,12 @@ function writeParamsDirect(p) {
     payload.writeFloatLE(Number(p.convolverCrossChannel ?? 0), 196);
     payload.writeFloatLE(Number(p.convolverWetMix ?? 1), 200);
     payload.writeUInt32LE(Number(p.convolverRevision ?? 0) >>> 0, 204);
+    // V4 Multi-Band EQ (file offsets 212..287 -> payload offsets 208..283)
+    payload.writeUInt32LE(Number(p.eqMode ?? 0) >>> 0, 208);
+    const bands18 = Array.isArray(p.eqBands18Db) ? p.eqBands18Db : [];
+    for (let i = 0; i < 18; i++) {
+      payload.writeFloatLE(Number(bands18[i] ?? 0), 212 + i * 4);
+    }
 
     fs.writeSync(fd, payload, 0, payload.length, 4);
 
@@ -330,6 +375,62 @@ const server = http.createServer(async (req, res) => {
         // ignore
       }
       sendJson(res, 200, readLiveStatus(defaultDev, sessions));
+      return;
+    }
+
+    if (url.pathname === '/api/presets' && req.method === 'GET') {
+      sendJson(res, 200, listJsonItems(PRESETS_DIR));
+      return;
+    }
+
+    if (url.pathname === '/api/presets/save' && req.method === 'POST') {
+      const raw = await readBody(req, 2 * 1024 * 1024);
+      const body = JSON.parse(raw);
+      const savedName = saveJsonItem(PRESETS_DIR, body);
+      sendJson(res, 200, { savedName, presets: listJsonItems(PRESETS_DIR) });
+      return;
+    }
+
+    if (url.pathname === '/api/presets/import' && req.method === 'POST') {
+      const raw = await readBody(req, 8 * 1024 * 1024);
+      const { items } = JSON.parse(raw);
+      const imported = [];
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          if (item && typeof item === 'object') {
+            imported.push(saveJsonItem(PRESETS_DIR, item));
+          }
+        }
+      }
+      sendJson(res, 200, { imported, presets: listJsonItems(PRESETS_DIR) });
+      return;
+    }
+
+    if (url.pathname === '/api/eq-presets' && req.method === 'GET') {
+      sendJson(res, 200, listJsonItems(EQ_PRESETS_DIR));
+      return;
+    }
+
+    if (url.pathname === '/api/eq-presets/save' && req.method === 'POST') {
+      const raw = await readBody(req, 1024 * 1024);
+      const body = JSON.parse(raw);
+      const savedName = saveJsonItem(EQ_PRESETS_DIR, body);
+      sendJson(res, 200, { savedName, presets: listJsonItems(EQ_PRESETS_DIR) });
+      return;
+    }
+
+    if (url.pathname === '/api/eq-presets/import' && req.method === 'POST') {
+      const raw = await readBody(req, 4 * 1024 * 1024);
+      const { items } = JSON.parse(raw);
+      const imported = [];
+      if (Array.isArray(items)) {
+        for (const item of items) {
+          if (item && typeof item === 'object') {
+            imported.push(saveJsonItem(EQ_PRESETS_DIR, item));
+          }
+        }
+      }
+      sendJson(res, 200, { imported, presets: listJsonItems(EQ_PRESETS_DIR) });
       return;
     }
 

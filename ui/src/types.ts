@@ -69,9 +69,18 @@ export interface DspParams {
   convolverCrossChannel: number;
   convolverWetMix: number;
   convolverRevision: number;
+  // V4 Multi-Band EQ
+  eqMode: number; // 0 = 10-Band, 1 = 18-Band
+  eqBands18Db: number[];
 }
 
-export const EQ_LABELS = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
+export const EQ_LABELS_10 = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
+export const EQ_LABELS_18 = [
+  '31', '45', '62', '90', '125', '180',
+  '250', '360', '500', '750', '1k', '1.5k',
+  '2k', '3k', '4k', '6k', '8k', '16k'
+];
+export const EQ_LABELS = EQ_LABELS_10;
 
 export const DEFAULT_PARAMS: DspParams = {
   masterEnabled: true,
@@ -113,8 +122,50 @@ export const DEFAULT_PARAMS: DspParams = {
   convolverEnabled: false,
   convolverCrossChannel: 0,
   convolverWetMix: 1,
-  convolverRevision: 0
+  convolverRevision: 0,
+  eqMode: 0,
+  eqBands18Db: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 };
+
+export interface EqPreset {
+  name: string;
+  eqMode: number; // 0 = 10-Band, 1 = 18-Band
+  eqBandsDb?: number[];
+  eqBands18Db?: number[];
+}
+
+export const BUILTIN_EQ_PRESETS: EqPreset[] = [
+  {
+    name: 'Flat',
+    eqMode: 0,
+    eqBandsDb: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    eqBands18Db: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  },
+  {
+    name: 'V-Shape Fun',
+    eqMode: 0,
+    eqBandsDb: [3.5, 4.0, 2.0, 0, -1.5, -1.0, 0.5, 2.0, 3.5, 3.0],
+    eqBands18Db: [3.5, 4.0, 4.0, 3.0, 2.0, 1.0, 0, -1.0, -1.5, -1.5, -1.0, 0, 0.5, 1.5, 2.0, 3.0, 3.5, 3.0]
+  },
+  {
+    name: 'Vocal Focus',
+    eqMode: 0,
+    eqBandsDb: [-1.0, -0.5, 0, 1.0, 2.0, 3.0, 3.5, 2.0, 0.5, 0],
+    eqBands18Db: [-1.0, -1.0, -0.5, 0, 0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 3.5, 2.5, 2.0, 1.0, 0.5, 0]
+  },
+  {
+    name: 'Deep Basshead',
+    eqMode: 1,
+    eqBandsDb: [5.5, 6.0, 3.5, 1.0, -1.0, -0.5, 0.5, 1.5, 2.0, 1.5],
+    eqBands18Db: [5.5, 6.0, 6.0, 4.5, 3.5, 2.0, 1.0, 0, -1.0, -1.0, -0.5, 0, 0.5, 1.0, 1.5, 2.0, 2.0, 1.5]
+  },
+  {
+    name: 'Acoustic & Jazz',
+    eqMode: 1,
+    eqBandsDb: [1.0, 1.5, 1.0, 0.5, 0, 0.5, 1.5, 2.0, 2.5, 2.0],
+    eqBands18Db: [1.0, 1.5, 1.5, 1.0, 1.0, 0.5, 0.5, 0, 0, 0.5, 0.5, 1.0, 1.5, 1.5, 2.0, 2.5, 2.5, 2.0]
+  }
+];
 
 export interface Preset {
   name: string;

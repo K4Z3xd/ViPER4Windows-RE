@@ -6,12 +6,16 @@ import {
   Copy,
   Ear,
   Flame,
+  FolderOpen,
   Gauge,
   Headphones,
+  Pin,
+  PinOff,
   Power,
   Radio,
   RefreshCw,
   RotateCcw,
+  Save,
   ShieldCheck,
   Sliders,
   Sparkles,
@@ -22,11 +26,15 @@ import {
 } from 'lucide-react';
 import {
   AudioDevice,
+  BUILTIN_EQ_PRESETS,
   BUILTIN_PRESETS,
   DEFAULT_PARAMS,
   DspParams,
-  EQ_LABELS,
-  LiveSourceStatus
+  EQ_LABELS_10,
+  EQ_LABELS_18,
+  EqPreset,
+  LiveSourceStatus,
+  Preset
 } from './types';
 import { InfoTip } from './components/InfoTip';
 
@@ -154,11 +162,94 @@ export default function App() {
   const [liveStatus, setLiveStatus] = useState<LiveSourceStatus | null>(null);
   const [irsFiles, setIrsFiles] = useState<string[]>([]);
   const [activeIrs, setActiveIrs] = useState<string>('');
+  const [customPresets, setCustomPresets] = useState<Preset[]>([]);
+  const [selectedPresetName, setSelectedPresetName] = useState<string>('Flat Reference');
+  const [pinnedPresetNames, setPinnedPresetNames] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('v4w_pinned_presets');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return BUILTIN_PRESETS.map(p => p.name);
+  });
+  const [customEqPresets, setCustomEqPresets] = useState<EqPreset[]>([]);
+  const [selectedEqPresetName, setSelectedEqPresetName] = useState<string>('Flat');
+  const [pinnedModules, setPinnedModules] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('v4w_pinned_modules');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // ignore
+    }
+    return [];
+  });
   const [activeTab, setActiveTab] = useState<'dsp' | 'devices'>('dsp');
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('syncing');
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
   const inFlightRef = useRef<boolean>(false);
   const pendingParamsRef = useRef<DspParams | null>(null);
+
+  const allPresets: Preset[] = [
+    ...BUILTIN_PRESETS,
+    ...customPresets.filter(cp => !BUILTIN_PRESETS.some(bp => bp.name === cp.name))
+  ];
+  const pinnedPresets = pinnedPresetNames
+    .map(name => allPresets.find(p => p.name === name))
+    .filter((p): p is Preset => Boolean(p));
+
+  const allEqPresets: EqPreset[] = [
+    ...BUILTIN_EQ_PRESETS,
+    ...customEqPresets.filter(cp => !BUILTIN_EQ_PRESETS.some(bp => bp.name === cp.name))
+  ];
+
+  const togglePinPreset = (name: string) => {
+    setPinnedPresetNames(prev => {
+      const next = prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name];
+      try {
+        localStorage.setItem('v4w_pinned_presets', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const togglePinModule = (moduleId: string) => {
+    setPinnedModules(prev => {
+      const next = prev.includes(moduleId) ? prev.filter(id => id !== moduleId) : [...prev, moduleId];
+      try {
+        localStorage.setItem('v4w_pinned_modules', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const getModuleOrder = (moduleId: string, defaultIdx: number) => {
+    const pinIdx = pinnedModules.indexOf(moduleId);
+    return pinIdx >= 0 ? pinIdx : 100 + defaultIdx;
+  };
+
+  const renderModulePin = (moduleId: string) => {
+    const isPinned = pinnedModules.includes(moduleId);
+    return (
+      <button
+        type="button"
+        onClick={() => togglePinModule(moduleId)}
+        title={isPinned ? 'Unpin module' : 'Pin module to top'}
+        aria-label={isPinned ? `Unpin ${moduleId}` : `Pin ${moduleId} to top`}
+        className={`inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border transition-colors ${
+          isPinned
+            ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400'
+            : 'border-zinc-800 bg-zinc-950 text-zinc-500 hover:border-zinc-700 hover:text-zinc-200'
+        }`}
+      >
+        <Pin className="h-3.5 w-3.5" />
+      </button>
+    );
+  };
 
   const loadStatus = async () => {
     try {
@@ -173,11 +264,13 @@ export default function App() {
 
   const loadAll = async () => {
     try {
-      const [devRes, paramRes, statusRes, irsRes] = await Promise.all([
+      const [devRes, paramRes, statusRes, irsRes, presetsRes, eqPresetsRes] = await Promise.all([
         fetch('/api/devices'),
         fetch('/api/params'),
         fetch('/api/status'),
-        fetch('/api/irs')
+        fetch('/api/irs'),
+        fetch('/api/presets'),
+        fetch('/api/eq-presets')
       ]);
       if (devRes.ok) {
         setDevices(await devRes.json());
@@ -194,9 +287,162 @@ export default function App() {
         setIrsFiles(irData.files || []);
         setActiveIrs(irData.active || '');
       }
+      if (presetsRes.ok) {
+        setCustomPresets(await presetsRes.json());
+      }
+      if (eqPresetsRes.ok) {
+        setCustomEqPresets(await eqPresetsRes.json());
+      }
       setSyncStatus('connected');
     } catch {
       setSyncStatus('offline');
+    }
+  };
+
+  const applyPresetByName = (name: string) => {
+    setSelectedPresetName(name);
+    const found = allPresets.find(p => p.name === name);
+    if (found) {
+      pushParams({ ...params, ...found.params }, true);
+    }
+  };
+
+  const handleSavePreset = async () => {
+    const name = window.prompt('Nhập tên Preset muốn lưu:', selectedPresetName || 'My Custom Preset');
+    if (!name || !name.trim()) return;
+    const presetObj: Preset = {
+      name: name.trim(),
+      subtitle: 'Custom saved preset',
+      params: { ...params }
+    };
+    const res = await fetch('/api/presets/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(presetObj)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setCustomPresets(data.presets || []);
+      setSelectedPresetName(data.savedName || presetObj.name);
+    }
+  };
+
+  const handleBatchLoadPresets = async (files: FileList) => {
+    const items: Preset[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          for (const entry of parsed) {
+            if (entry && typeof entry === 'object') {
+              items.push({
+                name: entry.name || file.name.replace(/\.json$/i, ''),
+                subtitle: entry.subtitle || 'Imported preset',
+                params: entry.params || entry
+              });
+            }
+          }
+        } else if (parsed && typeof parsed === 'object') {
+          items.push({
+            name: parsed.name || file.name.replace(/\.json$/i, ''),
+            subtitle: parsed.subtitle || 'Imported preset',
+            params: parsed.params || parsed
+          });
+        }
+      } catch {
+        // ignore invalid json file
+      }
+    }
+    if (items.length === 0) return;
+
+    const res = await fetch('/api/presets/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setCustomPresets(data.presets || []);
+      if (data.imported && data.imported.length > 0) {
+        const first = data.imported[0];
+        setSelectedPresetName(first);
+      }
+    }
+  };
+
+  const applyEqPresetByName = (name: string) => {
+    setSelectedEqPresetName(name);
+    const found = allEqPresets.find(p => p.name === name);
+    if (!found) return;
+    pushParams(
+      {
+        ...params,
+        eqEnabled: true,
+        eqMode: found.eqMode ?? params.eqMode,
+        eqBandsDb: found.eqBandsDb && found.eqBandsDb.length === 10 ? found.eqBandsDb : params.eqBandsDb,
+        eqBands18Db:
+          found.eqBands18Db && found.eqBands18Db.length === 18 ? found.eqBands18Db : params.eqBands18Db
+      },
+      true
+    );
+  };
+
+  const handleSaveEqPreset = async () => {
+    const name = window.prompt('Nhập tên EQ Preset muốn lưu:', selectedEqPresetName || 'My EQ');
+    if (!name || !name.trim()) return;
+    const eqObj: EqPreset = {
+      name: name.trim(),
+      eqMode: params.eqMode,
+      eqBandsDb: [...params.eqBandsDb],
+      eqBands18Db: [...params.eqBands18Db]
+    };
+    const res = await fetch('/api/eq-presets/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(eqObj)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setCustomEqPresets(data.presets || []);
+      setSelectedEqPresetName(data.savedName || eqObj.name);
+    }
+  };
+
+  const handleBatchLoadEqPresets = async (files: FileList) => {
+    const items: EqPreset[] = [];
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        for (const entry of list) {
+          if (entry && typeof entry === 'object') {
+            items.push({
+              name: entry.name || file.name.replace(/\.json$/i, ''),
+              eqMode: typeof entry.eqMode === 'number' ? entry.eqMode : entry.eqBands18Db ? 1 : 0,
+              eqBandsDb: entry.eqBandsDb,
+              eqBands18Db: entry.eqBands18Db
+            });
+          }
+        }
+      } catch {
+        // ignore invalid json
+      }
+    }
+    if (items.length === 0) return;
+
+    const res = await fetch('/api/eq-presets/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setCustomEqPresets(data.presets || []);
+      if (data.imported && data.imported.length > 0) {
+        setSelectedEqPresetName(data.imported[0]);
+      }
     }
   };
 
@@ -282,10 +528,19 @@ export default function App() {
   };
 
   const updateEqBand = (index: number, db: number) => {
-    const nextBands = [...params.eqBandsDb];
-    nextBands[index] = db;
-    pushParams({ ...params, eqBandsDb: nextBands });
+    if (params.eqMode === 1) {
+      const nextBands = [...params.eqBands18Db];
+      nextBands[index] = db;
+      pushParams({ ...params, eqBands18Db: nextBands });
+    } else {
+      const nextBands = [...params.eqBandsDb];
+      nextBands[index] = db;
+      pushParams({ ...params, eqBandsDb: nextBands });
+    }
   };
+
+  const activeEqLabels = params.eqMode === 1 ? EQ_LABELS_18 : EQ_LABELS_10;
+  const activeEqValues = params.eqMode === 1 ? params.eqBands18Db : params.eqBandsDb;
 
   const copyCommand = async (id: string, cmd: string) => {
     try {
@@ -463,53 +718,209 @@ export default function App() {
 
         {activeTab === 'dsp' ? (
           <div className="space-y-6">
-            {/* Presets Strip */}
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {BUILTIN_PRESETS.map(preset => (
-                <button
-                  key={preset.name}
-                  type="button"
-                  onClick={() => pushParams({ ...params, ...preset.params }, true)}
-                  className="group cursor-pointer rounded-xl border border-zinc-800/90 bg-[#0c0c0c] p-3.5 text-left transition-colors hover:border-zinc-600 hover:bg-zinc-900/70"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-display text-sm font-semibold text-zinc-100 group-hover:text-emerald-300">
-                      {preset.name}
-                    </span>
-                    <Sparkles className="h-3.5 w-3.5 text-zinc-600 group-hover:text-emerald-400" />
-                  </div>
-                  <p className="mt-1 text-xs text-zinc-400">{preset.subtitle}</p>
-                </button>
-              ))}
+            {/* Pinned Presets Strip */}
+            {pinnedPresets.length > 0 && (
+              <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {pinnedPresets.map(preset => {
+                  const isActive = selectedPresetName === preset.name;
+                  return (
+                    <div
+                      key={preset.name}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => applyPresetByName(preset.name)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          applyPresetByName(preset.name);
+                        }
+                      }}
+                      className={`group cursor-pointer rounded-xl border p-3.5 text-left transition-colors ${
+                        isActive
+                          ? 'border-emerald-500/50 bg-emerald-950/20'
+                          : 'border-zinc-800/90 bg-[#0c0c0c] hover:border-zinc-600 hover:bg-zinc-900/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate font-display text-sm font-semibold text-zinc-100 group-hover:text-emerald-300">
+                          {preset.name}
+                        </span>
+                        <button
+                          type="button"
+                          title="Unpin preset"
+                          aria-label={`Unpin ${preset.name}`}
+                          onClick={e => {
+                            e.stopPropagation();
+                            togglePinPreset(preset.name);
+                          }}
+                          className="inline-flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-emerald-400/80 transition-colors hover:bg-zinc-800 hover:text-amber-300"
+                        >
+                          <PinOff className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-zinc-400">{preset.subtitle}</p>
+                    </div>
+                  );
+                })}
+              </section>
+            )}
+
+            {/* Full Preset Manager Bar (Dropdown + Pin + Save + Batch Load) */}
+            <section className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-3">
+              <select
+                aria-label="Select Preset"
+                value={selectedPresetName}
+                onChange={e => applyPresetByName(e.target.value)}
+                className="min-w-[220px] flex-1 cursor-pointer rounded-xl border border-zinc-800 bg-black px-3.5 py-2.5 font-display text-sm font-medium text-zinc-100 focus:border-emerald-500 focus:outline-none"
+              >
+                {allPresets.map(p => (
+                  <option key={p.name} value={p.name}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => togglePinPreset(selectedPresetName)}
+                className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  pinnedPresetNames.includes(selectedPresetName)
+                    ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+                    : 'border-zinc-800 bg-zinc-950 text-zinc-200 hover:border-zinc-600'
+                }`}
+              >
+                <Pin className="h-3.5 w-3.5" />
+                {pinnedPresetNames.includes(selectedPresetName) ? 'Pinned' : 'Pin'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleSavePreset()}
+                className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white"
+              >
+                <Save className="h-3.5 w-3.5" />
+                Save
+              </button>
+
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
+                <FolderOpen className="h-3.5 w-3.5" />
+                Load
+                <input
+                  type="file"
+                  accept=".json"
+                  multiple
+                  className="hidden"
+                  onChange={e => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      void handleBatchLoadPresets(e.target.files);
+                    }
+                    e.target.value = '';
+                  }}
+                />
+              </label>
             </section>
 
-            {/* 10-Band Hi-Res Parametric Equalizer */}
+            {/* Multi-Band Hi-Res Parametric Equalizer (10-Band / 18-Band) */}
             <section className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <Activity className="h-4 w-4 text-emerald-400" />
                   <h2 className="font-display text-base font-semibold text-white">
-                    10-Band Hi-Res Equalizer
+                    {params.eqMode === 1 ? '18-Band' : '10-Band'} Hi-Res Equalizer
                   </h2>
                   <InfoTip
                     align="left"
-                    text="Bộ cân bằng 10 dải tần (31Hz–16kHz) dùng bộ lọc Biquad 64-bit. Kéo dải 31–125Hz để chỉnh trầm (Bass), 250Hz–2kHz chỉnh giọng hát (Mid), 4k–16kHz chỉnh độ sáng và chi tiết (Treble)."
+                    text="Bộ cân bằng 10-Band hoặc 18-Band dùng bộ lọc Biquad 64-bit. Chuyển sang 18-Band để tinh chỉnh chi tiết từng nửa quãng tám giống ViPER4Windows gốc."
                   />
-                  <span className="rounded bg-zinc-900 px-2 py-0.5 font-mono text-[11px] text-zinc-400">
-                    64-bit Biquad
-                  </span>
+                  {/* EQ Band Mode Switch */}
+                  <div className="flex rounded-lg border border-zinc-800 bg-black p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => updateField('eqMode', 0, true)}
+                      className={`cursor-pointer rounded-md px-2.5 py-1 font-mono text-[11px] font-medium transition-colors ${
+                        params.eqMode === 0
+                          ? 'bg-zinc-800 text-emerald-300'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      10-Band
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateField('eqMode', 1, true)}
+                      className={`cursor-pointer rounded-md px-2.5 py-1 font-mono text-[11px] font-medium transition-colors ${
+                        params.eqMode === 1
+                          ? 'bg-zinc-800 text-emerald-300'
+                          : 'text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      18-Band
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
+
+                {/* EQ Preset Dropdown + Save + Load + Reset + Toggle */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    aria-label="EQ Preset"
+                    value={selectedEqPresetName}
+                    onChange={e => applyEqPresetByName(e.target.value)}
+                    className="w-40 cursor-pointer rounded-lg border border-zinc-800 bg-black px-2.5 py-1.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none sm:w-48"
+                  >
+                    {allEqPresets.map(ep => (
+                      <option key={ep.name} value={ep.name}>
+                        {ep.name}
+                      </option>
+                    ))}
+                  </select>
+
                   <button
                     type="button"
-                    onClick={() =>
-                      pushParams({ ...params, eqBandsDb: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }, true)
-                    }
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                    onClick={() => void handleSaveEqPreset()}
+                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
+                  >
+                    <Save className="h-3 w-3" />
+                    Save
+                  </button>
+
+                  <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
+                    <FolderOpen className="h-3 w-3" />
+                    Load
+                    <input
+                      type="file"
+                      accept=".json"
+                      multiple
+                      className="hidden"
+                      onChange={e => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          void handleBatchLoadEqPresets(e.target.files);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (params.eqMode === 1) {
+                        pushParams(
+                          { ...params, eqBands18Db: Array(18).fill(0) },
+                          true
+                        );
+                      } else {
+                        pushParams(
+                          { ...params, eqBandsDb: Array(10).fill(0) },
+                          true
+                        );
+                      }
+                    }}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
                   >
                     <RotateCcw className="h-3 w-3" />
                     Reset EQ
                   </button>
+
                   <Toggle
                     checked={params.eqEnabled}
                     onChange={v => updateField('eqEnabled', v, true)}
@@ -518,14 +929,23 @@ export default function App() {
                 </div>
               </div>
 
-              <EqCurveSvg bands={params.eqBandsDb} enabled={params.eqEnabled && params.masterEnabled} />
+              <EqCurveSvg
+                bands={activeEqValues}
+                enabled={params.eqEnabled && params.masterEnabled}
+              />
 
-              <div className="mt-5 grid grid-cols-5 gap-2 sm:grid-cols-10">
-                {EQ_LABELS.map((freq, idx) => {
-                  const val = params.eqBandsDb[idx] ?? 0;
+              <div
+                className={`mt-5 grid gap-1.5 ${
+                  params.eqMode === 1
+                    ? 'grid-cols-6 sm:grid-cols-9 lg:grid-cols-18'
+                    : 'grid-cols-5 sm:grid-cols-10'
+                }`}
+              >
+                {activeEqLabels.map((freq, idx) => {
+                  const val = activeEqValues[idx] ?? 0;
                   return (
-                    <div key={freq} className="flex flex-col items-center gap-2">
-                      <span className="font-mono text-[11px] tabular-nums text-zinc-300">
+                    <div key={`${params.eqMode}-${freq}`} className="flex flex-col items-center gap-2">
+                      <span className="font-mono text-[10px] tabular-nums text-zinc-300">
                         {val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1)}
                       </span>
                       <input
@@ -538,7 +958,7 @@ export default function App() {
                         onChange={e => updateEqBand(idx, parseFloat(e.target.value))}
                         className="eq-fader"
                       />
-                      <span className="font-mono text-[11px] text-zinc-500">{freq}</span>
+                      <span className="font-mono text-[10px] text-zinc-500">{freq}</span>
                     </div>
                   );
                 })}
@@ -548,7 +968,10 @@ export default function App() {
             {/* DSP Modules Grid */}
             <section className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               {/* ViPER Bass */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('bass', 0) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Waves className="h-4 w-4 text-emerald-400" />
@@ -558,11 +981,14 @@ export default function App() {
                       text="Tăng cường dải siêu trầm sâu và có lực. Natural: tăng trầm tự nhiên; PureBass+: trầm gọn, chắc có hài bậc 2; Subwoofer: tái tạo lực rung sâu như loa sub."
                     />
                   </div>
-                  <Toggle
-                    checked={params.bassEnabled}
-                    onChange={v => updateField('bassEnabled', v, true)}
-                    label="Toggle ViPER Bass"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('bass')}
+                    <Toggle
+                      checked={params.bassEnabled}
+                      onChange={v => updateField('bassEnabled', v, true)}
+                      label="Toggle ViPER Bass"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -634,18 +1060,24 @@ export default function App() {
               </div>
 
               {/* ViPER Clarity */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('clarity', 1) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">ViPER Clarity</h3>
                     <InfoTip text="Tăng độ trong trẻo và tách bạch chi tiết nhạc cụ/giọng hát. Natural: sáng mượt tự nhiên; OZone+: thêm độ thoáng (air) dải cao; XHiFi: tái tạo chi tiết sắc nét cho tai nghe Hi-Res." />
                   </div>
-                  <Toggle
-                    checked={params.clarityEnabled}
-                    onChange={v => updateField('clarityEnabled', v, true)}
-                    label="Toggle ViPER Clarity"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('clarity')}
+                    <Toggle
+                      checked={params.clarityEnabled}
+                      onChange={v => updateField('clarityEnabled', v, true)}
+                      label="Toggle ViPER Clarity"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -690,7 +1122,10 @@ export default function App() {
               </div>
 
               {/* Tube Sound Simulator */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('tube', 2) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Flame className="h-4 w-4 text-amber-400" />
@@ -702,11 +1137,14 @@ export default function App() {
                       text="Giả lập chất âm ấm áp của ampli đèn điện tử 6N1J bằng cách tạo hài âm bậc chẵn nhẹ nhàng, làm mềm các dải cao gắt và dày giọng hát."
                     />
                   </div>
-                  <Toggle
-                    checked={params.tubeEnabled}
-                    onChange={v => updateField('tubeEnabled', v, true)}
-                    label="Toggle Tube Simulator"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('tube')}
+                    <Toggle
+                      checked={params.tubeEnabled}
+                      onChange={v => updateField('tubeEnabled', v, true)}
+                      label="Toggle Tube Simulator"
+                    />
+                  </div>
                 </div>
 
                 <p className="mb-4 text-xs text-zinc-400">
@@ -739,7 +1177,10 @@ export default function App() {
               </div>
 
               {/* Differential Surround & Stereo Field */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('surround', 3) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Headphones className="h-4 w-4 text-emerald-400" />
@@ -751,11 +1192,14 @@ export default function App() {
                       text="Mở rộng không gian âm trường (soundstage) bằng hiệu ứng trễ Haas và tách kênh Mid/Side, giúp âm thanh rộng mở ra ngoài đầu khi đeo tai nghe."
                     />
                   </div>
-                  <Toggle
-                    checked={params.surroundEnabled}
-                    onChange={v => updateField('surroundEnabled', v, true)}
-                    label="Toggle Differential Surround"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('surround')}
+                    <Toggle
+                      checked={params.surroundEnabled}
+                      onChange={v => updateField('surroundEnabled', v, true)}
+                      label="Toggle Differential Surround"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -810,11 +1254,17 @@ export default function App() {
               </div>
 
               {/* Master Output & Pan */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
-                <div className="mb-4 flex items-center gap-2">
-                  <Volume2 className="h-4 w-4 text-zinc-200" />
-                  <h3 className="font-display text-sm font-semibold text-white">Master Output</h3>
-                  <InfoTip text="Điều chỉnh tổng âm lượng đầu ra (Pre-amp) và độ cân bằng giữa 2 bên tai nghe Trái / Phải." />
+              <div
+                style={{ order: getModuleOrder('master', 4) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Volume2 className="h-4 w-4 text-zinc-200" />
+                    <h3 className="font-display text-sm font-semibold text-white">Master Output</h3>
+                    <InfoTip text="Điều chỉnh tổng âm lượng đầu ra (Pre-amp) và độ cân bằng giữa 2 bên tai nghe Trái / Phải." />
+                  </div>
+                  {renderModulePin('master')}
                 </div>
 
                 <div className="space-y-4">
@@ -867,7 +1317,10 @@ export default function App() {
               </div>
 
               {/* Brickwall Peak Limiter */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('limiter', 5) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-emerald-400" />
@@ -879,11 +1332,14 @@ export default function App() {
                       text="Bộ giới hạn đỉnh âm lượng (nên luôn bật). Tự động ghìm các đỉnh tín hiệu vượt ngưỡng 0 dBFS để chống rè và vỡ tiếng kỹ thuật số."
                     />
                   </div>
-                  <Toggle
-                    checked={params.limiterEnabled}
-                    onChange={v => updateField('limiterEnabled', v, true)}
-                    label="Toggle Peak Limiter"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('limiter')}
+                    <Toggle
+                      checked={params.limiterEnabled}
+                      onChange={v => updateField('limiterEnabled', v, true)}
+                      label="Toggle Peak Limiter"
+                    />
+                  </div>
                 </div>
 
                 <p className="mb-4 text-xs text-zinc-400">
@@ -916,7 +1372,10 @@ export default function App() {
               </div>
 
               {/* Dynamic System */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('dynamic', 6) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Zap className="h-4 w-4 text-emerald-400" />
@@ -928,11 +1387,14 @@ export default function App() {
                       text="Tự động đo nhịp đánh (transient) của bản nhạc để tăng lực nảy của trống và độ sống động theo thời gian thực, chọn đúng loại tai nghe/loa để đạt độ cắt tần hợp lý nhất."
                     />
                   </div>
-                  <Toggle
-                    checked={params.dynamicEnabled}
-                    onChange={v => updateField('dynamicEnabled', v, true)}
-                    label="Toggle Dynamic System"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('dynamic')}
+                    <Toggle
+                      checked={params.dynamicEnabled}
+                      onChange={v => updateField('dynamicEnabled', v, true)}
+                      label="Toggle Dynamic System"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -980,7 +1442,10 @@ export default function App() {
               </div>
 
               {/* Reverberation (Room Simulator) */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('reverb', 7) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Radio className="h-4 w-4 text-emerald-400" />
@@ -989,11 +1454,14 @@ export default function App() {
                     </h3>
                     <InfoTip text="Giả lập tiếng vang phòng nghe / khán phòng giúp âm thanh có chiều sâu không gian như đang nghe dàn loa thật." />
                   </div>
-                  <Toggle
-                    checked={params.reverbEnabled}
-                    onChange={v => updateField('reverbEnabled', v, true)}
-                    label="Toggle Reverberation"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('reverb')}
+                    <Toggle
+                      checked={params.reverbEnabled}
+                      onChange={v => updateField('reverbEnabled', v, true)}
+                      label="Toggle Reverberation"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -1106,7 +1574,10 @@ export default function App() {
               </div>
 
               {/* Compressor / Playback Gain Control */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('compressor', 8) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Gauge className="h-4 w-4 text-emerald-400" />
@@ -1118,11 +1589,14 @@ export default function App() {
                       text="Nén dải động thông minh (Soft-Knee): ghìm bớt các đoạn quá to và nâng các đoạn nhỏ lên đều nhau — cực kỳ hữu ích khi xem phim, podcast hoặc nghe nhạc ban đêm."
                     />
                   </div>
-                  <Toggle
-                    checked={params.compEnabled}
-                    onChange={v => updateField('compEnabled', v, true)}
-                    label="Toggle Compressor"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('compressor')}
+                    <Toggle
+                      checked={params.compEnabled}
+                      onChange={v => updateField('compEnabled', v, true)}
+                      label="Toggle Compressor"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -1247,7 +1721,10 @@ export default function App() {
               </div>
 
               {/* Cure Tech+ (Binaural Crossfeed) */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+              <div
+                style={{ order: getModuleOrder('cure', 9) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Ear className="h-4 w-4 text-emerald-400" />
@@ -1259,11 +1736,14 @@ export default function App() {
                       text="Công nghệ chống mệt tai khi đeo tai nghe lâu: trộn nhẹ một phần âm trầm đã trễ 0.26 ms từ tai này sang tai kia giống cách tai người nghe loa ngoài tự nhiên."
                     />
                   </div>
-                  <Toggle
-                    checked={params.cureEnabled}
-                    onChange={v => updateField('cureEnabled', v, true)}
-                    label="Toggle Cure Tech+"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('cure')}
+                    <Toggle
+                      checked={params.cureEnabled}
+                      onChange={v => updateField('cureEnabled', v, true)}
+                      label="Toggle Cure Tech+"
+                    />
+                  </div>
                 </div>
 
                 <p className="mb-4 text-xs text-zinc-400">
@@ -1289,7 +1769,10 @@ export default function App() {
               </div>
 
               {/* Convolver (.irs / .wav Impulse Response) */}
-              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5 md:col-span-2">
+              <div
+                style={{ order: getModuleOrder('convolver', 10) }}
+                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5 md:col-span-2"
+              >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <AudioLines className="h-4 w-4 text-emerald-400" />
@@ -1298,11 +1781,14 @@ export default function App() {
                     </h3>
                     <InfoTip text="Tích chập (Convolution) mô phỏng chính xác đặc tính âm thanh của các bộ EQ, DAC, ampli đèn hoặc phòng thu nổi tiếng thông qua file xung mẫu .irs / .wav của cộng đồng ViPER." />
                   </div>
-                  <Toggle
-                    checked={params.convolverEnabled}
-                    onChange={v => updateField('convolverEnabled', v, true)}
-                    label="Toggle Convolver"
-                  />
+                  <div className="flex items-center gap-2">
+                    {renderModulePin('convolver')}
+                    <Toggle
+                      checked={params.convolverEnabled}
+                      onChange={v => updateField('convolverEnabled', v, true)}
+                      label="Toggle Convolver"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">

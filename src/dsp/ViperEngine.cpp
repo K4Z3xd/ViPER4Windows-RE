@@ -43,7 +43,7 @@ void ViperEngine::setParams(const DspParams& params) noexcept {
 }
 
 void ViperEngine::applyParamsToModules() noexcept {
-    eq_.updateGains(params_.eqBandsDb);
+    eq_.updateGains(params_.eqMode, params_.eqBandsDb, params_.eqBands18Db);
     bass_.configure(params_.bassMode, params_.bassFrequencyHz, params_.bassGainDb);
     dynamic_.configure(static_cast<DynamicDeviceType>(params_.dynamicDevice), params_.dynamicBass);
     clarity_.configure(params_.clarityMode, params_.clarityGainDb);

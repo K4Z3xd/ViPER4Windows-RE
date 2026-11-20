@@ -9,13 +9,21 @@ namespace viper {
 constexpr uint32_t kMinSampleRate = 44100;
 constexpr uint32_t kMaxSampleRate = 384000;
 constexpr size_t kEqBandCount = 10;
+constexpr size_t kEqBand18Count = 18;
 constexpr uint32_t kParamsMagic = 0x56504852; // 'VPHR'
-constexpr uint32_t kParamsVersion = 3;
+constexpr uint32_t kParamsVersion = 4;
 
 // Standard 10-band ISO center frequencies (Hz)
 constexpr std::array<double, kEqBandCount> kEqFrequencies = {
     31.0, 62.0, 125.0, 250.0, 500.0,
     1000.0, 2000.0, 4000.0, 8000.0, 16000.0
+};
+
+// Classic 18-band Hi-Res EQ center frequencies (Hz)
+constexpr std::array<double, kEqBand18Count> kEq18Frequencies = {
+    31.0, 45.0, 62.0, 90.0, 125.0, 180.0,
+    250.0, 360.0, 500.0, 750.0, 1000.0, 1500.0,
+    2000.0, 3000.0, 4000.0, 6000.0, 8000.0, 16000.0
 };
 
 enum class BassMode : uint32_t {
@@ -105,11 +113,19 @@ struct DspParams {
     float convolverCrossChannel = 0.0f; // 0.0 to 1.0
     float convolverWetMix = 1.0f;       // 0.0 to 1.0
     uint32_t convolverRevision = 0;     // Incremented whenever a new .irs file is selected
+
+    // V4 Multi-Band EQ (0 = 10-Band, 1 = 18-Band)
+    uint32_t eqMode = 0;
+    std::array<float, kEqBand18Count> eqBands18Db = {
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f
+    };
 };
 
 static_assert(std::is_trivially_copyable_v<DspParams>,
               "DspParams must be trivially copyable for Shared Memory IPC");
-static_assert(sizeof(DspParams) == 208,
-              "DspParams v3 binary layout must be exactly 208 bytes (SharedConfigBlock = 212 bytes)");
+static_assert(sizeof(DspParams) == 284,
+              "DspParams v4 binary layout must be exactly 284 bytes (SharedConfigBlock = 288 bytes)");
 
 } // namespace viper
