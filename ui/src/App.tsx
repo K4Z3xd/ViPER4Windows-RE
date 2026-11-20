@@ -240,7 +240,15 @@ export default function App() {
   const [ddcFiles, setDdcFiles] = useState<string[]>([]);
   const [activeDdc, setActiveDdc] = useState<string>('');
   const [customPresets, setCustomPresets] = useState<Preset[]>([]);
-  const [selectedPresetName, setSelectedPresetName] = useState<string>('Flat Reference');
+  const [selectedPresetName, setSelectedPresetName] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('v4w_selected_preset');
+      if (saved) return saved;
+    } catch {
+      // ignore
+    }
+    return 'Flat Reference';
+  });
   const [pinnedPresetNames, setPinnedPresetNames] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('v4w_pinned_presets');
@@ -251,7 +259,15 @@ export default function App() {
     return BUILTIN_PRESETS.map(p => p.name);
   });
   const [customEqPresets, setCustomEqPresets] = useState<EqPreset[]>([]);
-  const [selectedEqPresetName, setSelectedEqPresetName] = useState<string>('Flat');
+  const [selectedEqPresetName, setSelectedEqPresetName] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('v4w_selected_eq_preset');
+      if (saved !== null) return saved;
+    } catch {
+      // ignore
+    }
+    return 'Flat';
+  });
   const [pinnedModules, setPinnedModules] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('v4w_pinned_modules');
@@ -339,6 +355,22 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('v4w_selected_preset', selectedPresetName);
+    } catch {
+      // ignore
+    }
+  }, [selectedPresetName]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('v4w_selected_eq_preset', selectedEqPresetName);
+    } catch {
+      // ignore
+    }
+  }, [selectedEqPresetName]);
+
   const loadAll = async () => {
     try {
       const [devRes, paramRes, statusRes, irsRes, ddcRes, presetsRes, eqPresetsRes] = await Promise.all([
@@ -353,9 +385,11 @@ export default function App() {
       if (devRes.ok) {
         setDevices(await devRes.json());
       }
+      let loadedParams: DspParams | null = null;
       if (paramRes.ok) {
         const p = await paramRes.json();
-        setParams({ ...DEFAULT_PARAMS, ...p });
+        loadedParams = { ...DEFAULT_PARAMS, ...p };
+        setParams(loadedParams);
       }
       if (statusRes.ok) {
         setLiveStatus(await statusRes.json());
@@ -370,12 +404,61 @@ export default function App() {
         setDdcFiles(ddcData.files || []);
         setActiveDdc(ddcData.active || '');
       }
+      let loadedCustomPresets: Preset[] = [];
       if (presetsRes.ok) {
-        setCustomPresets(await presetsRes.json());
+        loadedCustomPresets = await presetsRes.json();
+        setCustomPresets(loadedCustomPresets);
       }
+      let loadedCustomEqPresets: EqPreset[] = [];
       if (eqPresetsRes.ok) {
-        setCustomEqPresets(await eqPresetsRes.json());
+        loadedCustomEqPresets = await eqPresetsRes.json();
+        setCustomEqPresets(loadedCustomEqPresets);
       }
+
+      // Validate saved preset name against loaded presets; fallback if missing
+      const mergedPresets: Preset[] = [
+        ...BUILTIN_PRESETS,
+        ...loadedCustomPresets.filter(cp => !BUILTIN_PRESETS.some(bp => bp.name === cp.name))
+      ];
+      setSelectedPresetName(prev =>
+        mergedPresets.some(p => p.name === prev) ? prev : 'Flat Reference'
+      );
+
+      // Sync EQ preset dropdown with actual loaded EQ bands from live engine
+      if (loadedParams) {
+        const mergedEq: EqPreset[] = [
+          ...BUILTIN_EQ_PRESETS,
+          ...loadedCustomEqPresets.filter(cp => !BUILTIN_EQ_PRESETS.some(bp => bp.name === cp.name))
+        ];
+        const close = (a: number[], b: number[]) =>
+          a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 0.05);
+        let matchedEq = '';
+        for (const ep of mergedEq) {
+          if (loadedParams.eqMode === 1) {
+            const target18 = ep.eqBands18Db && ep.eqBands18Db.length === 18
+              ? ep.eqBands18Db
+              : ep.eqBandsDb && ep.eqBandsDb.length === 10
+                ? interpolate10to18(ep.eqBandsDb)
+                : null;
+            if (target18 && close(loadedParams.eqBands18Db, target18)) {
+              matchedEq = ep.name;
+              break;
+            }
+          } else {
+            const target10 = ep.eqBandsDb && ep.eqBandsDb.length === 10
+              ? ep.eqBandsDb
+              : ep.eqBands18Db && ep.eqBands18Db.length === 18
+                ? downsample18to10(ep.eqBands18Db)
+                : null;
+            if (target10 && close(loadedParams.eqBandsDb, target10)) {
+              matchedEq = ep.name;
+              break;
+            }
+          }
+        }
+        setSelectedEqPresetName(matchedEq);
+      }
+
       setSyncStatus('connected');
     } catch {
       setSyncStatus('offline');
