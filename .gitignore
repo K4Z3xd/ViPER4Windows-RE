@@ -7,3 +7,4 @@ out/
 *.ilk
 node_modules/
 dist/
+third_party/

@@ -75,3 +75,37 @@ if(MSVC)
         )
     endforeach()
 endif()
+
+# 6. Native foobar2000 v2 x64 DSP Component (Auto Sample-Rate 44.1kHz-384kHz, Zero Resample!)
+# Uses /MD (MultiThreadedDLL) to match official foobar2000 v2 x64 SDK runtime.
+set(FB2K_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/foobar2000_sdk")
+if(MSVC AND EXISTS "${FB2K_SDK_DIR}/foobar2000/SDK/x64/Release/foobar2000_SDK.lib")
+    add_library(foo_dsp_viperhires SHARED
+        foobar/foo_dsp_viperhires.cpp
+        src/dsp/BiquadFilter.cpp
+        src/dsp/ParametricEq.cpp
+        src/dsp/ViperBass.cpp
+        src/dsp/ViperClarity.cpp
+        src/dsp/TubeSimulator.cpp
+        src/dsp/DifferentialSurround.cpp
+        src/dsp/Limiter.cpp
+        src/dsp/ViperEngine.cpp
+        src/ipc/SharedConfig.cpp
+    )
+    target_include_directories(foo_dsp_viperhires PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${FB2K_SDK_DIR}
+        ${FB2K_SDK_DIR}/foobar2000
+    )
+    target_link_libraries(foo_dsp_viperhires PRIVATE
+        "${FB2K_SDK_DIR}/foobar2000/foobar2000_component_client/x64/Release/foobar2000_component_client.lib"
+        "${FB2K_SDK_DIR}/foobar2000/SDK/x64/Release/foobar2000_SDK.lib"
+        "${FB2K_SDK_DIR}/pfc/x64/Release/pfc.lib"
+        "${FB2K_SDK_DIR}/foobar2000/shared/shared-x64.lib"
+        shlwapi
+        ole32
+    )
+    target_compile_definitions(foo_dsp_viperhires PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+    set_property(TARGET foo_dsp_viperhires PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    target_compile_options(foo_dsp_viperhires PRIVATE /W3 /Zc:__cplusplus $<$<CONFIG:Release>:/O2 /fp:fast>)
+endif()
