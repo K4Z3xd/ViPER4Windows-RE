@@ -20,7 +20,8 @@ import {
   BUILTIN_PRESETS,
   DEFAULT_PARAMS,
   DspParams,
-  EQ_LABELS
+  EQ_LABELS,
+  LiveSourceStatus
 } from './types';
 
 function Toggle({
@@ -144,16 +145,29 @@ function EqCurveSvg({ bands, enabled }: { bands: number[]; enabled: boolean }) {
 export default function App() {
   const [params, setParams] = useState<DspParams>(DEFAULT_PARAMS);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
+  const [liveStatus, setLiveStatus] = useState<LiveSourceStatus | null>(null);
   const [activeTab, setActiveTab] = useState<'dsp' | 'devices'>('dsp');
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('syncing');
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
   const debounceRef = useRef<number | null>(null);
 
+  const loadStatus = async () => {
+    try {
+      const res = await fetch('/api/status');
+      if (res.ok) {
+        setLiveStatus(await res.json());
+      }
+    } catch {
+      // ignore transient poll errors
+    }
+  };
+
   const loadAll = async () => {
     try {
-      const [devRes, paramRes] = await Promise.all([
+      const [devRes, paramRes, statusRes] = await Promise.all([
         fetch('/api/devices'),
-        fetch('/api/params')
+        fetch('/api/params'),
+        fetch('/api/status')
       ]);
       if (devRes.ok) {
         setDevices(await devRes.json());
@@ -161,6 +175,9 @@ export default function App() {
       if (paramRes.ok) {
         const p = await paramRes.json();
         setParams({ ...DEFAULT_PARAMS, ...p });
+      }
+      if (statusRes.ok) {
+        setLiveStatus(await statusRes.json());
       }
       setSyncStatus('connected');
     } catch {
@@ -170,6 +187,8 @@ export default function App() {
 
   useEffect(() => {
     void loadAll();
+    const timer = window.setInterval(() => void loadStatus(), 1500);
+    return () => window.clearInterval(timer);
   }, []);
 
   const pushParams = (next: DspParams, immediate = false) => {
@@ -325,6 +344,69 @@ export default function App() {
       </header>
 
       <main className="mx-auto max-w-6xl px-5 py-6">
+        {/* Live Signal Path & Source Quality Monitor */}
+        {liveStatus && (
+          <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-zinc-800/90 bg-gradient-to-r from-[#0c0c0c] via-[#0e1210] to-[#0c0c0c] px-5 py-3.5">
+            <div className="flex min-w-0 items-center gap-3.5">
+              <div
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                  liveStatus.zeroResample
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                    : 'border-zinc-700 bg-zinc-900 text-zinc-300'
+                }`}
+              >
+                <Activity className="h-4 w-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-display text-xs font-bold uppercase tracking-wider text-zinc-200">
+                    {liveStatus.source}
+                  </span>
+                  <span className="rounded bg-zinc-900 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+                    {liveStatus.mode}
+                  </span>
+                  {liveStatus.zeroResample && (
+                    <span className="rounded border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-emerald-300">
+                      0% RESAMPLE
+                    </span>
+                  )}
+                  {liveStatus.isHiRes && (
+                    <span className="rounded border border-amber-400/40 bg-amber-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber-300">
+                      HI-RES AUDIO
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 truncate text-xs text-zinc-400">
+                  {liveStatus.title
+                    ? `${liveStatus.artist ? `${liveStatus.artist} — ` : ''}${liveStatus.title}`
+                    : liveStatus.deviceName}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 font-mono text-xs tabular-nums">
+              {liveStatus.codec && (
+                <span className="rounded-lg border border-zinc-800 bg-black px-2.5 py-1 text-zinc-200">
+                  {liveStatus.codec}
+                </span>
+              )}
+              <span className="rounded-lg border border-emerald-500/30 bg-black px-2.5 py-1 font-semibold text-emerald-300">
+                {(liveStatus.sampleRate / 1000).toFixed(1)} kHz
+              </span>
+              {liveStatus.bitDepth > 0 && (
+                <span className="rounded-lg border border-zinc-800 bg-black px-2.5 py-1 text-zinc-200">
+                  {liveStatus.bitDepth}-bit
+                </span>
+              )}
+              {liveStatus.bitrateKbps > 0 && (
+                <span className="rounded-lg border border-zinc-800 bg-black px-2.5 py-1 text-zinc-400">
+                  {liveStatus.bitrateKbps.toLocaleString()} kbps
+                </span>
+              )}
+            </div>
+          </section>
+        )}
+
         {activeTab === 'dsp' ? (
           <div className="space-y-6">
             {/* Presets Strip */}

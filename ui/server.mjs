@@ -8,6 +8,73 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 48192;
 const VIPER_CTL = path.resolve(__dirname, '..', 'build', 'viper_ctl.exe');
 const DIST_DIR = path.resolve(__dirname, 'dist');
+const FOOBAR_STATUS_PATH = 'C:\\ProgramData\\ViPERHiRes\\foobar_status.json';
+const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
+
+function readLiveStatus(defaultDevice) {
+  const now = Date.now();
+  // 1. Prefer live foobar2000 native DSP telemetry if active within last 4 seconds
+  try {
+    if (fs.existsSync(FOOBAR_STATUS_PATH)) {
+      const raw = fs.readFileSync(FOOBAR_STATUS_PATH, 'utf8');
+      const fb = JSON.parse(raw);
+      if (fb && typeof fb.timestampMs === 'number' && now - fb.timestampMs < 4000) {
+        return {
+          active: true,
+          source: 'foobar2000',
+          mode: fb.mode || 'Native DSP · 0% Resample',
+          sampleRate: fb.sampleRate || 0,
+          channels: fb.channels || 2,
+          bitDepth: fb.bitDepth || 0,
+          bitrateKbps: fb.bitrateKbps || 0,
+          codec: fb.codec || '',
+          title: fb.title || '',
+          artist: fb.artist || '',
+          deviceName: defaultDevice?.name || 'USB HiFi DAC',
+          isHiRes: (fb.sampleRate || 0) >= 88200 || (fb.bitDepth || 0) >= 24,
+          zeroResample: true
+        };
+      }
+    }
+  } catch {
+    // ignore partial reads
+  }
+
+  // 2. Fallback to Windows APO (audiodg.exe) telemetry
+  let apoSr = defaultDevice?.sampleRate || 48000;
+  let apoCh = defaultDevice?.channels || 2;
+  let apoLocked = false;
+  try {
+    if (fs.existsSync(APO_DIAG_PATH)) {
+      const txt = fs.readFileSync(APO_DIAG_PATH, 'utf8');
+      const mSr = txt.match(/SR=(\d+)/);
+      const mCh = txt.match(/Ch=(\d+)/);
+      if (mSr) {
+        apoSr = parseInt(mSr[1], 10);
+        apoLocked = true;
+      }
+      if (mCh) apoCh = parseInt(mCh[1], 10);
+    }
+  } catch {
+    // ignore
+  }
+
+  return {
+    active: apoLocked,
+    source: 'Windows Audio APO',
+    mode: apoLocked ? 'MFX · 32-bit Float' : 'Standby',
+    sampleRate: apoSr,
+    channels: apoCh,
+    bitDepth: defaultDevice?.bitsPerSample || 32,
+    bitrateKbps: 0,
+    codec: '32-BIT FLOAT',
+    title: '',
+    artist: '',
+    deviceName: defaultDevice?.name || 'Windows Default Audio',
+    isHiRes: apoSr >= 88200,
+    zeroResample: false
+  };
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -67,6 +134,19 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/devices' && req.method === 'GET') {
       const out = await runViperCtl(['devices']);
       sendJson(res, 200, out || '[]');
+      return;
+    }
+
+    if (url.pathname === '/api/status' && req.method === 'GET') {
+      let defaultDev = null;
+      try {
+        const devJson = await runViperCtl(['devices']);
+        const list = JSON.parse(devJson || '[]');
+        defaultDev = list.find(d => d.isDefault) || list[0] || null;
+      } catch {
+        // ignore
+      }
+      sendJson(res, 200, readLiveStatus(defaultDev));
       return;
     }
 

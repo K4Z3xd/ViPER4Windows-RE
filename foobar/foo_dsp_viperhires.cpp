@@ -3,17 +3,19 @@
 #include "viper/SharedConfig.hpp"
 #include "viper/ViperEngine.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <span>
+#include <string>
 #include <type_traits>
 #include <vector>
 
 DECLARE_COMPONENT_VERSION(
     "ViPERHiRes DSP (Auto Sample-Rate)",
-    "0.2.0",
+    "0.3.0",
     "Hi-Res 44.1kHz-384kHz 64-bit internal DSP synced in real time with ViPERHiRes Console.\n"
-    "Automatically follows each track's native sample rate in WASAPI Exclusive / Bit-Perfect mode."
+    "Automatically follows each track's native sample rate and reports live source telemetry."
 );
 
 VALIDATE_COMPONENT_FILENAME("foo_dsp_viperhires.dll");
@@ -26,6 +28,29 @@ constexpr GUID kViperHiResDspGuid = {
     0x5c3e9a21, 0x8b4d, 0x4f7a,
     { 0x91, 0x2e, 0x7d, 0x4a, 0x3b, 0x6c, 0x8e, 0x10 }
 };
+
+std::string jsonEscape(const char* s) {
+    if (!s) return {};
+    std::string out;
+    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
+        switch (*p) {
+            case '"': out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n"; break;
+            case '\r': out += "\\r"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (*p >= 0x20) out.push_back(static_cast<char>(*p));
+                break;
+        }
+    }
+    return out;
+}
+
+int64_t nowEpochMs() noexcept {
+    using namespace std::chrono;
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
 
 class dsp_viperhires : public dsp_impl_base {
 public:
@@ -58,17 +83,26 @@ public:
             return true;
         }
 
-        // Automatically follow track's native sample rate (44.1kHz -> 384kHz) without resampling!
+        bool telemetryDirty = false;
         if (sr != currentSampleRate_) {
             currentSampleRate_ = sr;
             engine_.prepare(sr);
             engine_.setParams(params_);
+            telemetryDirty = true;
+        }
 
-            if (FILE* f = nullptr; _wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\foobar_diag.txt", L"w") == 0 && f) {
-                std::fprintf(f, "foobar2000 Native Track Rate = %u Hz | Ch = %u | IPC = %d\n",
-                             sr, ch, sharedConfig_.isOpen() ? 1 : 0);
-                std::fclose(f);
-            }
+        // Check if track changed or heartbeat interval (1000ms) elapsed
+        dsp_track_t curTrack = get_cur_file();
+        if (curTrack != lastTrack_) {
+            lastTrack_ = curTrack;
+            refreshTrackMetadata(curTrack);
+            telemetryDirty = true;
+        }
+
+        const int64_t nowMs = nowEpochMs();
+        if (telemetryDirty || (nowMs - lastTelemetryWriteMs_) >= 1000) {
+            lastTelemetryWriteMs_ = nowMs;
+            writeLiveStatusJson(sr, ch, nowMs);
         }
 
         // Lock-free real-time sync with ViPERHiRes Web Console (http://127.0.0.1:48192)
@@ -84,7 +118,6 @@ public:
             auto* samples = reinterpret_cast<float*>(chunk->get_data());
             engine_.processInterleavedStereo(std::span<float>{samples, totalSamples});
         } else {
-            // foobar2000 v2 x64 uses 64-bit double audio_sample natively
             if (scratchBuf_.size() < totalSamples) {
                 scratchBuf_.resize(totalSamples);
             }
@@ -112,12 +145,68 @@ public:
     }
 
     bool need_track_change_mark() override {
-        return false;
+        return true;
     }
 
 private:
+    void refreshTrackMetadata(const dsp_track_t& track) {
+        trackTitle_.clear();
+        trackArtist_.clear();
+        trackCodec_.clear();
+        trackBitDepth_ = 0;
+        trackBitrateKbps_ = 0;
+
+        if (!track.is_valid()) {
+            return;
+        }
+
+        metadb_info_container::ptr infoRef = track->get_info_ref();
+        if (!infoRef.is_valid()) {
+            return;
+        }
+
+        const file_info& fi = infoRef->info();
+        if (const char* t = fi.meta_get("TITLE", 0)) trackTitle_ = t;
+        if (const char* a = fi.meta_get("ARTIST", 0)) trackArtist_ = a;
+        if (const char* c = fi.info_get("codec")) trackCodec_ = c;
+
+        const int64_t bps = fi.info_get_int("bitspersample");
+        if (bps > 0) trackBitDepth_ = static_cast<uint32_t>(bps);
+
+        const int64_t br = fi.info_get_bitrate();
+        if (br > 0) trackBitrateKbps_ = static_cast<uint32_t>(br);
+    }
+
+    void writeLiveStatusJson(uint32_t sr, uint32_t ch, int64_t nowMs) const noexcept {
+        FILE* f = nullptr;
+        if (_wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\foobar_status.json", L"wb") == 0 && f) {
+            std::fprintf(
+                f,
+                "{\"source\":\"foobar2000\",\"mode\":\"Native DSP · 0%% Resample\","
+                "\"sampleRate\":%u,\"channels\":%u,\"bitDepth\":%u,\"bitrateKbps\":%u,"
+                "\"codec\":\"%s\",\"title\":\"%s\",\"artist\":\"%s\",\"timestampMs\":%lld}",
+                sr,
+                ch,
+                trackBitDepth_,
+                trackBitrateKbps_,
+                jsonEscape(trackCodec_.c_str()).c_str(),
+                jsonEscape(trackTitle_.c_str()).c_str(),
+                jsonEscape(trackArtist_.c_str()).c_str(),
+                static_cast<long long>(nowMs));
+            std::fclose(f);
+        }
+    }
+
     uint32_t currentSampleRate_ = 0;
     uint32_t lastSeq_ = 0;
+    int64_t lastTelemetryWriteMs_ = 0;
+    dsp_track_t lastTrack_{};
+    std::string trackTitle_{};
+    std::string trackArtist_{};
+    std::string trackCodec_{};
+    uint32_t trackBitDepth_ = 0;
+    uint32_t trackBitrateKbps_ = 0;
+
     viper::DspParams params_{};
     viper::SharedConfig sharedConfig_{};
     viper::ViperEngine engine_{};

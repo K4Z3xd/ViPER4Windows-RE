@@ -8,6 +8,22 @@ export interface AudioDevice {
   isDefault: boolean;
 }
 
+export interface LiveSourceStatus {
+  active: boolean;
+  source: string;
+  mode: string;
+  sampleRate: number;
+  channels: number;
+  bitDepth: number;
+  bitrateKbps: number;
+  codec: string;
+  title: string;
+  artist: string;
+  deviceName: string;
+  isHiRes: boolean;
+  zeroResample: boolean;
+}
+
 export interface DspParams {
   sequence?: number;
   masterEnabled: boolean;
