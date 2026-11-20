@@ -42,10 +42,15 @@ const APO_REG_PROPERTIES& getApoRegProperties() noexcept;
 class ViPERHiResAPO final : public CBaseAudioProcessingObject,
                             public IAudioSystemEffects2 {
 public:
-    ViPERHiResAPO();
+    explicit ViPERHiResAPO(IUnknown* pUnkOuter = nullptr);
     ~ViPERHiResAPO() override;
 
-    // IUnknown
+    // Non-delegating IUnknown for COM Aggregation (required by Windows audiodg.exe!)
+    STDMETHODIMP nonDelegatingQueryInterface(REFIID riid, void** ppvObject);
+    ULONG nonDelegatingAddRef();
+    ULONG nonDelegatingRelease();
+
+    // Delegating IUnknown
     STDMETHODIMP QueryInterface(REFIID riid, void** ppvObject) override;
     STDMETHODIMP_(ULONG) AddRef() override;
     STDMETHODIMP_(ULONG) Release() override;
@@ -56,6 +61,10 @@ public:
         IAudioMediaType* pOppositeFormat,
         IAudioMediaType* pRequestedInputFormat,
         IAudioMediaType** ppSupportedInputFormat) override;
+    STDMETHODIMP IsOutputFormatSupported(
+        IAudioMediaType* pOppositeFormat,
+        IAudioMediaType* pRequestedOutputFormat,
+        IAudioMediaType** ppSupportedOutputFormat) override;
 
     // IAudioProcessingObjectConfiguration
     STDMETHODIMP LockForProcess(
@@ -80,6 +89,20 @@ public:
         HANDLE Event) override;
 
 private:
+    class NonDelegatingUnknown final : public IUnknown {
+    public:
+        explicit NonDelegatingUnknown(ViPERHiResAPO* owner) noexcept : owner_(owner) {}
+        STDMETHODIMP QueryInterface(REFIID riid, void** ppvObject) override {
+            return owner_->nonDelegatingQueryInterface(riid, ppvObject);
+        }
+        STDMETHODIMP_(ULONG) AddRef() override { return owner_->nonDelegatingAddRef(); }
+        STDMETHODIMP_(ULONG) Release() override { return owner_->nonDelegatingRelease(); }
+    private:
+        ViPERHiResAPO* owner_;
+    };
+
+    NonDelegatingUnknown nonDelegatingUnknown_{this};
+    IUnknown* outerUnknown_ = nullptr;
     std::atomic<ULONG> refCount_{1};
     uint32_t sampleRate_ = 48000;
     uint32_t channelCount_ = 2;

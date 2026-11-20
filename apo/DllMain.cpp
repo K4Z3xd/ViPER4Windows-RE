@@ -1,9 +1,22 @@
 #include "ViPERHiResAPO.hpp"
 
 #include <atomic>
+#include <cstdio>
 #include <string>
 
 namespace {
+
+void dllLog(const char* msg) noexcept {
+    HANDLE h = CreateFileW(L"C:\\ProgramData\\ViPERHiRes\\apo_dll.txt",
+                           FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                           nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h != INVALID_HANDLE_VALUE) {
+        DWORD written = 0;
+        WriteFile(h, msg, static_cast<DWORD>(std::strlen(msg)), &written, nullptr);
+        WriteFile(h, "\r\n", 2, &written, nullptr);
+        CloseHandle(h);
+    }
+}
 
 HMODULE g_moduleHandle = nullptr;
 
@@ -43,13 +56,16 @@ public:
     STDMETHODIMP CreateInstance(IUnknown* pUnkOuter, REFIID riid, void** ppvObject) override {
         if (!ppvObject) return E_POINTER;
         *ppvObject = nullptr;
-        if (pUnkOuter) return CLASS_E_NOAGGREGATION;
+        // COM Aggregation rule: when pUnkOuter != nullptr, riid MUST be IID_IUnknown
+        if (pUnkOuter != nullptr && riid != __uuidof(IUnknown)) {
+            return CLASS_E_NOAGGREGATION;
+        }
 
-        auto* apo = new (std::nothrow) viper::apo::ViPERHiResAPO();
+        auto* apo = new (std::nothrow) viper::apo::ViPERHiResAPO(pUnkOuter);
         if (!apo) return E_OUTOFMEMORY;
 
-        const HRESULT hr = apo->QueryInterface(riid, ppvObject);
-        apo->Release();
+        const HRESULT hr = apo->nonDelegatingQueryInterface(riid, ppvObject);
+        apo->nonDelegatingRelease();
         return hr;
     }
 
@@ -99,6 +115,7 @@ STDAPI DllCanUnloadNow() {
 }
 
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, LPVOID* ppv) {
+    dllLog("DllGetClassObject called");
     if (!ppv) return E_POINTER;
     *ppv = nullptr;
 
@@ -132,7 +149,8 @@ STDAPI DllRegisterServer() {
     hr = setRegString(HKEY_CLASSES_ROOT, inprocKey, L"ThreadingModel", L"Both");
     if (FAILED(hr)) return hr;
 
-    // Register with Windows Audio Engine APO registry
+    // Re-register cleanly with Windows Audio Engine APO registry (3 core interfaces)
+    (void)UnregisterAPO(viper::apo::CLSID_ViPERHiResAPO);
     hr = RegisterAPO(&viper::apo::getApoRegProperties());
     return hr;
 }

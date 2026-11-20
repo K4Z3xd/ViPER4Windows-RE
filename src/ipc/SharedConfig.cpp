@@ -4,8 +4,6 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
-#include <sddl.h>
-#include <shlobj.h>
 
 #include <atomic>
 #include <cstring>
@@ -29,13 +27,8 @@ void ensureDirectoryExists(const std::wstring& dirPath) {
 } // namespace
 
 std::wstring SharedConfig::defaultConfigFilePath() {
-    wchar_t* programData = nullptr;
-    std::wstring baseDir = L"C:\\ProgramData";
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_ProgramData, 0, nullptr, &programData)) && programData) {
-        baseDir = programData;
-        CoTaskMemFree(programData);
-    }
-    return baseDir + L"\\ViPERHiRes\\live_params.bin";
+    // Direct path avoids shell32.dll / COM calls inside audiodg.exe (Session 0)
+    return L"C:\\ProgramData\\ViPERHiRes\\live_params.bin";
 }
 
 SharedConfig::~SharedConfig() {

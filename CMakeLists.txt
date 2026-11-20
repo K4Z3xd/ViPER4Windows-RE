@@ -62,7 +62,9 @@ target_link_libraries(viper_ctl PRIVATE
 target_compile_definitions(viper_ctl PRIVATE UNICODE _UNICODE)
 
 if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
     foreach(tgt viper_dsp viper_ipc viper_wav_tester ViPERHiResAPO viper_ctl)
+        set_property(TARGET ${tgt} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
         target_compile_options(${tgt} PRIVATE
             /W4
             /permissive-

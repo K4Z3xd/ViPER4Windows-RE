@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <span>
 
@@ -11,11 +13,25 @@ std::atomic<long> g_dllRefCount{0};
 
 namespace {
 
-// Registration properties for Windows Audio Engine (SFX/MFX/EFX compatible)
-struct ApoRegPropsHolder {
-    APO_REG_PROPERTIES props{};
+void traceLog(const char* fmt, ...) noexcept {
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\apo_trace.txt", L"a") == 0 && f) {
+        va_list args;
+        va_start(args, fmt);
+        std::vfprintf(f, fmt, args);
+        va_end(args);
+        std::fputc('\n', f);
+        std::fclose(f);
+    }
+}
 
-    ApoRegPropsHolder() noexcept {
+// Windows Audio Engine requires all 3 core APO interfaces in APO_REG_PROPERTIES!
+#pragma pack(push, 1)
+struct ApoRegProps3 {
+    APO_REG_PROPERTIES props{};
+    IID extraInterfaces[2]{};
+
+    ApoRegProps3() noexcept {
         props.clsid = CLSID_ViPERHiResAPO;
         props.Flags = static_cast<APO_FLAG>(
             APO_FLAG_INPLACE |
@@ -31,21 +47,91 @@ struct ApoRegPropsHolder {
         props.u32MinOutputConnections = 1;
         props.u32MaxOutputConnections = 1;
         props.u32MaxInstances = 0xFFFFFFFF;
-        props.u32NumAPOInterfaces = 1;
+        props.u32NumAPOInterfaces = 3;
         props.iidAPOInterfaceList[0] = __uuidof(IAudioProcessingObject);
+        extraInterfaces[0] = __uuidof(IAudioProcessingObjectRT);
+        extraInterfaces[1] = __uuidof(IAudioProcessingObjectConfiguration);
     }
 };
+#pragma pack(pop)
+
+HRESULT checkFormatSupported(
+    IAudioMediaType* pOppositeFormat,
+    IAudioMediaType* pRequestedFormat,
+    IAudioMediaType** ppSupportedFormat) {
+    if (!pRequestedFormat) {
+        return E_POINTER;
+    }
+    if (ppSupportedFormat) {
+        *ppSupportedFormat = nullptr;
+    }
+
+    UNCOMPRESSEDAUDIOFORMAT requested{};
+    HRESULT hr = pRequestedFormat->GetUncompressedAudioFormat(&requested);
+    if (FAILED(hr)) {
+        return APOERR_FORMAT_NOT_SUPPORTED;
+    }
+
+    UNCOMPRESSEDAUDIOFORMAT target = requested;
+    if (pOppositeFormat) {
+        UNCOMPRESSEDAUDIOFORMAT opposite{};
+        if (SUCCEEDED(pOppositeFormat->GetUncompressedAudioFormat(&opposite))) {
+            target.dwSamplesPerFrame = opposite.dwSamplesPerFrame;
+            target.fFramesPerSecond = opposite.fFramesPerSecond;
+        }
+    }
+
+    const float clampedSr = std::clamp(
+        target.fFramesPerSecond,
+        static_cast<float>(kMinSampleRate),
+        static_cast<float>(kMaxSampleRate));
+    const DWORD clampedCh = std::clamp<DWORD>(target.dwSamplesPerFrame, 1ul, 8ul);
+
+    const bool isExactMatch =
+        (requested.guidFormatType == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) &&
+        (requested.dwBytesPerSampleContainer == 4) &&
+        (requested.dwValidBitsPerSample == 32) &&
+        (std::abs(requested.fFramesPerSecond - clampedSr) < 1.0f) &&
+        (requested.dwSamplesPerFrame == clampedCh);
+
+    if (isExactMatch) {
+        if (ppSupportedFormat) {
+            *ppSupportedFormat = pRequestedFormat;
+            pRequestedFormat->AddRef();
+        }
+        return S_OK;
+    }
+
+    if (ppSupportedFormat) {
+        UNCOMPRESSEDAUDIOFORMAT preferred = requested;
+        preferred.guidFormatType = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+        preferred.dwBytesPerSampleContainer = 4;
+        preferred.dwValidBitsPerSample = 32;
+        preferred.fFramesPerSecond = clampedSr;
+        preferred.dwSamplesPerFrame = clampedCh;
+
+        hr = CreateAudioMediaTypeFromUncompressedAudioFormat(&preferred, ppSupportedFormat);
+        if (FAILED(hr)) {
+            return APOERR_FORMAT_NOT_SUPPORTED;
+        }
+        return S_FALSE;
+    }
+
+    return APOERR_FORMAT_NOT_SUPPORTED;
+}
 
 } // namespace
 
 const APO_REG_PROPERTIES& getApoRegProperties() noexcept {
-    static const ApoRegPropsHolder holder{};
+    static const ApoRegProps3 holder{};
     return holder.props;
 }
 
-ViPERHiResAPO::ViPERHiResAPO()
-    : CBaseAudioProcessingObject(&getApoRegProperties()) {
+ViPERHiResAPO::ViPERHiResAPO(IUnknown* pUnkOuter)
+    : CBaseAudioProcessingObject(&getApoRegProperties()),
+      outerUnknown_(pUnkOuter) {
     g_dllRefCount.fetch_add(1, std::memory_order_relaxed);
+    traceLog("Ctor called (outer=%p)", static_cast<void*>(pUnkOuter));
 }
 
 ViPERHiResAPO::~ViPERHiResAPO() {
@@ -53,12 +139,18 @@ ViPERHiResAPO::~ViPERHiResAPO() {
     g_dllRefCount.fetch_sub(1, std::memory_order_relaxed);
 }
 
-STDMETHODIMP ViPERHiResAPO::QueryInterface(REFIID riid, void** ppvObject) {
+STDMETHODIMP ViPERHiResAPO::nonDelegatingQueryInterface(REFIID riid, void** ppvObject) {
     if (!ppvObject) {
         return E_POINTER;
     }
 
-    if (riid == __uuidof(IUnknown) || riid == __uuidof(IAudioProcessingObject)) {
+    if (riid == __uuidof(IUnknown)) {
+        *ppvObject = static_cast<IUnknown*>(&nonDelegatingUnknown_);
+        nonDelegatingAddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IAudioProcessingObject)) {
         *ppvObject = static_cast<IAudioProcessingObject*>(this);
     } else if (riid == __uuidof(IAudioProcessingObjectRT)) {
         *ppvObject = static_cast<IAudioProcessingObjectRT*>(this);
@@ -77,11 +169,11 @@ STDMETHODIMP ViPERHiResAPO::QueryInterface(REFIID riid, void** ppvObject) {
     return S_OK;
 }
 
-STDMETHODIMP_(ULONG) ViPERHiResAPO::AddRef() {
+ULONG ViPERHiResAPO::nonDelegatingAddRef() {
     return refCount_.fetch_add(1, std::memory_order_relaxed) + 1;
 }
 
-STDMETHODIMP_(ULONG) ViPERHiResAPO::Release() {
+ULONG ViPERHiResAPO::nonDelegatingRelease() {
     const ULONG count = refCount_.fetch_sub(1, std::memory_order_acq_rel) - 1;
     if (count == 0) {
         delete this;
@@ -89,16 +181,37 @@ STDMETHODIMP_(ULONG) ViPERHiResAPO::Release() {
     return count;
 }
 
+STDMETHODIMP ViPERHiResAPO::QueryInterface(REFIID riid, void** ppvObject) {
+    if (outerUnknown_) {
+        return outerUnknown_->QueryInterface(riid, ppvObject);
+    }
+    return nonDelegatingQueryInterface(riid, ppvObject);
+}
+
+STDMETHODIMP_(ULONG) ViPERHiResAPO::AddRef() {
+    if (outerUnknown_) {
+        return outerUnknown_->AddRef();
+    }
+    return nonDelegatingAddRef();
+}
+
+STDMETHODIMP_(ULONG) ViPERHiResAPO::Release() {
+    if (outerUnknown_) {
+        return outerUnknown_->Release();
+    }
+    return nonDelegatingRelease();
+}
+
 STDMETHODIMP ViPERHiResAPO::Initialize(UINT32 cbDataSize, BYTE* pbyData) {
     if (!pbyData && cbDataSize > 0) {
         return E_POINTER;
     }
 
-    if (pbyData && cbDataSize >= sizeof(APOInitBaseStruct)) {
-        const auto* initBase = reinterpret_cast<const APOInitBaseStruct*>(pbyData);
-        if (initBase->clsid != CLSID_ViPERHiResAPO) {
-            return APOERR_INVALID_APO_CLSID;
-        }
+    // Note: APOInitBaseStruct::clsid identifies the init struct type
+    // (APOInitSystemEffects / APOInitSystemEffects2 / APOInitSystemEffects3),
+    // NOT CLSID_ViPERHiResAPO! Accept all standard Windows 10/11 init structs.
+    if (pbyData && cbDataSize < sizeof(APOInitBaseStruct)) {
+        return E_INVALIDARG;
     }
 
     // Attempt to open shared config early (will also retry on LockForProcess if not created yet)
@@ -109,6 +222,7 @@ STDMETHODIMP ViPERHiResAPO::Initialize(UINT32 cbDataSize, BYTE* pbyData) {
     }
 
     m_bIsInitialized = TRUE;
+    traceLog("Initialize OK (cb=%u, ipc=%d)", cbDataSize, sharedConfig_.isOpen() ? 1 : 0);
     return S_OK;
 }
 
@@ -116,72 +230,18 @@ STDMETHODIMP ViPERHiResAPO::IsInputFormatSupported(
     IAudioMediaType* pOppositeFormat,
     IAudioMediaType* pRequestedInputFormat,
     IAudioMediaType** ppSupportedInputFormat) {
-    if (!pRequestedInputFormat) {
-        return E_POINTER;
-    }
-    if (ppSupportedInputFormat) {
-        *ppSupportedInputFormat = nullptr;
-    }
+    const HRESULT hr = checkFormatSupported(pOppositeFormat, pRequestedInputFormat, ppSupportedInputFormat);
+    traceLog("IsInputFormatSupported -> 0x%08lX", static_cast<unsigned long>(hr));
+    return hr;
+}
 
-    UNCOMPRESSEDAUDIOFORMAT requested{};
-    HRESULT hr = pRequestedInputFormat->GetUncompressedAudioFormat(&requested);
-    if (FAILED(hr)) {
-        return APOERR_FORMAT_NOT_SUPPORTED;
-    }
-
-    // Check if opposite format imposes constraints
-    if (pOppositeFormat) {
-        UNCOMPRESSEDAUDIOFORMAT opposite{};
-        if (SUCCEEDED(pOppositeFormat->GetUncompressedAudioFormat(&opposite))) {
-            if (opposite.dwSamplesPerFrame != requested.dwSamplesPerFrame ||
-                std::abs(opposite.fFramesPerSecond - requested.fFramesPerSecond) > 1.0f) {
-                return APOERR_FORMAT_NOT_SUPPORTED;
-            }
-        }
-    }
-
-    // Accept Stereo (2 ch) or pass-through multichannel; Hi-Res sample rates 44.1kHz - 384kHz
-    const float clampedSr = std::clamp(
-        requested.fFramesPerSecond,
-        static_cast<float>(kMinSampleRate),
-        static_cast<float>(kMaxSampleRate));
-
-    const bool isFloat32 =
-        (requested.guidFormatType == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) &&
-        (requested.dwBytesPerSampleContainer == 4) &&
-        (requested.dwValidBitsPerSample == 32);
-
-    const bool isRateSupported =
-        (requested.fFramesPerSecond >= static_cast<float>(kMinSampleRate)) &&
-        (requested.fFramesPerSecond <= static_cast<float>(kMaxSampleRate));
-
-    const bool isChannelsSupported = (requested.dwSamplesPerFrame >= 1 && requested.dwSamplesPerFrame <= 8);
-
-    if (isFloat32 && isRateSupported && isChannelsSupported) {
-        if (ppSupportedInputFormat) {
-            *ppSupportedInputFormat = pRequestedInputFormat;
-            pRequestedInputFormat->AddRef();
-        }
-        return S_OK;
-    }
-
-    // Suggest 32-bit IEEE float at the clamped Hi-Res sample rate
-    if (ppSupportedInputFormat) {
-        UNCOMPRESSEDAUDIOFORMAT preferred = requested;
-        preferred.guidFormatType = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
-        preferred.dwBytesPerSampleContainer = 4;
-        preferred.dwValidBitsPerSample = 32;
-        preferred.fFramesPerSecond = clampedSr;
-        preferred.dwSamplesPerFrame = std::clamp<DWORD>(requested.dwSamplesPerFrame, 1ul, 8ul);
-
-        hr = CreateAudioMediaTypeFromUncompressedAudioFormat(&preferred, ppSupportedInputFormat);
-        if (FAILED(hr)) {
-            return APOERR_FORMAT_NOT_SUPPORTED;
-        }
-        return S_FALSE;
-    }
-
-    return APOERR_FORMAT_NOT_SUPPORTED;
+STDMETHODIMP ViPERHiResAPO::IsOutputFormatSupported(
+    IAudioMediaType* pOppositeFormat,
+    IAudioMediaType* pRequestedOutputFormat,
+    IAudioMediaType** ppSupportedOutputFormat) {
+    const HRESULT hr = checkFormatSupported(pOppositeFormat, pRequestedOutputFormat, ppSupportedOutputFormat);
+    traceLog("IsOutputFormatSupported -> 0x%08lX", static_cast<unsigned long>(hr));
+    return hr;
 }
 
 STDMETHODIMP ViPERHiResAPO::LockForProcess(
@@ -194,6 +254,7 @@ STDMETHODIMP ViPERHiResAPO::LockForProcess(
         ppInputConnections,
         u32NumOutputConnections,
         ppOutputConnections);
+    traceLog("Base LockForProcess -> 0x%08lX", static_cast<unsigned long>(hr));
     if (FAILED(hr)) {
         return hr;
     }
@@ -214,6 +275,15 @@ STDMETHODIMP ViPERHiResAPO::LockForProcess(
     }
     if (sharedConfig_.isOpen() && sharedConfig_.readSnapshot(cachedParams_)) {
         engine_.setParams(cachedParams_);
+    }
+
+    // Write lightweight non-RT diagnostic line so we can verify active sample rate & IPC status
+    if (FILE* f = nullptr; _wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\apo_diag.txt", L"w") == 0 && f) {
+        std::fprintf(f, "LockForProcess OK | SR=%u Hz | Ch=%u | IPC=%d | Seq=%u | Master=%u | EQ=%u | Bass=%u\n",
+                     sampleRate_, channelCount_, sharedConfig_.isOpen() ? 1 : 0,
+                     cachedParams_.sequence, cachedParams_.masterEnabled,
+                     cachedParams_.eqEnabled, cachedParams_.bassEnabled);
+        std::fclose(f);
     }
 
     return S_OK;

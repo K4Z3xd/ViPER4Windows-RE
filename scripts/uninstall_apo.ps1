@@ -22,12 +22,16 @@ if (Test-Path $BackupFile) {
     Write-Host "[2/3] Restoring original FxProperties from $BackupFile ..." -ForegroundColor Cyan
     # Remove ViPERHiRes SFX entries first, then re-import exact original backup
     Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},5" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},6" -ErrorAction SilentlyContinue
     & reg.exe import $BackupFile | Out-Null
 } else {
     Write-Host "[2/3] No backup file found; removing ViPERHiRes APO keys directly..." -ForegroundColor Yellow
     Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6" -ErrorAction SilentlyContinue
     Remove-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},5" -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},6" -ErrorAction SilentlyContinue
 }
 
 if ($UnregisterDll) {
