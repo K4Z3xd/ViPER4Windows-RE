@@ -98,6 +98,38 @@ export const EQ_LABELS_18 = [
 ];
 export const EQ_LABELS = EQ_LABELS_10;
 
+// Maps 10-band curve -> 18-band curve with smooth midpoint interpolation (rounded to 0.5 dB)
+export function interpolate10to18(b10: number[]): number[] {
+  const g = (i: number) => Number(b10[i] ?? 0);
+  const mid = (a: number, b: number) => Math.round(((a + b) / 2) * 2) / 2;
+  return [
+    g(0),                 // 31
+    mid(g(0), g(1)),      // 45
+    g(1),                 // 62
+    mid(g(1), g(2)),      // 90
+    g(2),                 // 125
+    mid(g(2), g(3)),      // 180
+    g(3),                 // 250
+    mid(g(3), g(4)),      // 360
+    g(4),                 // 500
+    mid(g(4), g(5)),      // 750
+    g(5),                 // 1k
+    mid(g(5), g(6)),      // 1.5k
+    g(6),                 // 2k
+    mid(g(6), g(7)),      // 3k
+    g(7),                 // 4k
+    mid(g(7), g(8)),      // 6k
+    g(8),                 // 8k
+    g(9)                  // 16k
+  ];
+}
+
+// Extracts 10 anchor bands from 18-band curve
+export function downsample18to10(b18: number[]): number[] {
+  const idx = [0, 2, 4, 6, 8, 10, 12, 14, 16, 17];
+  return idx.map(i => Number(b18[i] ?? 0));
+}
+
 export const DEFAULT_PARAMS: DspParams = {
   masterEnabled: true,
   masterGainDb: 0,

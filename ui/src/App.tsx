@@ -29,10 +29,12 @@ import {
   BUILTIN_EQ_PRESETS,
   BUILTIN_PRESETS,
   DEFAULT_PARAMS,
+  downsample18to10,
   DspParams,
   EQ_LABELS_10,
   EQ_LABELS_18,
   EqPreset,
+  interpolate10to18,
   LiveSourceStatus,
   Preset
 } from './types';
@@ -297,7 +299,7 @@ export default function App() {
         className={`inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border transition-colors ${
           isPinned
             ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-400'
-            : 'border-zinc-800 bg-zinc-950 text-zinc-500 hover:border-zinc-700 hover:text-zinc-200'
+            : 'border-zinc-700/80 bg-zinc-900/90 text-zinc-500 hover:border-zinc-700 hover:text-zinc-200'
         }`}
       >
         <Pin className="h-3.5 w-3.5" />
@@ -391,9 +393,21 @@ export default function App() {
   const applyPresetByName = (name: string) => {
     setSelectedPresetName(name);
     const found = allPresets.find(p => p.name === name);
-    if (found) {
-      pushParams({ ...params, ...found.params }, true);
+    if (!found) return;
+
+    const merged: DspParams = { ...params, ...found.params };
+    // Keep 10-band and 18-band EQ curves synced when loading any full preset
+    if (found.params.eqBands18Db && found.params.eqBands18Db.length === 18) {
+      merged.eqBands18Db = [...found.params.eqBands18Db];
+      if (!found.params.eqBandsDb || found.params.eqBandsDb.length !== 10) {
+        merged.eqBandsDb = downsample18to10(merged.eqBands18Db);
+      }
+    } else if (found.params.eqBandsDb && found.params.eqBandsDb.length === 10) {
+      merged.eqBandsDb = [...found.params.eqBandsDb];
+      merged.eqBands18Db = interpolate10to18(merged.eqBandsDb);
     }
+
+    pushParams(merged, true);
   };
 
   const handleSavePreset = async () => {
@@ -464,14 +478,27 @@ export default function App() {
     setSelectedEqPresetName(name);
     const found = allEqPresets.find(p => p.name === name);
     if (!found) return;
+
+    let next10 = params.eqBandsDb;
+    let next18 = params.eqBands18Db;
+    if (found.eqBands18Db && found.eqBands18Db.length === 18 && found.eqBandsDb && found.eqBandsDb.length === 10) {
+      next10 = [...found.eqBandsDb];
+      next18 = [...found.eqBands18Db];
+    } else if (found.eqBands18Db && found.eqBands18Db.length === 18) {
+      next18 = [...found.eqBands18Db];
+      next10 = downsample18to10(next18);
+    } else if (found.eqBandsDb && found.eqBandsDb.length === 10) {
+      next10 = [...found.eqBandsDb];
+      next18 = interpolate10to18(next10);
+    }
+
+    // Apply ONLY EQ curve while keeping all other active full-preset DSP settings intact
     pushParams(
       {
         ...params,
         eqEnabled: true,
-        eqMode: found.eqMode ?? params.eqMode,
-        eqBandsDb: found.eqBandsDb && found.eqBandsDb.length === 10 ? found.eqBandsDb : params.eqBandsDb,
-        eqBands18Db:
-          found.eqBands18Db && found.eqBands18Db.length === 18 ? found.eqBands18Db : params.eqBands18Db
+        eqBandsDb: next10,
+        eqBands18Db: next18
       },
       true
     );
@@ -618,13 +645,46 @@ export default function App() {
 
   const updateEqBand = (index: number, db: number) => {
     if (params.eqMode === 1) {
-      const nextBands = [...params.eqBands18Db];
-      nextBands[index] = db;
-      pushParams({ ...params, eqBands18Db: nextBands });
+      const next18 = [...params.eqBands18Db];
+      next18[index] = db;
+      pushParams({
+        ...params,
+        eqBands18Db: next18,
+        eqBandsDb: downsample18to10(next18)
+      });
     } else {
-      const nextBands = [...params.eqBandsDb];
-      nextBands[index] = db;
-      pushParams({ ...params, eqBandsDb: nextBands });
+      const next10 = [...params.eqBandsDb];
+      next10[index] = db;
+      pushParams({
+        ...params,
+        eqBandsDb: next10,
+        eqBands18Db: interpolate10to18(next10)
+      });
+    }
+  };
+
+  const switchEqMode = (targetMode: number) => {
+    if (targetMode === params.eqMode) return;
+    if (targetMode === 1) {
+      // 10-Band -> 18-Band: smoothly interpolate 8 intermediate bands
+      pushParams(
+        {
+          ...params,
+          eqMode: 1,
+          eqBands18Db: interpolate10to18(params.eqBandsDb)
+        },
+        true
+      );
+    } else {
+      // 18-Band -> 10-Band: map anchor bands cleanly
+      pushParams(
+        {
+          ...params,
+          eqMode: 0,
+          eqBandsDb: downsample18to10(params.eqBands18Db)
+        },
+        true
+      );
     }
   };
 
@@ -649,7 +709,7 @@ export default function App() {
       <header className="sticky top-0 z-20 border-b border-zinc-800/80 bg-black/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-3.5">
           <div className="flex items-center gap-3.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950 shadow-inner">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700/80 bg-zinc-900/90 shadow-inner">
               <AudioLines className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
@@ -668,7 +728,7 @@ export default function App() {
 
           <div className="flex items-center gap-3">
             {/* Navigation Tabs */}
-            <nav className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
+            <nav className="flex rounded-lg border border-zinc-700/80 bg-zinc-900/90 p-1">
               <button
                 type="button"
                 onClick={() => setActiveTab('dsp')}
@@ -706,7 +766,7 @@ export default function App() {
                   className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 font-mono text-xs font-semibold tracking-wide transition-colors ${
                     isWorking
                       ? 'border-emerald-400/50 bg-emerald-500/20 text-emerald-200'
-                      : 'border-zinc-800 bg-zinc-950 text-zinc-400'
+                      : 'border-zinc-700/80 bg-zinc-900/90 text-zinc-400'
                   }`}
                   title={
                     liveStatus?.mode === 'Exclusive Mode'
@@ -800,14 +860,14 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 font-mono text-xs tabular-nums">
+            <div className="flex flex-wrap items-center gap-2 font-mono text-[13px] font-semibold tabular-nums">
               {liveStatus.isHiRes && (
                 <span className="rounded-lg border border-amber-400/40 bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
                   HI-RES AUDIO
                 </span>
               )}
               {liveStatus.codec && (
-                <span className="rounded-lg border border-zinc-800 bg-black px-2.5 py-1 text-zinc-200">
+                <span className="rounded-lg border border-zinc-700/80 bg-zinc-950 px-2.5 py-1 text-zinc-200">
                   {liveStatus.codec}
                 </span>
               )}
@@ -815,12 +875,12 @@ export default function App() {
                 {(liveStatus.sampleRate / 1000).toFixed(1)} kHz
               </span>
               {liveStatus.bitDepth > 0 && (
-                <span className="rounded-lg border border-zinc-800 bg-black px-2.5 py-1 text-zinc-200">
+                <span className="rounded-lg border border-zinc-700/80 bg-zinc-950 px-2.5 py-1 text-zinc-200">
                   {liveStatus.bitDepth}-bit
                 </span>
               )}
               {liveStatus.bitrateKbps > 0 && (
-                <span className="rounded-lg border border-zinc-800 bg-black px-2.5 py-1 text-zinc-400">
+                <span className="rounded-lg border border-zinc-700/80 bg-zinc-950 px-2.5 py-1 text-zinc-400">
                   {liveStatus.bitrateKbps.toLocaleString()} kbps
                 </span>
               )}
@@ -850,7 +910,7 @@ export default function App() {
                       className={`group cursor-pointer rounded-xl border p-3.5 text-left transition-colors ${
                         isActive
                           ? 'border-emerald-500/50 bg-emerald-950/20'
-                          : 'border-zinc-800/90 bg-[#0c0c0c] hover:border-zinc-600 hover:bg-zinc-900/70'
+                          : 'border-zinc-700/80 bg-[#121216] hover:border-zinc-600 hover:bg-zinc-900/70'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -878,12 +938,12 @@ export default function App() {
             )}
 
             {/* Full Preset Manager Bar (Dropdown + Pin + Save + Batch Load) */}
-            <section className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-3">
+            <section className="flex flex-wrap items-center gap-2.5 rounded-2xl border border-zinc-700/80 bg-[#121216] p-3">
               <select
                 aria-label="Select Preset"
                 value={selectedPresetName}
                 onChange={e => applyPresetByName(e.target.value)}
-                className="min-w-[220px] flex-1 cursor-pointer rounded-xl border border-zinc-800 bg-black px-3.5 py-2.5 font-display text-sm font-medium text-zinc-100 focus:border-emerald-500 focus:outline-none"
+                className="min-w-[220px] flex-1 cursor-pointer rounded-xl border border-zinc-700/80 bg-zinc-950 px-3.5 py-2.5 font-display text-sm font-medium text-zinc-100 focus:border-emerald-500 focus:outline-none"
               >
                 {allPresets.map(p => (
                   <option key={p.name} value={p.name}>
@@ -898,7 +958,7 @@ export default function App() {
                 className={`flex cursor-pointer items-center gap-1.5 rounded-xl border px-4 py-2.5 text-xs font-semibold uppercase tracking-wide transition-colors ${
                   pinnedPresetNames.includes(selectedPresetName)
                     ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
-                    : 'border-zinc-800 bg-zinc-950 text-zinc-200 hover:border-zinc-600'
+                    : 'border-zinc-700/80 bg-zinc-900/90 text-zinc-200 hover:border-zinc-600'
                 }`}
               >
                 <Pin className="h-3.5 w-3.5" />
@@ -908,13 +968,13 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => void handleSavePreset()}
-                className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white"
+                className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-700/80 bg-zinc-900/90 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition-colors hover:border-zinc-600 hover:text-white"
               >
                 <Save className="h-3.5 w-3.5" />
                 Save
               </button>
 
-              <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-700/80 bg-zinc-900/90 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-200 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
                 <FolderOpen className="h-3.5 w-3.5" />
                 Load
                 <input
@@ -933,7 +993,7 @@ export default function App() {
             </section>
 
             {/* Multi-Band Hi-Res Parametric Equalizer (10-Band / 18-Band) */}
-            <section className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5">
+            <section className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <V4AEqualizerIcon className="h-4.5 w-4.5 text-emerald-400" />
@@ -945,25 +1005,25 @@ export default function App() {
                     text="64-bit Biquad parametric equalizer. Switch between 10-Band (1-octave) and 18-Band (1/2-octave) for surgical tonal shaping from 31 Hz sub-bass up to 16 kHz air."
                   />
                   {/* EQ Band Mode Switch */}
-                  <div className="flex rounded-lg border border-zinc-800 bg-black p-0.5">
+                  <div className="flex rounded-lg border border-zinc-700 bg-black p-0.5">
                     <button
                       type="button"
-                      onClick={() => updateField('eqMode', 0, true)}
-                      className={`cursor-pointer rounded-md px-2.5 py-1 font-mono text-[11px] font-medium transition-colors ${
+                      onClick={() => switchEqMode(0)}
+                      className={`cursor-pointer rounded-md px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
                         params.eqMode === 0
                           ? 'bg-zinc-800 text-emerald-300'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                          : 'text-zinc-300 hover:text-white'
                       }`}
                     >
                       10-Band
                     </button>
                     <button
                       type="button"
-                      onClick={() => updateField('eqMode', 1, true)}
-                      className={`cursor-pointer rounded-md px-2.5 py-1 font-mono text-[11px] font-medium transition-colors ${
+                      onClick={() => switchEqMode(1)}
+                      className={`cursor-pointer rounded-md px-2.5 py-1 font-mono text-xs font-semibold transition-colors ${
                         params.eqMode === 1
                           ? 'bg-zinc-800 text-emerald-300'
-                          : 'text-zinc-400 hover:text-zinc-200'
+                          : 'text-zinc-300 hover:text-white'
                       }`}
                     >
                       18-Band
@@ -977,7 +1037,7 @@ export default function App() {
                     aria-label="EQ Preset"
                     value={selectedEqPresetName}
                     onChange={e => applyEqPresetByName(e.target.value)}
-                    className="w-40 cursor-pointer rounded-lg border border-zinc-800 bg-black px-2.5 py-1.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none sm:w-48"
+                    className="w-40 cursor-pointer rounded-lg border border-zinc-700/80 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none sm:w-48"
                   >
                     {allEqPresets.map(ep => (
                       <option key={ep.name} value={ep.name}>
@@ -989,13 +1049,13 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => void handleSaveEqPreset()}
-                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
+                    className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-700/80 bg-zinc-900/90 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
                   >
                     <Save className="h-3 w-3" />
                     Save
                   </button>
 
-                  <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
+                  <label className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-700/80 bg-zinc-900/90 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
                     <FolderOpen className="h-3 w-3" />
                     Load
                     <input
@@ -1015,21 +1075,18 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (params.eqMode === 1) {
-                        pushParams(
-                          { ...params, eqBands18Db: Array(18).fill(0) },
-                          true
-                        );
-                      } else {
-                        pushParams(
-                          { ...params, eqBandsDb: Array(10).fill(0) },
-                          true
-                        );
-                      }
+                      pushParams(
+                        {
+                          ...params,
+                          eqBandsDb: Array(10).fill(0),
+                          eqBands18Db: Array(18).fill(0)
+                        },
+                        true
+                      );
                     }}
-                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white"
+                    className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white"
                   >
-                    <RotateCcw className="h-3 w-3" />
+                    <RotateCcw className="h-3.5 w-3.5" />
                     Reset EQ
                   </button>
 
@@ -1057,7 +1114,15 @@ export default function App() {
                   const val = activeEqValues[idx] ?? 0;
                   return (
                     <div key={`${params.eqMode}-${freq}`} className="flex flex-col items-center gap-2">
-                      <span className="font-mono text-[10px] tabular-nums text-zinc-300">
+                      <span
+                        className={`font-mono text-xs font-semibold tabular-nums ${
+                          val > 0.01
+                            ? 'text-emerald-300'
+                            : val < -0.01
+                              ? 'text-amber-300'
+                              : 'text-zinc-200'
+                        }`}
+                      >
                         {val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1)}
                       </span>
                       <input
@@ -1071,7 +1136,7 @@ export default function App() {
                         onChange={e => updateEqBand(idx, parseFloat(e.target.value))}
                         className="eq-fader"
                       />
-                      <span className="font-mono text-[10px] text-zinc-500">{freq}</span>
+                      <span className="font-mono text-[11px] font-medium text-zinc-300">{freq}</span>
                     </div>
                   );
                 })}
@@ -1083,7 +1148,7 @@ export default function App() {
               {/* ViPER Bass */}
               <div
                 style={{ order: getModuleOrder('bass', 0) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1105,7 +1170,7 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                  <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-950 p-1">
                     {['Natural', 'PureBass+', 'Subwoofer'].map((label, idx) => (
                       <button
                         key={label}
@@ -1123,15 +1188,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Bass Frequency
                         <InfoTip
                           align="left"
                           text="Low-pass cutoff frequency (30–120 Hz). 50–65 Hz targets deep sub-bass; 80–100 Hz adds fuller mid-bass drum impact."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {params.bassFrequencyHz.toFixed(0)} Hz
                       </span>
                     </div>
@@ -1148,15 +1213,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Bass Boost
                         <InfoTip
                           align="left"
                           text="Amount of bass enhancement (0 to +15 dB). Start around +3.5 to +6.0 dB to keep midrange clarity intact."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         +{params.bassGainDb.toFixed(1)} dB
                       </span>
                     </div>
@@ -1177,7 +1242,7 @@ export default function App() {
               {/* ViPER Clarity */}
               <div
                 style={{ order: getModuleOrder('clarity', 1) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1196,7 +1261,7 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                  <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-950 p-1">
                     {['Natural', 'OZone+', 'XHiFi'].map((label, idx) => (
                       <button
                         key={label}
@@ -1214,12 +1279,12 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Clarity Level
                         <InfoTip text="High-frequency clarity intensity (0 to +15 dB). +2.0 to +4.0 dB brings vocals forward without introducing harsh sibilance." />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         +{params.clarityGainDb.toFixed(1)} dB
                       </span>
                     </div>
@@ -1240,7 +1305,7 @@ export default function App() {
               {/* Tube Sound Simulator */}
               <div
                 style={{ order: getModuleOrder('tube', 2) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1268,15 +1333,15 @@ export default function App() {
                 </p>
 
                 <div>
-                  <div className="mb-1.5 flex justify-between text-xs">
-                    <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                  <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                       Warmth / Drive
                       <InfoTip
                         align="right"
                         text="Tube saturation intensity (0–100%). 20–40% adds smooth analog warmth; higher values give a richer vintage tube color."
                       />
                     </span>
-                    <span className="font-mono tabular-nums text-zinc-200">
+                    <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                       {Math.round(params.tubeDrive * 100)}%
                     </span>
                   </div>
@@ -1296,7 +1361,7 @@ export default function App() {
               {/* Differential Surround & Stereo Field */}
               <div
                 style={{ order: getModuleOrder('surround', 3) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1321,15 +1386,15 @@ export default function App() {
 
                 <div className="space-y-4">
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Haas Delay
                         <InfoTip
                           align="left"
                           text="Subtle L/R time offset (0–20 ms). 2–6 ms widens naturally; above 12 ms creates a pronounced surround-hall effect."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {params.surroundDelayMs.toFixed(1)} ms
                       </span>
                     </div>
@@ -1346,15 +1411,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Stereo Soundstage
                         <InfoTip
                           align="left"
                           text="Mid/Side stereo width. 100% is original stereo, below 100% narrows toward Mono, and 115–140% opens up the soundstage."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.stereoWidth * 100)}%
                       </span>
                     </div>
@@ -1375,7 +1440,7 @@ export default function App() {
               {/* Master Output & Pan */}
               <div
                 style={{ order: getModuleOrder('master', 4) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1388,12 +1453,12 @@ export default function App() {
 
                 <div className="space-y-4">
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Output Gain
                         <InfoTip text="Master volume trim (-24 to +12 dB). Lowering by -2 to -4 dB adds clean headroom when stacking heavy EQ or Bass boosts." />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {params.masterGainDb > 0 ? `+${params.masterGainDb.toFixed(1)}` : params.masterGainDb.toFixed(1)} dB
                       </span>
                     </div>
@@ -1410,12 +1475,12 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         L / R Balance
                         <InfoTip text="Shifts stereo balance toward Left or Right. Useful to compensate for slight driver imbalance in headphones or IEMs." />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {params.outputPan === 0
                           ? 'Center'
                           : params.outputPan < 0
@@ -1440,7 +1505,7 @@ export default function App() {
               {/* Brickwall Peak Limiter */}
               <div
                 style={{ order: getModuleOrder('limiter', 5) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1468,15 +1533,15 @@ export default function App() {
                 </p>
 
                 <div>
-                  <div className="mb-1.5 flex justify-between text-xs">
-                    <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                  <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                       Ceiling Threshold
                       <InfoTip
                         align="right"
                         text="Maximum allowed peak level (-6.0 to 0.0 dBFS). -0.3 dBFS is the mastering standard to avoid inter-sample DAC clipping."
                       />
                     </span>
-                    <span className="font-mono tabular-nums text-zinc-200">
+                    <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                       {params.limiterThresholdDb.toFixed(1)} dBFS
                     </span>
                   </div>
@@ -1496,7 +1561,7 @@ export default function App() {
               {/* Dynamic System */}
               <div
                 style={{ order: getModuleOrder('dynamic', 6) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1520,7 +1585,7 @@ export default function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                  <div className="grid grid-cols-2 gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-950 p-1">
                     {['Common', 'Extreme HP', 'High-End HP', 'Studio'].map((label, idx) => (
                       <button
                         key={label}
@@ -1538,15 +1603,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Dynamic Bass
                         <InfoTip
                           align="left"
                           text="Dynamic punch intensity (0–100%). 20–35% adds lively rhythmic impact to EDM/Pop without muddying quiet passages."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.dynamicBass)}%
                       </span>
                     </div>
@@ -1567,7 +1632,7 @@ export default function App() {
               {/* Reverberation (Room Simulator) */}
               <div
                 style={{ order: getModuleOrder('reverb', 7) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1589,12 +1654,12 @@ export default function App() {
 
                 <div className="space-y-3">
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Room Size
                         <InfoTip text="Virtual room dimensions (0–100%). Lower = intimate studio room; Higher = spacious concert hall with longer decay." />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.reverbRoomSize * 100)}%
                       </span>
                     </div>
@@ -1611,12 +1676,12 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Sound Field / Width
                         <InfoTip text="Stereo spread of the reverb tail between Left and Right channels." />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.reverbWidth * 100)}%
                       </span>
                     </div>
@@ -1633,12 +1698,12 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Damping
                         <InfoTip text="High-frequency absorption of virtual walls. Higher damping produces warmer, softer reverb tails." />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.reverbDamping * 100)}%
                       </span>
                     </div>
@@ -1656,12 +1721,12 @@ export default function App() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                      <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                        <span className="inline-flex items-center gap-1 font-medium text-zinc-300">
                           Wet
                           <InfoTip text="Level of reverberated signal blended into the mix (10–25% sounds most natural)." />
                         </span>
-                        <span className="font-mono tabular-nums text-zinc-200">
+                        <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                           {Math.round(params.reverbWet * 100)}%
                         </span>
                       </div>
@@ -1677,12 +1742,12 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                      <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                        <span className="inline-flex items-center gap-1 font-medium text-zinc-300">
                           Dry
                           <InfoTip text="Level of direct unprocessed signal (typically kept between 80–100%)." />
                         </span>
-                        <span className="font-mono tabular-nums text-zinc-200">
+                        <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                           {Math.round(params.reverbDry * 100)}%
                         </span>
                       </div>
@@ -1704,7 +1769,7 @@ export default function App() {
               {/* Compressor / Playback Gain Control */}
               <div
                 style={{ order: getModuleOrder('compressor', 8) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1729,15 +1794,15 @@ export default function App() {
 
                 <div className="space-y-3">
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Threshold
                         <InfoTip
                           align="right"
                           text="Level where compression engages (-40 to 0 dB). Signals louder than this threshold are reduced by Ratio."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {params.compThresholdDb.toFixed(0)} dB
                       </span>
                     </div>
@@ -1754,15 +1819,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Ratio
                         <InfoTip
                           align="right"
                           text="Compression slope (1:1 to 20:1). 2:1–4:1 is smooth and musical; 6:1+ keeps loudness tightly controlled."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {params.compRatio.toFixed(1)} : 1
                       </span>
                     </div>
@@ -1780,12 +1845,12 @@ export default function App() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                      <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                        <span className="inline-flex items-center gap-1 font-medium text-zinc-300">
                           Attack
                           <InfoTip text="How quickly compression clamps down on peaks (1–100 ms). Slower attack preserves crisp drum transients." />
                         </span>
-                        <span className="font-mono tabular-nums text-zinc-200">
+                        <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                           {params.compAttackMs.toFixed(0)} ms
                         </span>
                       </div>
@@ -1801,15 +1866,15 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <div className="mb-1 flex justify-between text-xs">
-                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                      <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                        <span className="inline-flex items-center gap-1 font-medium text-zinc-300">
                           Release
                           <InfoTip
                             align="right"
                             text="How quickly gain recovers once audio drops below threshold (20–500 ms). 100–200 ms feels smooth and natural."
                           />
                         </span>
-                        <span className="font-mono tabular-nums text-zinc-200">
+                        <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                           {params.compReleaseMs.toFixed(0)} ms
                         </span>
                       </div>
@@ -1827,15 +1892,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Makeup Gain
                         <InfoTip
                           align="right"
                           text="Post-compression output boost (0 to +18 dB) to restore overall loudness and bring up subtle details."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         +{params.compMakeupDb.toFixed(1)} dB
                       </span>
                     </div>
@@ -1856,7 +1921,7 @@ export default function App() {
               {/* Cure Tech+ (Binaural Crossfeed) */}
               <div
                 style={{ order: getModuleOrder('cure', 9) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1883,7 +1948,7 @@ export default function App() {
                   Binaural speaker crossfeed with 0.26 ms ITD to reduce headphone ear fatigue during long sessions.
                 </p>
 
-                <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-950 p-1">
                   {['Slight', 'Moderate', 'Extreme'].map((label, idx) => (
                     <button
                       key={label}
@@ -1904,7 +1969,7 @@ export default function App() {
               {/* Convolver (.irs / .wav Impulse Response) */}
               <div
                 style={{ order: getModuleOrder('convolver', 10) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5 md:col-span-2"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5 md:col-span-2"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1934,7 +1999,7 @@ export default function App() {
                       <select
                         value={activeIrs}
                         onChange={e => void handleIrsSelect(e.target.value)}
-                        className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-700/80 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
                       >
                         {irsFiles.length === 0 ? (
                           <option value="">No .irs / .wav loaded yet</option>
@@ -1969,15 +2034,15 @@ export default function App() {
 
                   <div className="space-y-3">
                     <div>
-                      <div className="mb-1.5 flex justify-between text-xs">
-                        <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                      <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                        <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                           Cross-Channel
                           <InfoTip
                             align="right"
                             text="Blends Left and Right convolved channels together (0–100%). 0% keeps full stereo separation; 15–30% creates a cohesive soundstage."
                           />
                         </span>
-                        <span className="font-mono tabular-nums text-zinc-200">
+                        <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                           {Math.round(params.convolverCrossChannel * 100)}%
                         </span>
                       </div>
@@ -1996,15 +2061,15 @@ export default function App() {
                     </div>
 
                     <div>
-                      <div className="mb-1.5 flex justify-between text-xs">
-                        <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                      <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                        <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                           Effect Mix (Wet)
                           <InfoTip
                             align="right"
                             text="Wet/Dry blend of the impulse response (0–100%). 100% applies the full .irs profile; 40–70% blends it subtly with dry audio."
                           />
                         </span>
-                        <span className="font-mono tabular-nums text-zinc-200">
+                        <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                           {Math.round(params.convolverWetMix * 100)}%
                         </span>
                       </div>
@@ -2026,7 +2091,7 @@ export default function App() {
               {/* ViPER-DDC (.vdc Headphone/IEM Correction) */}
               <div
                 style={{ order: getModuleOrder('ddc', 11) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2061,7 +2126,7 @@ export default function App() {
                     <select
                       value={activeDdc}
                       onChange={e => void handleDdcSelect(e.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+                      className="min-w-0 flex-1 rounded-lg border border-zinc-700/80 bg-zinc-950 px-3 py-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
                     >
                       {ddcFiles.length === 0 ? (
                         <option value="">No .vdc profile loaded</option>
@@ -2094,7 +2159,7 @@ export default function App() {
               {/* Spectrum Extension (VSE) */}
               <div
                 style={{ order: getModuleOrder('vse', 12) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2119,12 +2184,12 @@ export default function App() {
                 </p>
 
                 <div>
-                  <div className="mb-1.5 flex justify-between text-xs">
-                    <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                  <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                    <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                       Extension Strength
                       <InfoTip text="High-frequency harmonic restoration intensity (0–100%). 30–60% works best for compressed streaming audio." />
                     </span>
-                    <span className="font-mono tabular-nums text-zinc-200">
+                    <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                       {Math.round(params.vseStrength * 100)}%
                     </span>
                   </div>
@@ -2144,7 +2209,7 @@ export default function App() {
               {/* AnalogX (Class-A) */}
               <div
                 style={{ order: getModuleOrder('analogx', 13) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2171,7 +2236,7 @@ export default function App() {
                   Pure Class-A solid-state harmonic signature for richer body and analog smoothness.
                 </p>
 
-                <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-950 p-1">
                   {['Slight', 'Moderate', 'Extreme'].map((label, idx) => (
                     <button
                       key={label}
@@ -2192,7 +2257,7 @@ export default function App() {
               {/* Field Surround (Colorful Music) */}
               <div
                 style={{ order: getModuleOrder('field', 14) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2217,15 +2282,15 @@ export default function App() {
 
                 <div className="space-y-4">
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Field Strength
                         <InfoTip
                           align="left"
                           text="Stereo field expansion (0–100%). 30–50% widens the stage naturally without hollowing out the mix."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.fieldSurroundStrength * 100)}%
                       </span>
                     </div>
@@ -2242,15 +2307,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Mid Image (Vocal Focus)
                         <InfoTip
                           align="left"
                           text="Center vocal prominence (0–100%). Pushing above 50% brings lead vocals closer and clearer in the center."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.fieldSurroundMidImage * 100)}%
                       </span>
                     </div>
@@ -2271,7 +2336,7 @@ export default function App() {
               {/* Headphone Surround+ (VHS+) */}
               <div
                 style={{ order: getModuleOrder('vhs', 15) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2295,7 +2360,7 @@ export default function App() {
                   5-level binaural early-reflection spatializer scaled cleanly up to 384 kHz.
                 </p>
 
-                <div className="grid grid-cols-5 gap-1.5 rounded-lg border border-zinc-800 bg-black p-1">
+                <div className="grid grid-cols-5 gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-950 p-1">
                   {[1, 2, 3, 4, 5].map(lv => (
                     <button
                       key={lv}
@@ -2316,7 +2381,7 @@ export default function App() {
               {/* Playback Gain Control (AGC) */}
               <div
                 style={{ order: getModuleOrder('agc', 16) }}
-                className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -2341,15 +2406,15 @@ export default function App() {
 
                 <div className="space-y-3">
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Effect Strength
                         <InfoTip
                           align="right"
                           text="How aggressively AGC levels track volume (0–100%). 40–60% preserves natural musical dynamics."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {Math.round(params.agcStrength * 100)}%
                       </span>
                     </div>
@@ -2366,15 +2431,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Max Gain
                         <InfoTip
                           align="right"
                           text="Maximum upward boost allowed on very quiet tracks (0 to +24 dB, equivalent to 1x–16x)."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         +{params.agcMaxGainDb.toFixed(0)} dB
                       </span>
                     </div>
@@ -2391,15 +2456,15 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="mb-1 flex justify-between text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-zinc-300">
                         Output Threshold
                         <InfoTip
                           align="right"
                           text="Target output loudness ceiling (-12.0 to 0.0 dBFS). -1.0 to -2.0 dBFS keeps playback clean and balanced."
                         />
                       </span>
-                      <span className="font-mono tabular-nums text-zinc-200">
+                      <span className="font-mono text-[13px] font-semibold tabular-nums text-white">
                         {params.agcOutputThreshDb.toFixed(1)} dBFS
                       </span>
                     </div>
@@ -2433,7 +2498,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => void loadAll()}
-                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs font-medium text-zinc-200 hover:border-zinc-700"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-700/80 bg-zinc-900/90 px-3 py-2 text-xs font-medium text-zinc-200 hover:border-zinc-700"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Refresh Devices
@@ -2447,11 +2512,11 @@ export default function App() {
                 return (
                   <div
                     key={dev.id}
-                    className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5"
+                    className="rounded-2xl border border-zinc-700/80 bg-[#121216] p-5"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-700/80 bg-zinc-900/90">
                           <Headphones className="h-5 w-5 text-emerald-400" />
                         </div>
                         <div>
@@ -2473,7 +2538,7 @@ export default function App() {
                     </div>
 
                     <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <div className="rounded-xl border border-zinc-800 bg-black p-3">
+                      <div className="rounded-xl border border-zinc-700/80 bg-zinc-950 p-3">
                         <div className="mb-1.5 flex items-center justify-between">
                           <span className="text-[11px] font-semibold text-emerald-300">
                             Install Hi-Res APO (Run as Admin)
@@ -2499,7 +2564,7 @@ export default function App() {
                         </code>
                       </div>
 
-                      <div className="rounded-xl border border-zinc-800 bg-black p-3">
+                      <div className="rounded-xl border border-zinc-700/80 bg-zinc-950 p-3">
                         <div className="mb-1.5 flex items-center justify-between">
                           <span className="text-[11px] font-semibold text-amber-300">
                             1-Click Restore Factory Audio (Run as Admin)
