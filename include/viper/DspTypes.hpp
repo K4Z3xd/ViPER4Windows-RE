@@ -10,7 +10,7 @@ constexpr uint32_t kMinSampleRate = 44100;
 constexpr uint32_t kMaxSampleRate = 384000;
 constexpr size_t kEqBandCount = 10;
 constexpr uint32_t kParamsMagic = 0x56504852; // 'VPHR'
-constexpr uint32_t kParamsVersion = 2;
+constexpr uint32_t kParamsVersion = 3;
 
 // Standard 10-band ISO center frequencies (Hz)
 constexpr std::array<double, kEqBandCount> kEqFrequencies = {
@@ -99,11 +99,17 @@ struct DspParams {
     // Cure Tech+ (Binaural Crossfeed / Ear Fatigue Protection)
     uint32_t cureEnabled = 0;
     uint32_t cureLevel = 0;        // 0: Slight, 1: Moderate, 2: Extreme
+
+    // Convolver (.irs / .wav Impulse Response with auto Hi-Res resampling)
+    uint32_t convolverEnabled = 0;
+    float convolverCrossChannel = 0.0f; // 0.0 to 1.0
+    float convolverWetMix = 1.0f;       // 0.0 to 1.0
+    uint32_t convolverRevision = 0;     // Incremented whenever a new .irs file is selected
 };
 
 static_assert(std::is_trivially_copyable_v<DspParams>,
               "DspParams must be trivially copyable for Shared Memory IPC");
-static_assert(sizeof(DspParams) == 192,
-              "DspParams v2 binary layout must be exactly 192 bytes (SharedConfigBlock = 196 bytes)");
+static_assert(sizeof(DspParams) == 208,
+              "DspParams v3 binary layout must be exactly 208 bytes (SharedConfigBlock = 212 bytes)");
 
 } // namespace viper

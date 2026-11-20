@@ -11,9 +11,27 @@ const DIST_DIR = path.resolve(__dirname, 'dist');
 const LIVE_PARAMS_PATH = 'C:\\ProgramData\\ViPERHiRes\\live_params.bin';
 const FOOBAR_STATUS_PATH = 'C:\\ProgramData\\ViPERHiRes\\foobar_status.json';
 const APO_DIAG_PATH = 'C:\\ProgramData\\ViPERHiRes\\apo_diag.txt';
+const IRS_DIR = 'C:\\ProgramData\\ViPERHiRes\\irs';
+const ACTIVE_IR_PATH = 'C:\\ProgramData\\ViPERHiRes\\active_ir.txt';
 const MAGIC_VPHR = 0x56504852;
-const PARAMS_VERSION = 2;
-const BLOCK_SIZE = 196; // 4-byte seqlock + 192-byte DspParams v2
+const PARAMS_VERSION = 3;
+const BLOCK_SIZE = 212; // 4-byte seqlock + 208-byte DspParams v3
+
+function listIrsFiles() {
+  fs.mkdirSync(IRS_DIR, { recursive: true });
+  const files = fs.readdirSync(IRS_DIR)
+    .filter(f => /\.(irs|wav)$/i.test(f))
+    .sort((a, b) => a.localeCompare(b));
+  let active = '';
+  try {
+    if (fs.existsSync(ACTIVE_IR_PATH)) {
+      active = path.basename(fs.readFileSync(ACTIVE_IR_PATH, 'utf8').trim());
+    }
+  } catch {
+    // ignore
+  }
+  return { files, active };
+}
 
 function readParamsDirect() {
   const buf = fs.readFileSync(LIVE_PARAMS_PATH);
@@ -62,7 +80,12 @@ function readParamsDirect() {
     compReleaseMs: Math.round(buf.readFloatLE(180) * 100) / 100,
     compMakeupDb: Math.round(buf.readFloatLE(184) * 100) / 100,
     cureEnabled: buf.readUInt32LE(188) !== 0,
-    cureLevel: buf.readUInt32LE(192)
+    cureLevel: buf.readUInt32LE(192),
+    // V3 Convolver
+    convolverEnabled: buf.readUInt32LE(196) !== 0,
+    convolverCrossChannel: Math.round(buf.readFloatLE(200) * 100) / 100,
+    convolverWetMix: Math.round(buf.readFloatLE(204) * 100) / 100,
+    convolverRevision: buf.readUInt32LE(208)
   };
 }
 
@@ -131,6 +154,11 @@ function writeParamsDirect(p) {
     payload.writeFloatLE(Number(p.compMakeupDb ?? 3), 180);
     payload.writeUInt32LE(p.cureEnabled ? 1 : 0, 184);
     payload.writeUInt32LE(Number(p.cureLevel ?? 0) >>> 0, 188);
+    // V3 Convolver (file offsets 196..211 -> payload offsets 192..207)
+    payload.writeUInt32LE(p.convolverEnabled ? 1 : 0, 192);
+    payload.writeFloatLE(Number(p.convolverCrossChannel ?? 0), 196);
+    payload.writeFloatLE(Number(p.convolverWetMix ?? 1), 200);
+    payload.writeUInt32LE(Number(p.convolverRevision ?? 0) >>> 0, 204);
 
     fs.writeSync(fd, payload, 0, payload.length, 4);
 
@@ -255,12 +283,12 @@ function sendJson(res, status, data) {
   res.end(typeof data === 'string' ? data : JSON.stringify(data));
 }
 
-function readBody(req) {
+function readBody(req, maxBytes = 65536) {
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
       body += chunk;
-      if (body.length > 65536) reject(new Error('Body too large'));
+      if (body.length > maxBytes) reject(new Error('Body too large'));
     });
     req.on('end', () => resolve(body));
     req.on('error', reject);
@@ -302,6 +330,54 @@ const server = http.createServer(async (req, res) => {
         // ignore
       }
       sendJson(res, 200, readLiveStatus(defaultDev, sessions));
+      return;
+    }
+
+    if (url.pathname === '/api/irs' && req.method === 'GET') {
+      sendJson(res, 200, listIrsFiles());
+      return;
+    }
+
+    if (url.pathname === '/api/irs/upload' && req.method === 'POST') {
+      // Allow up to 16 MB base64-encoded .irs / .wav file
+      const raw = await readBody(req, 24 * 1024 * 1024);
+      const { filename, base64 } = JSON.parse(raw);
+      const safeName = path.basename(String(filename || 'custom.irs')).replace(/[^a-zA-Z0-9._\- ]/g, '_');
+      if (!/\.(irs|wav)$/i.test(safeName)) {
+        sendJson(res, 400, { error: 'Only .irs or .wav files are supported' });
+        return;
+      }
+      fs.mkdirSync(IRS_DIR, { recursive: true });
+      const destPath = path.join(IRS_DIR, safeName);
+      fs.writeFileSync(destPath, Buffer.from(String(base64 || ''), 'base64'));
+      fs.writeFileSync(ACTIVE_IR_PATH, destPath, 'utf8');
+
+      const cur = readParamsDirect();
+      const updated = writeParamsDirect({
+        ...cur,
+        convolverEnabled: true,
+        convolverRevision: (cur.convolverRevision || 0) + 1
+      });
+      sendJson(res, 200, { ...listIrsFiles(), params: updated });
+      return;
+    }
+
+    if (url.pathname === '/api/irs/select' && req.method === 'POST') {
+      const raw = await readBody(req);
+      const { filename } = JSON.parse(raw);
+      const safeName = path.basename(String(filename || ''));
+      const fullPath = path.join(IRS_DIR, safeName);
+      if (!safeName || !fs.existsSync(fullPath)) {
+        sendJson(res, 404, { error: 'IRS file not found' });
+        return;
+      }
+      fs.writeFileSync(ACTIVE_IR_PATH, fullPath, 'utf8');
+      const cur = readParamsDirect();
+      const updated = writeParamsDirect({
+        ...cur,
+        convolverRevision: (cur.convolverRevision || 0) + 1
+      });
+      sendJson(res, 200, { ...listIrsFiles(), params: updated });
       return;
     }
 

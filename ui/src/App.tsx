@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Sliders,
   Sparkles,
+  Upload,
   Volume2,
   Waves,
   Zap
@@ -150,6 +151,8 @@ export default function App() {
   const [params, setParams] = useState<DspParams>(DEFAULT_PARAMS);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveSourceStatus | null>(null);
+  const [irsFiles, setIrsFiles] = useState<string[]>([]);
+  const [activeIrs, setActiveIrs] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'dsp' | 'devices'>('dsp');
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('syncing');
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
@@ -169,10 +172,11 @@ export default function App() {
 
   const loadAll = async () => {
     try {
-      const [devRes, paramRes, statusRes] = await Promise.all([
+      const [devRes, paramRes, statusRes, irsRes] = await Promise.all([
         fetch('/api/devices'),
         fetch('/api/params'),
-        fetch('/api/status')
+        fetch('/api/status'),
+        fetch('/api/irs')
       ]);
       if (devRes.ok) {
         setDevices(await devRes.json());
@@ -184,9 +188,48 @@ export default function App() {
       if (statusRes.ok) {
         setLiveStatus(await statusRes.json());
       }
+      if (irsRes.ok) {
+        const irData = await irsRes.json();
+        setIrsFiles(irData.files || []);
+        setActiveIrs(irData.active || '');
+      }
       setSyncStatus('connected');
     } catch {
       setSyncStatus('offline');
+    }
+  };
+
+  const handleIrsUpload = async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const dataUrl = String(reader.result || '');
+      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+      const res = await fetch('/api/irs/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, base64 })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIrsFiles(data.files || []);
+        setActiveIrs(data.active || '');
+        if (data.params) setParams({ ...DEFAULT_PARAMS, ...data.params });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleIrsSelect = async (filename: string) => {
+    if (!filename) return;
+    const res = await fetch('/api/irs/select', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setActiveIrs(data.active || filename);
+      if (data.params) setParams({ ...DEFAULT_PARAMS, ...data.params });
     }
   };
 
@@ -1113,6 +1156,104 @@ export default function App() {
                       {label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Convolver (.irs / .wav Impulse Response) */}
+              <div className="rounded-2xl border border-zinc-800/90 bg-[#0c0c0c] p-5 md:col-span-2">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AudioLines className="h-4 w-4 text-emerald-400" />
+                    <h3 className="font-display text-sm font-semibold text-white">
+                      Convolver (.irs / .wav)
+                    </h3>
+                  </div>
+                  <Toggle
+                    checked={params.convolverEnabled}
+                    onChange={v => updateField('convolverEnabled', v, true)}
+                    label="Toggle Convolver"
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-3">
+                    <label className="block text-xs text-zinc-400">Impulse Response File</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={activeIrs}
+                        onChange={e => void handleIrsSelect(e.target.value)}
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs text-zinc-200 focus:border-emerald-500 focus:outline-none"
+                      >
+                        {irsFiles.length === 0 ? (
+                          <option value="">No .irs / .wav loaded yet</option>
+                        ) : (
+                          irsFiles.map(f => (
+                            <option key={f} value={f}>
+                              {f}
+                            </option>
+                          ))
+                        )}
+                      </select>
+
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-100 transition-colors hover:border-emerald-500/60 hover:text-emerald-300">
+                        <Upload className="h-3.5 w-3.5" />
+                        Load .irs
+                        <input
+                          type="file"
+                          accept=".irs,.wav"
+                          className="hidden"
+                          onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) void handleIrsUpload(f);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-zinc-500">
+                      Automatically resamples 44.1/48 kHz .irs files to match your DAC (up to 384 kHz).
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <div className="mb-1.5 flex justify-between text-xs">
+                        <span className="text-zinc-400">Cross-Channel</span>
+                        <span className="font-mono tabular-nums text-zinc-200">
+                          {Math.round(params.convolverCrossChannel * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.02}
+                        value={params.convolverCrossChannel}
+                        onChange={e =>
+                          updateField('convolverCrossChannel', parseFloat(e.target.value))
+                        }
+                        className="studio-slider w-full"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="mb-1.5 flex justify-between text-xs">
+                        <span className="text-zinc-400">Effect Mix (Wet)</span>
+                        <span className="font-mono tabular-nums text-zinc-200">
+                          {Math.round(params.convolverWetMix * 100)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.02}
+                        value={params.convolverWetMix}
+                        onChange={e => updateField('convolverWetMix', parseFloat(e.target.value))}
+                        className="studio-slider w-full"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>

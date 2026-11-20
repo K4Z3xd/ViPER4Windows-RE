@@ -64,6 +64,11 @@ export interface DspParams {
   compMakeupDb: number;
   cureEnabled: boolean;
   cureLevel: number; // 0: Slight, 1: Moderate, 2: Extreme
+  // V3 Convolver
+  convolverEnabled: boolean;
+  convolverCrossChannel: number;
+  convolverWetMix: number;
+  convolverRevision: number;
 }
 
 export const EQ_LABELS = ['31', '62', '125', '250', '500', '1k', '2k', '4k', '8k', '16k'];
@@ -104,7 +109,11 @@ export const DEFAULT_PARAMS: DspParams = {
   compReleaseMs: 120,
   compMakeupDb: 3,
   cureEnabled: false,
-  cureLevel: 0
+  cureLevel: 0,
+  convolverEnabled: false,
+  convolverCrossChannel: 0,
+  convolverWetMix: 1,
+  convolverRevision: 0
 };
 
 export interface Preset {

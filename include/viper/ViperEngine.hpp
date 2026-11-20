@@ -1,6 +1,7 @@
 #pragma once
 
 #include "viper/Compressor.hpp"
+#include "viper/Convolver.hpp"
 #include "viper/CureTech.hpp"
 #include "viper/DifferentialSurround.hpp"
 #include "viper/DspTypes.hpp"
@@ -43,6 +44,7 @@ private:
     CureTech cure_{};
     DifferentialSurround surround_{};
     Reverb reverb_{};
+    Convolver convolver_{};
     Limiter limiter_{};
 };
 

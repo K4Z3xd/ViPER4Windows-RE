@@ -17,6 +17,7 @@ add_library(viper_dsp STATIC
     src/dsp/CureTech.cpp
     src/dsp/DifferentialSurround.cpp
     src/dsp/Reverb.cpp
+    src/dsp/Convolver.cpp
     src/dsp/Limiter.cpp
     src/dsp/ViperEngine.cpp
 )
@@ -80,25 +81,12 @@ if(MSVC)
     endforeach()
 endif()
 
-# 6. Native foobar2000 v2 x64 DSP Component (Auto Sample-Rate 44.1kHz-384kHz, Zero Resample!)
+# 6. Native foobar2000 v2 x64 Bit-Transparent Status Reporter Component
 # Uses /MD (MultiThreadedDLL) to match official foobar2000 v2 x64 SDK runtime.
 set(FB2K_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/foobar2000_sdk")
 if(MSVC AND EXISTS "${FB2K_SDK_DIR}/foobar2000/SDK/x64/Release/foobar2000_SDK.lib")
     add_library(foo_dsp_viperhires SHARED
         foobar/foo_dsp_viperhires.cpp
-        src/dsp/BiquadFilter.cpp
-        src/dsp/ParametricEq.cpp
-        src/dsp/ViperBass.cpp
-        src/dsp/DynamicSystem.cpp
-        src/dsp/ViperClarity.cpp
-        src/dsp/TubeSimulator.cpp
-        src/dsp/Compressor.cpp
-        src/dsp/CureTech.cpp
-        src/dsp/DifferentialSurround.cpp
-        src/dsp/Reverb.cpp
-        src/dsp/Limiter.cpp
-        src/dsp/ViperEngine.cpp
-        src/ipc/SharedConfig.cpp
     )
     target_include_directories(foo_dsp_viperhires PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include

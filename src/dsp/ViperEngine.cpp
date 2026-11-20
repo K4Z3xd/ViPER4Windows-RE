@@ -17,6 +17,7 @@ void ViperEngine::prepare(uint32_t sampleRate) {
     cure_.prepare(sr);
     surround_.prepare(sr);
     reverb_.prepare(sr);
+    convolver_.prepare(sr);
     limiter_.prepare(sr);
 
     applyParamsToModules();
@@ -32,6 +33,7 @@ void ViperEngine::reset() noexcept {
     cure_.reset();
     surround_.reset();
     reverb_.reset();
+    convolver_.reset();
     limiter_.reset();
 }
 
@@ -52,6 +54,8 @@ void ViperEngine::applyParamsToModules() noexcept {
     surround_.configure(params_.surroundDelayMs, params_.stereoWidth);
     reverb_.configure(params_.reverbRoomSize, params_.reverbWidth,
                       params_.reverbDamping, params_.reverbWet, params_.reverbDry);
+    convolver_.configure(params_.convolverCrossChannel, params_.convolverWetMix,
+                         params_.convolverRevision);
     limiter_.setThresholdDb(params_.limiterThresholdDb);
 }
 
@@ -94,6 +98,10 @@ void ViperEngine::processInterleavedStereo(std::span<float> interleavedSamples) 
 
     if (params_.reverbEnabled) {
         reverb_.processInterleavedStereo(interleavedSamples);
+    }
+
+    if (params_.convolverEnabled) {
+        convolver_.processInterleavedStereo(interleavedSamples);
     }
 
     // Master Gain & Output Balance (Pan)
