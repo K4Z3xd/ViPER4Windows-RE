@@ -28,6 +28,7 @@ import {
   EQ_LABELS,
   LiveSourceStatus
 } from './types';
+import { InfoTip } from './components/InfoTip';
 
 function Toggle({
   checked,
@@ -490,6 +491,10 @@ export default function App() {
                   <h2 className="font-display text-base font-semibold text-white">
                     10-Band Hi-Res Equalizer
                   </h2>
+                  <InfoTip
+                    align="left"
+                    text="Bộ cân bằng 10 dải tần (31Hz–16kHz) dùng bộ lọc Biquad 64-bit. Kéo dải 31–125Hz để chỉnh trầm (Bass), 250Hz–2kHz chỉnh giọng hát (Mid), 4k–16kHz chỉnh độ sáng và chi tiết (Treble)."
+                  />
                   <span className="rounded bg-zinc-900 px-2 py-0.5 font-mono text-[11px] text-zinc-400">
                     64-bit Biquad
                   </span>
@@ -548,6 +553,10 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <Waves className="h-4 w-4 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">ViPER Bass</h3>
+                    <InfoTip
+                      align="left"
+                      text="Tăng cường dải siêu trầm sâu và có lực. Natural: tăng trầm tự nhiên; PureBass+: trầm gọn, chắc có hài bậc 2; Subwoofer: tái tạo lực rung sâu như loa sub."
+                    />
                   </div>
                   <Toggle
                     checked={params.bassEnabled}
@@ -576,7 +585,13 @@ export default function App() {
 
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">Bass Frequency</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Bass Frequency
+                        <InfoTip
+                          align="left"
+                          text="Tần số cắt của dải trầm (30–120Hz). Mức 50–65Hz tập trung vào sub-bass sâu, mức 80–100Hz tăng lực trống mid-bass dày hơn."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.bassFrequencyHz.toFixed(0)} Hz
                       </span>
@@ -594,7 +609,13 @@ export default function App() {
 
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">Bass Boost</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Bass Boost
+                        <InfoTip
+                          align="left"
+                          text="Độ lớn tăng cường âm trầm (0 đến +15 dB). Nên bắt đầu ở mức +3.5 đến +6 dB để giữ độ sạch cho dải trung."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         +{params.bassGainDb.toFixed(1)} dB
                       </span>
@@ -618,6 +639,7 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-emerald-400" />
                     <h3 className="font-display text-sm font-semibold text-white">ViPER Clarity</h3>
+                    <InfoTip text="Tăng độ trong trẻo và tách bạch chi tiết nhạc cụ/giọng hát. Natural: sáng mượt tự nhiên; OZone+: thêm độ thoáng (air) dải cao; XHiFi: tái tạo chi tiết sắc nét cho tai nghe Hi-Res." />
                   </div>
                   <Toggle
                     checked={params.clarityEnabled}
@@ -646,7 +668,10 @@ export default function App() {
 
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">Clarity Level</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Clarity Level
+                        <InfoTip text="Mức độ nâng chi tiết dải cao (0 đến +15 dB). Mức +2 đến +4 dB giúp giọng hát và nhạc cụ nổi khối mà không bị chói gắt." />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         +{params.clarityGainDb.toFixed(1)} dB
                       </span>
@@ -672,6 +697,10 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Tube Simulator (6N1J)
                     </h3>
+                    <InfoTip
+                      align="right"
+                      text="Giả lập chất âm ấm áp của ampli đèn điện tử 6N1J bằng cách tạo hài âm bậc chẵn nhẹ nhàng, làm mềm các dải cao gắt và dày giọng hát."
+                    />
                   </div>
                   <Toggle
                     checked={params.tubeEnabled}
@@ -686,7 +715,13 @@ export default function App() {
 
                 <div>
                   <div className="mb-1.5 flex justify-between text-xs">
-                    <span className="text-zinc-400">Warmth / Drive</span>
+                    <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                      Warmth / Drive
+                      <InfoTip
+                        align="right"
+                        text="Cường độ giả lập đèn (0–100%). Mức 20–40% cho độ ấm analog mượt mà; cao hơn sẽ nghe rõ độ bão hòa cổ điển (vintage)."
+                      />
+                    </span>
                     <span className="font-mono tabular-nums text-zinc-200">
                       {Math.round(params.tubeDrive * 100)}%
                     </span>
@@ -711,6 +746,10 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Differential Surround
                     </h3>
+                    <InfoTip
+                      align="left"
+                      text="Mở rộng không gian âm trường (soundstage) bằng hiệu ứng trễ Haas và tách kênh Mid/Side, giúp âm thanh rộng mở ra ngoài đầu khi đeo tai nghe."
+                    />
                   </div>
                   <Toggle
                     checked={params.surroundEnabled}
@@ -722,7 +761,13 @@ export default function App() {
                 <div className="space-y-4">
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">Haas Delay</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Haas Delay
+                        <InfoTip
+                          align="left"
+                          text="Độ trễ nhẹ giữa 2 kênh trái/phải (0–20 ms). Mức 2–6 ms tạo cảm giác không gian rộng tự nhiên; trên 12 ms tạo hiệu ứng vòm rõ rệt."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.surroundDelayMs.toFixed(1)} ms
                       </span>
@@ -740,7 +785,13 @@ export default function App() {
 
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">Stereo Soundstage</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Stereo Soundstage
+                        <InfoTip
+                          align="left"
+                          text="Độ rộng âm trường Mid/Side. 100% là nguyên bản, dưới 100% thu hẹp về Mono, trên 100% (115–140%) đẩy nhạc cụ sang hai bên rộng hơn."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.stereoWidth * 100)}%
                       </span>
@@ -763,12 +814,16 @@ export default function App() {
                 <div className="mb-4 flex items-center gap-2">
                   <Volume2 className="h-4 w-4 text-zinc-200" />
                   <h3 className="font-display text-sm font-semibold text-white">Master Output</h3>
+                  <InfoTip text="Điều chỉnh tổng âm lượng đầu ra (Pre-amp) và độ cân bằng giữa 2 bên tai nghe Trái / Phải." />
                 </div>
 
                 <div className="space-y-4">
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">Output Gain</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Output Gain
+                        <InfoTip text="Tăng hoặc giảm tổng độ lớn tín hiệu (-24 đến +12 dB). Nếu tăng EQ hoặc Bass nhiều, có thể giảm nhẹ -2 đến -4 dB để tạo khoảng thở (headroom)." />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.masterGainDb > 0 ? `+${params.masterGainDb.toFixed(1)}` : params.masterGainDb.toFixed(1)} dB
                       </span>
@@ -786,7 +841,10 @@ export default function App() {
 
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">L / R Balance</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        L / R Balance
+                        <InfoTip text="Cân bằng âm lượng giữa kênh Trái (L) và Phải (R). Hữu ích nếu một bên tai nghe bị lệch âm lượng nhẹ." />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.outputPan === 0
                           ? 'Center'
@@ -816,6 +874,10 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Peak Limiter
                     </h3>
+                    <InfoTip
+                      align="right"
+                      text="Bộ giới hạn đỉnh âm lượng (nên luôn bật). Tự động ghìm các đỉnh tín hiệu vượt ngưỡng 0 dBFS để chống rè và vỡ tiếng kỹ thuật số."
+                    />
                   </div>
                   <Toggle
                     checked={params.limiterEnabled}
@@ -830,7 +892,13 @@ export default function App() {
 
                 <div>
                   <div className="mb-1.5 flex justify-between text-xs">
-                    <span className="text-zinc-400">Ceiling Threshold</span>
+                    <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                      Ceiling Threshold
+                      <InfoTip
+                        align="right"
+                        text="Ngưỡng trần tối đa cho phép (-6.0 đến 0.0 dBFS). Mức -0.3 dBFS là chuẩn phòng thu giúp chống méo tiếng trên DAC."
+                      />
+                    </span>
                     <span className="font-mono tabular-nums text-zinc-200">
                       {params.limiterThresholdDb.toFixed(1)} dBFS
                     </span>
@@ -855,6 +923,10 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Dynamic System
                     </h3>
+                    <InfoTip
+                      align="left"
+                      text="Tự động đo nhịp đánh (transient) của bản nhạc để tăng lực nảy của trống và độ sống động theo thời gian thực, chọn đúng loại tai nghe/loa để đạt độ cắt tần hợp lý nhất."
+                    />
                   </div>
                   <Toggle
                     checked={params.dynamicEnabled}
@@ -883,7 +955,13 @@ export default function App() {
 
                   <div>
                     <div className="mb-1.5 flex justify-between text-xs">
-                      <span className="text-zinc-400">Dynamic Bass</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Dynamic Bass
+                        <InfoTip
+                          align="left"
+                          text="Cường độ lực đánh động (0–100%). Mức 20–35% giúp nhạc EDM/Pop có độ nảy và lực hơn mà không bị ù nền."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.dynamicBass)}%
                       </span>
@@ -909,6 +987,7 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Reverberation
                     </h3>
+                    <InfoTip text="Giả lập tiếng vang phòng nghe / khán phòng giúp âm thanh có chiều sâu không gian như đang nghe dàn loa thật." />
                   </div>
                   <Toggle
                     checked={params.reverbEnabled}
@@ -920,7 +999,10 @@ export default function App() {
                 <div className="space-y-3">
                   <div>
                     <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-zinc-400">Room Size</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Room Size
+                        <InfoTip text="Kích thước phòng giả lập (0–100%). Thấp = phòng thu nhỏ, Cao = khán phòng rộng với đuôi vang dài hơn." />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.reverbRoomSize * 100)}%
                       </span>
@@ -938,7 +1020,10 @@ export default function App() {
 
                   <div>
                     <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-zinc-400">Sound Field / Width</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Sound Field / Width
+                        <InfoTip text="Độ lan tỏa không gian stereo của tiếng vang giữa hai kênh trái và phải." />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.reverbWidth * 100)}%
                       </span>
@@ -956,7 +1041,10 @@ export default function App() {
 
                   <div>
                     <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-zinc-400">Damping</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Damping
+                        <InfoTip text="Độ tiêu âm dải cao của tường phòng. Tăng Damping làm tiếng vang ấm và mềm hơn, giảm tiếng vang kim loại chói." />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {Math.round(params.reverbDamping * 100)}%
                       </span>
@@ -975,7 +1063,10 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <div className="mb-1 flex justify-between text-xs">
-                        <span className="text-zinc-400">Wet</span>
+                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                          Wet
+                          <InfoTip text="Tỷ lệ âm lượng của tiếng vang phòng trộn vào nhạc (nên để 10–25% cho tự nhiên)." />
+                        </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {Math.round(params.reverbWet * 100)}%
                         </span>
@@ -992,7 +1083,10 @@ export default function App() {
                     </div>
                     <div>
                       <div className="mb-1 flex justify-between text-xs">
-                        <span className="text-zinc-400">Dry</span>
+                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                          Dry
+                          <InfoTip text="Tỷ lệ âm thanh gốc chưa qua tiếng vang (thường giữ ở mức 80–100%)." />
+                        </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {Math.round(params.reverbDry * 100)}%
                         </span>
@@ -1019,6 +1113,10 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Compressor / AGC
                     </h3>
+                    <InfoTip
+                      align="right"
+                      text="Nén dải động thông minh (Soft-Knee): ghìm bớt các đoạn quá to và nâng các đoạn nhỏ lên đều nhau — cực kỳ hữu ích khi xem phim, podcast hoặc nghe nhạc ban đêm."
+                    />
                   </div>
                   <Toggle
                     checked={params.compEnabled}
@@ -1030,7 +1128,13 @@ export default function App() {
                 <div className="space-y-3">
                   <div>
                     <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-zinc-400">Threshold</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Threshold
+                        <InfoTip
+                          align="right"
+                          text="Ngưỡng âm lượng bắt đầu nén (-40 đến 0 dB). Âm thanh vượt ngưỡng này sẽ bị nén xuống theo tỷ lệ Ratio."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.compThresholdDb.toFixed(0)} dB
                       </span>
@@ -1048,7 +1152,13 @@ export default function App() {
 
                   <div>
                     <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-zinc-400">Ratio</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Ratio
+                        <InfoTip
+                          align="right"
+                          text="Tỷ lệ nén (1:1 đến 20:1). Mức 2:1–4:1 nén êm tự nhiên cho nhạc; mức 6:1 trở lên nén mạnh để giữ âm lượng đều tăm tắp."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         {params.compRatio.toFixed(1)} : 1
                       </span>
@@ -1067,7 +1177,10 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <div className="mb-1 flex justify-between text-xs">
-                        <span className="text-zinc-400">Attack</span>
+                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                          Attack
+                          <InfoTip text="Tốc độ bắt đầu nén khi có tiếng lớn đột ngột (1–100 ms). Thấp = phản ứng nhanh; Cao = giữ lại độ nảy ban đầu của tiếng trống." />
+                        </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {params.compAttackMs.toFixed(0)} ms
                         </span>
@@ -1084,7 +1197,13 @@ export default function App() {
                     </div>
                     <div>
                       <div className="mb-1 flex justify-between text-xs">
-                        <span className="text-zinc-400">Release</span>
+                        <span className="inline-flex items-center gap-1 text-zinc-400">
+                          Release
+                          <InfoTip
+                            align="right"
+                            text="Thời gian nhả nén sau khi âm thanh giảm dưới ngưỡng (20–500 ms). Mức 100–200 ms giúp âm lượng hồi lại mượt mà."
+                          />
+                        </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {params.compReleaseMs.toFixed(0)} ms
                         </span>
@@ -1103,7 +1222,13 @@ export default function App() {
 
                   <div>
                     <div className="mb-1 flex justify-between text-xs">
-                      <span className="text-zinc-400">Makeup Gain</span>
+                      <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                        Makeup Gain
+                        <InfoTip
+                          align="right"
+                          text="Bù lại âm lượng sau khi nén (0 đến +18 dB) giúp tổng thể bản nhạc nghe đầy đặn và rõ chi tiết nhỏ hơn."
+                        />
+                      </span>
                       <span className="font-mono tabular-nums text-zinc-200">
                         +{params.compMakeupDb.toFixed(1)} dB
                       </span>
@@ -1129,6 +1254,10 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Cure Tech+ (Crossfeed)
                     </h3>
+                    <InfoTip
+                      align="left"
+                      text="Công nghệ chống mệt tai khi đeo tai nghe lâu: trộn nhẹ một phần âm trầm đã trễ 0.26 ms từ tai này sang tai kia giống cách tai người nghe loa ngoài tự nhiên."
+                    />
                   </div>
                   <Toggle
                     checked={params.cureEnabled}
@@ -1167,6 +1296,7 @@ export default function App() {
                     <h3 className="font-display text-sm font-semibold text-white">
                       Convolver (.irs / .wav)
                     </h3>
+                    <InfoTip text="Tích chập (Convolution) mô phỏng chính xác đặc tính âm thanh của các bộ EQ, DAC, ampli đèn hoặc phòng thu nổi tiếng thông qua file xung mẫu .irs / .wav của cộng đồng ViPER." />
                   </div>
                   <Toggle
                     checked={params.convolverEnabled}
@@ -1177,7 +1307,10 @@ export default function App() {
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-3">
-                    <label className="block text-xs text-zinc-400">Impulse Response File</label>
+                    <label className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+                      Impulse Response File
+                      <InfoTip text="Chọn file .irs hoặc .wav từ máy. Hệ thống tự động resample lên đúng tần số DAC (96/192/384 kHz) để không bị lệch màu âm." />
+                    </label>
                     <div className="flex gap-2">
                       <select
                         value={activeIrs}
@@ -1218,7 +1351,13 @@ export default function App() {
                   <div className="space-y-3">
                     <div>
                       <div className="mb-1.5 flex justify-between text-xs">
-                        <span className="text-zinc-400">Cross-Channel</span>
+                        <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                          Cross-Channel
+                          <InfoTip
+                            align="right"
+                            text="Độ hòa trộn chéo giữa 2 kênh Trái/Phải sau khi qua Convolver (0–100%). 0% giữ nguyên độ tách kênh gốc; 15–30% giúp âm hình tự nhiên hơn."
+                          />
+                        </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {Math.round(params.convolverCrossChannel * 100)}%
                         </span>
@@ -1238,7 +1377,13 @@ export default function App() {
 
                     <div>
                       <div className="mb-1.5 flex justify-between text-xs">
-                        <span className="text-zinc-400">Effect Mix (Wet)</span>
+                        <span className="inline-flex items-center gap-1.5 text-zinc-400">
+                          Effect Mix (Wet)
+                          <InfoTip
+                            align="right"
+                            text="Độ đậm nhạt của hiệu ứng file .irs (0–100%). 100% áp dụng toàn bộ file xung; giảm xuống 40–70% nếu muốn pha nhẹ với chất âm gốc."
+                          />
+                        </span>
                         <span className="font-mono tabular-nums text-zinc-200">
                           {Math.round(params.convolverWetMix * 100)}%
                         </span>
