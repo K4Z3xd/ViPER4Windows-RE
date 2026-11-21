@@ -65,33 +65,33 @@ Write-Host "[1/5] Stopping Windows Audio service briefly to replace DLL..." -For
 Stop-Service -Name "Audiosrv" -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 400
 
-Copy-Item -Path $DllSource -Destination $InstalledDll -Force
-icacls $InstallDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX" /T | Out-Null
+try {
+    Copy-Item -Path $DllSource -Destination $InstalledDll -Force
+    icacls $InstallDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX" /T | Out-Null
 
-# 3. Register COM + Windows APO
-Write-Host "[2/5] Registering ViPERHiResAPO.dll..." -ForegroundColor Cyan
-$regProc = Start-Process -FilePath "regsvr32.exe" -ArgumentList "/s `"$InstalledDll`"" -Wait -PassThru
-if ($regProc.ExitCode -ne 0) {
-    Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
-    throw "regsvr32 failed with exit code $($regProc.ExitCode)"
-}
+    # 3. Register COM + Windows APO
+    Write-Host "[2/5] Registering ViPERHiResAPO.dll..." -ForegroundColor Cyan
+    $regProc = Start-Process -FilePath "regsvr32.exe" -ArgumentList "/s `"$InstalledDll`"" -Wait -PassThru
+    if ($regProc.ExitCode -ne 0) {
+        throw "regsvr32 failed with exit code $($regProc.ExitCode)"
+    }
 
-# 4. Backup original FxProperties BEFORE touching Registry
-$RegPathRaw = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\FxProperties"
-$RegPathPs = "Registry::$RegPathRaw"
-$BackupFile = Join-Path $BackupDir "$DeviceGuid.original.reg"
+    # 4. Backup original FxProperties BEFORE touching Registry
+    $RegPathRaw = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\FxProperties"
+    $RegPathPs = "Registry::$RegPathRaw"
+    $BackupFile = Join-Path $BackupDir "$DeviceGuid.original.reg"
 
-if (-not (Test-Path $BackupFile)) {
-    Write-Host "[3/5] Backing up factory FxProperties to $BackupFile ..." -ForegroundColor Cyan
-    & reg.exe export $RegPathRaw $BackupFile /y | Out-Null
-} else {
-    Write-Host "[3/5] Original backup already exists: $BackupFile (preserved)" -ForegroundColor Yellow
-}
+    if (-not (Test-Path $BackupFile)) {
+        Write-Host "[3/5] Backing up factory FxProperties to $BackupFile ..." -ForegroundColor Cyan
+        & reg.exe export $RegPathRaw $BackupFile /y | Out-Null
+    } else {
+        Write-Host "[3/5] Original backup already exists: $BackupFile (preserved)" -ForegroundColor Yellow
+    }
 
-# 5. Take ownership of FxProperties (TrustedInstaller -> Administrators) and attach ViPERHiRes APO (SFX)
-Write-Host "[4/5] Attaching ViPERHiRes APO (SFX Hi-Res) to device $DeviceGuid ..." -ForegroundColor Cyan
+    # 5. Take ownership of FxProperties (TrustedInstaller -> Administrators) and attach ViPERHiRes APO (MFX)
+    Write-Host "[4/5] Attaching ViPERHiRes APO (MFX Hi-Res) to device $DeviceGuid ..." -ForegroundColor Cyan
 
-$csharp = @"
+    $csharp = @"
 using System;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
@@ -151,30 +151,36 @@ public static class RegOwnership {
 }
 "@
 
-if (-not ("RegOwnership" -as [type])) {
-    Add-Type -TypeDefinition $csharp
-}
+    if (-not ("RegOwnership" -as [type])) {
+        Add-Type -TypeDefinition $csharp
+    }
 
-$subKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\FxProperties"
-[RegOwnership]::GrantAdminFullControl($subKey)
+    $subKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\FxProperties"
+    [RegOwnership]::GrantAdminFullControl($subKey)
 
-# Attach as MFX (Mode Effect = ,6) so ALL apps (browsers, music players, games) are processed in one master Hi-Res chain
-Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5" -ErrorAction SilentlyContinue
-New-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6" -Value $ApoClsid -PropertyType String -Force | Out-Null
-New-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},6" -Value $ModesAll -PropertyType MultiString -Force | Out-Null
-# Clear Windows 11 Audio Enhancements circuit-breaker inside FxProperties (DisableSysFx = 0)
-New-ItemProperty -Path $RegPathPs -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
+    # Attach as MFX (Mode Effect = ,6) so ALL apps (browsers, music players, games) are processed in one master Hi-Res chain
+    Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5" -ErrorAction SilentlyContinue
+    New-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6" -Value $ApoClsid -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},6" -Value $ModesAll -PropertyType MultiString -Force | Out-Null
+    # Clear Windows 11 Audio Enhancements circuit-breaker inside FxProperties (DisableSysFx = 0)
+    New-ItemProperty -Path $RegPathPs -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
 
-# Ensure Audio Enhancements are enabled (DisableSysFx = 0)
-$PropsSubKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\Properties"
-try {
-    [RegOwnership]::GrantAdminFullControl($PropsSubKey)
-    New-ItemProperty -Path "Registry::HKLM\$PropsSubKey" -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
+    # Ensure Audio Enhancements are enabled (DisableSysFx = 0)
+    $PropsSubKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\Properties"
+    try {
+        [RegOwnership]::GrantAdminFullControl($PropsSubKey)
+        New-ItemProperty -Path "Registry::HKLM\$PropsSubKey" -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
+    } catch {
+        Write-Warning "Could not update DisableSysFx flag (non-fatal): $_"
+    }
+
+    Write-Host "SUCCESS! ViPERHiRes APO installed on device $DeviceGuid." -ForegroundColor Green
 } catch {
-    Write-Warning "Could not update DisableSysFx flag (non-fatal): $_"
+    $errMsg = "$(Get-Date -Format o) ERROR installing APO on ${DeviceGuid}: $_"
+    Add-Content -Path (Join-Path $ProgramDataDir "apo_install.log") -Value $errMsg -ErrorAction SilentlyContinue
+    Write-Error $errMsg
+    throw
+} finally {
+    Write-Host "[5/5] Ensuring Windows Audio service is running..." -ForegroundColor Cyan
+    Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
 }
-
-Write-Host "[5/5] Restarting Windows Audio service..." -ForegroundColor Cyan
-Start-Service -Name "Audiosrv"
-Write-Host "SUCCESS! ViPERHiRes APO installed on device $DeviceGuid." -ForegroundColor Green
-Write-Host "If anything sounds wrong, run: .\scripts\uninstall_apo.ps1 -DeviceGuid '$DeviceGuid'" -ForegroundColor Yellow
