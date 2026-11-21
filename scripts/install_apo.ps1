@@ -184,9 +184,15 @@ try {
         Set-Content -Path $FreshMarker -Value "created_by_v4wa" -ErrorAction SilentlyContinue
     }
 
-    # 5. Attach V4Wa MFX APO (Mode Effect = ,6) across DEFAULT / MEDIA / MOVIE / COMMUNICATIONS
+    # 5. Remove any conflicting legacy/vendor APO slots (LFX/GFX/SFX/EFX) so audiodg.exe never mutes the device,
+    #    then attach V4Wa MFX APO (Mode Effect = ,6) across DEFAULT / MEDIA / MOVIE / COMMUNICATIONS
     Write-Host "[4/5] Attaching V4Wa Hi-Res MFX APO to device $DeviceGuid ..." -ForegroundColor Cyan
-    Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5" -ErrorAction SilentlyContinue
+    foreach ($slot in @("1", "2", "3", "5", "7")) {
+        Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},$slot" -ErrorAction SilentlyContinue
+    }
+    foreach ($modeSlot in @("5", "7")) {
+        Remove-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},$modeSlot" -ErrorAction SilentlyContinue
+    }
     New-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6" -Value $ApoClsid -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},6" -Value $ModesAll -PropertyType MultiString -Force | Out-Null
     New-ItemProperty -Path $RegPathPs -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
@@ -210,6 +216,10 @@ try {
     throw
 } finally {
     Write-Host "[5/5] Ensuring Windows Audio service is running..." -ForegroundColor Cyan
-    Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
-    Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
+    for ($try = 0; $try -lt 5; $try++) {
+        Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
+        Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
+        if ((Get-Service -Name "Audiosrv" -ErrorAction SilentlyContinue).Status -eq "Running") { break }
+        Start-Sleep -Milliseconds 500
+    }
 }

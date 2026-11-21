@@ -769,20 +769,43 @@ public sealed class V4WaEngineBridge
         return File.Exists(path);
     }
 
-    public bool RunApoScriptElevated(bool install, string endpointGuid)
+    public async Task<(bool Launched, int ExitCode)> RunApoScriptElevatedAsync(bool install, string endpointGuid)
     {
         string script = install ? InstallScriptPath : UninstallScriptPath;
-        if (!File.Exists(script)) return false;
+        if (!File.Exists(script)) return (false, -1);
         try
         {
-            Process.Start(new ProcessStartInfo
+            using var proc = Process.Start(new ProcessStartInfo
             {
                 FileName = "powershell.exe",
-                Arguments = $"-ExecutionPolicy Bypass -File \"{script}\" -EndpointGuid \"{endpointGuid}\"",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\" -EndpointGuid \"{endpointGuid}\"",
                 Verb = "runas",
                 UseShellExecute = true
             });
-            return true;
+            if (proc == null) return (false, -1);
+            await proc.WaitForExitAsync();
+            return (true, proc.ExitCode);
+        }
+        catch
+        {
+            return (false, -1);
+        }
+    }
+
+    public async Task<bool> RestartAudioServiceElevatedAsync()
+    {
+        try
+        {
+            using var proc = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -WindowStyle Hidden -Command \"Start-Service AudioEndpointBuilder -EA SilentlyContinue; Restart-Service Audiosrv -Force -EA SilentlyContinue; Start-Service Audiosrv -EA SilentlyContinue\"",
+                Verb = "runas",
+                UseShellExecute = true
+            });
+            if (proc == null) return false;
+            await proc.WaitForExitAsync();
+            return proc.ExitCode == 0;
         }
         catch
         {

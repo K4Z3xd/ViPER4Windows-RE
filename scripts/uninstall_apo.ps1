@@ -55,8 +55,27 @@ try {
 
         if (Test-Path $BackupFile) {
             Write-Host "[2/3] Restoring original FxProperties for $guid ..." -ForegroundColor Cyan
-            # Use Start-Process so non-fatal stderr on TrustedInstaller subkeys never trips ErrorActionPreference=Stop
-            Start-Process -FilePath "reg.exe" -ArgumentList "import `"$BackupFile`"" -NoNewWindow -Wait
+            # Extract ONLY the top-level FxProperties section so untouched TrustedInstaller vendor subkeys never cause reg.exe errors
+            $rawLines = Get-Content -Path $BackupFile
+            $filtered = New-Object System.Collections.Generic.List[string]
+            $inTopSection = $false
+            foreach ($line in $rawLines) {
+                if ($line -match '^Windows Registry Editor') {
+                    $filtered.Add($line)
+                    $filtered.Add("")
+                } elseif ($line -match '^\[.*\\FxProperties\]$') {
+                    $inTopSection = $true
+                    $filtered.Add($line)
+                } elseif ($line -match '^\[') {
+                    $inTopSection = $false
+                } elseif ($inTopSection) {
+                    $filtered.Add($line)
+                }
+            }
+            $tmpReg = Join-Path $env:TEMP "v4wa_restore_$guid.reg"
+            [System.IO.File]::WriteAllLines($tmpReg, $filtered, [System.Text.Encoding]::Unicode)
+            Start-Process -FilePath "reg.exe" -ArgumentList "import `"$tmpReg`"" -NoNewWindow -Wait
+            Remove-Item -Path $tmpReg -Force -ErrorAction SilentlyContinue
         } elseif (Test-Path $FreshMarker) {
             Write-Host "[2/3] Cleaning up V4Wa-created FxProperties for $guid ..." -ForegroundColor Cyan
             Remove-Item -Path $FreshMarker -Force -ErrorAction SilentlyContinue
@@ -84,6 +103,10 @@ try {
     throw
 } finally {
     Write-Host "[3/3] Ensuring Windows Audio service is running..." -ForegroundColor Cyan
-    Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
-    Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
+    for ($try = 0; $try -lt 5; $try++) {
+        Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
+        Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
+        if ((Get-Service -Name "Audiosrv" -ErrorAction SilentlyContinue).Status -eq "Running") { break }
+        Start-Sleep -Milliseconds 500
+    }
 }

@@ -54,6 +54,7 @@ public sealed partial class MainWindow : Window
     private string _activeDdc = "";
     private readonly DispatcherTimer _pollTimer = new();
     private bool _pollBusy = false;
+    private bool _apoOpBusy = false;
 
     private readonly List<Slider> _eqSliders = new();
     private readonly List<TextBlock> _eqValueLabels = new();
@@ -610,10 +611,22 @@ public sealed partial class MainWindow : Window
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 12.5
             };
-            installBtn.Click += (_, _) =>
+            installBtn.Click += async (_, _) =>
             {
-                bool ok = _bridge.RunApoScriptElevated(true, guid);
-                ShowToast(ok ? "Launched elevated APO installer" : "Could not launch install_apo.ps1");
+                if (_apoOpBusy) { ShowToast("An APO operation is already in progress..."); return; }
+                _apoOpBusy = true;
+                try
+                {
+                    ShowToast("Installing V4Wa MFX APO...");
+                    var (launched, exitCode) = await _bridge.RunApoScriptElevatedAsync(true, guid);
+                    await Task.Delay(500);
+                    await PollLiveTelemetrySafeAsync();
+                    RebuildDevicesListUi();
+                    if (!launched) ShowToast("UAC cancelled or install script not found.");
+                    else if (exitCode == 0) ShowToast("V4Wa MFX APO installed successfully!");
+                    else ShowToast($"APO install failed (code {exitCode}). See apo_install.log.");
+                }
+                finally { _apoOpBusy = false; }
             };
 
             var restoreBtn = new Button
@@ -626,10 +639,22 @@ public sealed partial class MainWindow : Window
                 BorderBrush = CardBorderBrush,
                 FontSize = 12.5
             };
-            restoreBtn.Click += (_, _) =>
+            restoreBtn.Click += async (_, _) =>
             {
-                bool ok = _bridge.RunApoScriptElevated(false, guid);
-                ShowToast(ok ? "Launched 1-Click Factory Audio restore" : "Could not launch uninstall_apo.ps1");
+                if (_apoOpBusy) { ShowToast("An APO operation is already in progress..."); return; }
+                _apoOpBusy = true;
+                try
+                {
+                    ShowToast("Restoring factory audio...");
+                    var (launched, exitCode) = await _bridge.RunApoScriptElevatedAsync(false, guid);
+                    await Task.Delay(500);
+                    await PollLiveTelemetrySafeAsync();
+                    RebuildDevicesListUi();
+                    if (!launched) ShowToast("UAC cancelled or uninstall script not found.");
+                    else if (exitCode == 0) ShowToast("Factory audio restored successfully!");
+                    else ShowToast($"Restore failed (code {exitCode}). See apo_install.log.");
+                }
+                finally { _apoOpBusy = false; }
             };
 
             actions.Children.Add(installBtn);
@@ -2103,6 +2128,22 @@ public sealed partial class MainWindow : Window
     }
 
     private void EqCurveCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawEqCurve();
+
+    private async void RestartAudioBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_apoOpBusy) { ShowToast("An audio operation is already in progress..."); return; }
+        _apoOpBusy = true;
+        try
+        {
+            ShowToast("Restarting Windows Audio service...");
+            bool ok = await _bridge.RestartAudioServiceElevatedAsync();
+            await Task.Delay(600);
+            await PollLiveTelemetrySafeAsync();
+            RebuildDevicesListUi();
+            ShowToast(ok ? "Windows Audio service restarted" : "Could not restart Audiosrv (UAC cancelled)");
+        }
+        finally { _apoOpBusy = false; }
+    }
 
     private async void RefreshDevicesBtn_Click(object sender, RoutedEventArgs e)
     {

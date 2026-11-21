@@ -396,6 +396,10 @@ int cmdListDevices() {
         }
 
         std::string name = "Unknown Audio Device";
+        uint32_t sampleRate = 0;
+        uint32_t channels = 0;
+        uint32_t bitsPerSample = 0;
+
         IPropertyStore* props = nullptr;
         if (SUCCEEDED(dev->OpenPropertyStore(STGM_READ, &props)) && props) {
             PROPVARIANT varName;
@@ -404,23 +408,41 @@ int cmdListDevices() {
                 name = wideToUtf8(varName.pwszVal);
             }
             PropVariantClear(&varName);
+
+            // Read true hardware device output format (exact 16/24/32-bit & kHz set in Windows Sound)
+            PROPVARIANT varFmt;
+            PropVariantInit(&varFmt);
+            if (SUCCEEDED(props->GetValue(PKEY_AudioEngine_DeviceFormat, &varFmt)) &&
+                varFmt.vt == VT_BLOB && varFmt.blob.cbSize >= sizeof(WAVEFORMATEX) && varFmt.blob.pBlobData) {
+                const auto* wfx = reinterpret_cast<const WAVEFORMATEX*>(varFmt.blob.pBlobData);
+                sampleRate = wfx->nSamplesPerSec;
+                channels = wfx->nChannels;
+                bitsPerSample = wfx->wBitsPerSample;
+                if (wfx->wFormatTag == WAVE_FORMAT_EXTENSIBLE && varFmt.blob.cbSize >= sizeof(WAVEFORMATEXTENSIBLE)) {
+                    const auto* wfex = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(varFmt.blob.pBlobData);
+                    if (wfex->Samples.wValidBitsPerSample > 0) {
+                        bitsPerSample = wfex->Samples.wValidBitsPerSample;
+                    }
+                }
+            }
+            PropVariantClear(&varFmt);
             props->Release();
         }
 
-        uint32_t sampleRate = 0;
-        uint32_t channels = 0;
-        uint32_t bitsPerSample = 0;
-        IAudioClient* audioClient = nullptr;
-        if (SUCCEEDED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
-                                    reinterpret_cast<void**>(&audioClient))) && audioClient) {
-            WAVEFORMATEX* mixFmt = nullptr;
-            if (SUCCEEDED(audioClient->GetMixFormat(&mixFmt)) && mixFmt) {
-                sampleRate = mixFmt->nSamplesPerSec;
-                channels = mixFmt->nChannels;
-                bitsPerSample = mixFmt->wBitsPerSample;
-                CoTaskMemFree(mixFmt);
+        // Fallback to WASAPI mix format only if PKEY_AudioEngine_DeviceFormat was unavailable
+        if (sampleRate == 0) {
+            IAudioClient* audioClient = nullptr;
+            if (SUCCEEDED(dev->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr,
+                                        reinterpret_cast<void**>(&audioClient))) && audioClient) {
+                WAVEFORMATEX* mixFmt = nullptr;
+                if (SUCCEEDED(audioClient->GetMixFormat(&mixFmt)) && mixFmt) {
+                    sampleRate = mixFmt->nSamplesPerSec;
+                    channels = mixFmt->nChannels;
+                    bitsPerSample = mixFmt->wBitsPerSample;
+                    CoTaskMemFree(mixFmt);
+                }
+                audioClient->Release();
             }
-            audioClient->Release();
         }
 
         const bool isDefault = (!defaultId.empty() && id == defaultId);

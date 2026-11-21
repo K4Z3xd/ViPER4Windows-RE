@@ -406,7 +406,11 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Devices &amp; APO" FontSize="22" FontWeight="Bold" Foreground="White" Margin="2,0,0,4" />
-                            <Button Grid.Column="1" Content="Refresh Devices" Style="{StaticResource V4WaToolbarButtonStyle}" Click="RefreshDevicesBtn_Click" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button Content="Restart Audio" Style="{StaticResource V4WaToolbarButtonStyle}" Click="RestartAudioBtn_Click"
+                                        ToolTipService.ToolTip="Restart Windows Audio service (Audiosrv) if devices ever freeze" />
+                                <Button Content="Refresh Devices" Style="{StaticResource V4WaToolbarButtonStyle}" Click="RefreshDevicesBtn_Click" />
+                            </StackPanel>
                         </Grid>
 
                         <StackPanel x:Name="DevicesListPanel" Spacing="12" />
