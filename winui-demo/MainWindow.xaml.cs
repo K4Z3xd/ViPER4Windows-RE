@@ -283,10 +283,12 @@ public sealed partial class MainWindow : Window
         string label, string tooltip, double min, double max, double val, double step, Func<double, string> formatter)
     {
         var panel = new StackPanel { Spacing = 3 };
-        var header = new Grid();
+        var header = new Grid { ColumnSpacing = 10 };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        left.Children.Add(new TextBlock { Text = label, FontSize = 13, Foreground = TextDimBrush });
+        left.Children.Add(new TextBlock { Text = label, FontSize = 13, Foreground = TextDimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
         if (!string.IsNullOrEmpty(tooltip))
         {
             var tipIcon = new FontIcon { Glyph = "\uE946", FontSize = 12, Foreground = MutedBrush };
@@ -297,13 +299,15 @@ public sealed partial class MainWindow : Window
         var valText = new TextBlock
         {
             Text = formatter(val),
-            HorizontalAlignment = HorizontalAlignment.Right,
             FontFamily = new FontFamily("Consolas"),
             FontSize = 13.5,
             FontWeight = FontWeights.SemiBold,
-            Foreground = TextPrimaryBrush
+            Foreground = TextPrimaryBrush,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
+        Grid.SetColumn(left, 0);
+        Grid.SetColumn(valText, 1);
         header.Children.Add(left);
         header.Children.Add(valText);
 
@@ -464,7 +468,11 @@ public sealed partial class MainWindow : Window
             rightHeader.Children.Add(toggle);
         }
 
-        var headerGrid = new Grid();
+        var headerGrid = new Grid { ColumnSpacing = 10 };
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        Grid.SetColumn(leftHeader, 0);
+        Grid.SetColumn(rightHeader, 1);
         headerGrid.Children.Add(leftHeader);
         headerGrid.Children.Add(rightHeader);
 
@@ -1216,6 +1224,22 @@ public sealed partial class MainWindow : Window
 
     // ==================== EVENT HANDLERS ====================
 
+    private static void SetResponsiveWrap(FrameworkElement element, ColumnDefinition col2, bool wrapToNextRow, bool equalStarWhenWide = false)
+    {
+        if (wrapToNextRow)
+        {
+            Grid.SetRow(element, 1);
+            Grid.SetColumn(element, 0);
+            col2.Width = new GridLength(0);
+        }
+        else
+        {
+            Grid.SetRow(element, 0);
+            Grid.SetColumn(element, 1);
+            col2.Width = equalStarWhenWide ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
+        }
+    }
+
     private void RootBackdropGrid_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         double w = e.NewSize.Width;
@@ -1236,20 +1260,25 @@ public sealed partial class MainWindow : Window
             RebuildPinnedPresets();
         }
 
-        // 3. Responsive Settings Sidebar & Accent Picker stacking
-        SettingsSidebarCol.Width = new GridLength(w < 760 ? 176 : 236);
-        if (w < 900)
-        {
-            Grid.SetRow(AccentPickerPanel, 1);
-            Grid.SetColumn(AccentPickerPanel, 0);
-            AccentPickerCol.Width = new GridLength(0);
-        }
-        else
-        {
-            Grid.SetRow(AccentPickerPanel, 0);
-            Grid.SetColumn(AccentPickerPanel, 1);
-            AccentPickerCol.Width = GridLength.Auto;
-        }
+        // 3. Responsive Toolbars & Signal Path (CSS flex-wrap style)
+        SetResponsiveWrap(SignalBadgesPanel, SignalBadgesCol, w < 760);
+        SetResponsiveWrap(PresetActionsPanel, PresetActionsCol, w < 620);
+        SetResponsiveWrap(EqActionsPanel, EqActionsCol, w < 900);
+
+        // 4. Settings Sidebar: auto-collapse to compact Icon-Only Rail when width < 760px
+        bool compactSidebar = w < 760;
+        SettingsSidebarCol.Width = new GridLength(compactSidebar ? 54 : 220);
+        var labelVis = compactSidebar ? Visibility.Collapsed : Visibility.Visible;
+        NavAppearanceLabel.Visibility = labelVis;
+        NavDevicesLabel.Visibility = labelVis;
+        NavAboutLabel.Visibility = labelVis;
+        SettingsSidebarPanel.Margin = compactSidebar ? new Thickness(0, 4, 10, 0) : new Thickness(0, 4, 16, 0);
+
+        // 5. Settings Pages internal wrapping (Appearance Theme cards, ColorPicker, Devices & APO)
+        SetResponsiveWrap(ThemeOledBtn, ThemeOledCol, w < 640, equalStarWhenWide: true);
+        SetResponsiveWrap(AccentPickerPanel, AccentPickerCol, w < 920);
+        SetResponsiveWrap(DevicesActionsPanel, DevicesActionsCol, w < 820);
+        SetResponsiveWrap(DevicesCmd2Border, DevicesCmd2Col, w < 820, equalStarWhenWide: true);
     }
 
     private void SetSettingsOpen(bool open)

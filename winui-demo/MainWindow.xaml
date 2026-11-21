@@ -17,30 +17,34 @@
             <TextBlock Text="V4Wa" FontSize="12" FontWeight="SemiBold" Foreground="#B3F4F4F5" VerticalAlignment="Center" />
         </Grid>
 
-        <!-- Top Studio Header -->
+        <!-- Top Studio Header (2-col Grid prevents overlap) -->
         <Border x:Name="TopHeaderBorder" Grid.Row="1" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="0,0,0,1"
                 Background="{StaticResource V4WaHeaderBgBrush}" Padding="20,10">
-            <Grid MaxWidth="1280" HorizontalAlignment="Stretch">
+            <Grid MaxWidth="1280" HorizontalAlignment="Stretch" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Left (DSP Mode): Speaker Icon Box + Audio Output Info -->
-                <StackPanel x:Name="HeaderAudioInfoPanel" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <Border x:Name="SpeakerBadge" Width="38" Height="38" CornerRadius="6"
+                <!-- Left (DSP Mode): Speaker Icon Box + Truncating Audio Output Info -->
+                <Grid x:Name="HeaderAudioInfoPanel" Grid.Column="0" ColumnSpacing="12" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="SpeakerBadge" Grid.Column="0" Width="38" Height="38" CornerRadius="6"
                             Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1">
                         <FontIcon x:Name="HeaderSpeakerIcon" Glyph="&#xE767;" FontSize="18" Foreground="{StaticResource V4WaAccentLightBrush}" />
                     </Border>
-                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                         <TextBlock Text="Headphones (CX31993+MAX97220 HiFiAudio)" FontSize="15" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" />
                         <TextBlock Text="384.0 kHz · 32-bit IEEE Float · Stereo Output"
                                    FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                </StackPanel>
+                </Grid>
 
                 <!-- Left (Settings Mode): Back Arrow + Settings Title -->
-                <StackPanel x:Name="HeaderSettingsPanel" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Visibility="Collapsed">
+                <StackPanel x:Name="HeaderSettingsPanel" Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Visibility="Collapsed">
                     <Button Click="BackToDspBtn_Click" Width="34" Height="34" Padding="0" CornerRadius="4"
                             Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1"
                             ToolTipService.ToolTip="Back to DSP">
@@ -58,7 +62,6 @@
                         <FontIcon x:Name="SettingsGearIcon" Glyph="&#xE713;" FontSize="15" Foreground="#FFE4E4E7" />
                     </Button>
 
-                    <!-- WORKING / NOT WORKING Status Pill (matched 34px height) -->
                     <Border x:Name="StatusPill" Height="34" CornerRadius="4" BorderThickness="1" Padding="12,0"
                             Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
@@ -67,59 +70,60 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Master Power Toggle -->
                     <ToggleSwitch x:Name="MasterToggle" IsOn="True" OnContent="" OffContent="" MinWidth="0"
                                   Toggled="MasterToggle_Toggled" ToolTipService.ToolTip="Master Engine Power" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- DSP CONSOLE VIEW (Responsive Width) -->
+        <!-- DSP CONSOLE VIEW (Fully Responsive) -->
         <ScrollViewer x:Name="DspScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="20,16,20,32">
             <StackPanel MaxWidth="1280" HorizontalAlignment="Stretch" Spacing="14">
 
-                <!-- Live Signal Path Card -->
+                <!-- Live Signal Path Card (Wraps badges to Row 1 when narrow) -->
                 <Border x:Name="SignalPathCard" Style="{StaticResource V4WaCardStyle}" Padding="16,12">
-                    <Grid ColumnSpacing="12">
+                    <Grid ColumnSpacing="12" RowSpacing="10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition x:Name="SignalBadgesCol" Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                            <Border Width="34" Height="34" CornerRadius="6"
+                        <Grid Grid.Row="0" Grid.Column="0" ColumnSpacing="12" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" Width="34" Height="34" CornerRadius="6"
                                     Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1">
                                 <FontIcon Glyph="&#xE9D9;" FontSize="15" Foreground="{StaticResource V4WaAccentLightBrush}" />
                             </Border>
-                            <StackPanel Spacing="2" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                     <TextBlock Text="FOOBAR2000" FontSize="12.5" FontWeight="Bold" Foreground="#FFF4F4F5" CharacterSpacing="40" />
-                                    <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="7,2">
+                                    <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="6,2">
                                         <TextBlock Text="SHARED MODE" FontFamily="Consolas" FontSize="10.5" FontWeight="SemiBold" Foreground="#FFD4D4D8" />
                                     </Border>
-                                    <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="7,2">
-                                        <TextBlock Text="+ Google Chrome" FontFamily="Consolas" FontSize="10.5" Foreground="#FFA1A1AA" />
-                                    </Border>
                                 </StackPanel>
-                                <TextBlock Text="Aimer — us" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
+                                <TextBlock Text="Aimer — us" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
-                        </StackPanel>
+                        </Grid>
 
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <Border Height="28" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="9,0">
-                                <TextBlock Text="HI-RES AUDIO" FontFamily="Consolas" FontSize="11" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
+                        <StackPanel x:Name="SignalBadgesPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <Border Height="28" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
+                                <TextBlock Text="HI-RES" FontFamily="Consolas" FontSize="11" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
                             </Border>
-                            <Border Height="28" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="9,0">
+                            <Border Height="28" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
                                 <TextBlock Text="FLAC" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
                             </Border>
-                            <Border Height="28" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="9,0">
+                            <Border Height="28" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
                                 <TextBlock Text="192.0 kHz" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource V4WaAccentLightBrush}" VerticalAlignment="Center" />
                             </Border>
-                            <Border Height="28" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="9,0">
+                            <Border Height="28" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
                                 <TextBlock Text="24-bit" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
-                            </Border>
-                            <Border Height="28" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="9,0">
-                                <TextBlock Text="4,608 kbps" FontFamily="Consolas" FontSize="12" FontWeight="SemiBold" Foreground="#FFB4B4BE" VerticalAlignment="Center" />
                             </Border>
                         </StackPanel>
                     </Grid>
@@ -128,39 +132,48 @@
                 <!-- Pinned Presets Strip (Responsive 4 / 2 / 1 cols) -->
                 <Grid x:Name="PinnedPresetsGrid" ColumnSpacing="10" RowSpacing="10" />
 
-                <!-- Preset Manager Bar (Uniform 34px Controls) -->
+                <!-- Preset Manager Bar (Wraps buttons to Row 1 when narrow) -->
                 <Border x:Name="PresetBarCard" Style="{StaticResource V4WaCardStyle}" Padding="10">
-                    <Grid ColumnSpacing="8">
+                    <Grid ColumnSpacing="8" RowSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition x:Name="PresetActionsCol" Width="Auto" />
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                        <ComboBox x:Name="PresetCombo" Style="{StaticResource V4WaToolbarComboStyle}" HorizontalAlignment="Stretch" SelectionChanged="PresetCombo_SelectionChanged" SelectedIndex="1">
+                        <ComboBox x:Name="PresetCombo" Grid.Row="0" Grid.Column="0" Style="{StaticResource V4WaToolbarComboStyle}" HorizontalAlignment="Stretch" SelectionChanged="PresetCombo_SelectionChanged" SelectedIndex="1">
                             <ComboBoxItem Content="Flat Reference" />
                             <ComboBoxItem Content="Hi-Res Audiophile" />
                             <ComboBoxItem Content="Deep Bass Boost" />
                             <ComboBoxItem Content="Warm Tube Studio" />
                         </ComboBox>
-                        <Button x:Name="PinPresetBtn" Grid.Column="1" Content="Pinned" Style="{StaticResource V4WaToolbarButtonStyle}"
-                                Click="PinPresetBtn_Click" FontWeight="SemiBold" />
-                        <Button Grid.Column="2" Content="Save" Style="{StaticResource V4WaToolbarButtonStyle}" Click="DummyAction_Click" Tag="Full preset snapshot saved (dummy preview)" />
-                        <Button Grid.Column="3" Content="Load" Style="{StaticResource V4WaToolbarButtonStyle}" Click="DummyAction_Click" Tag="Batch JSON preset loader opened (dummy preview)" />
+
+                        <StackPanel x:Name="PresetActionsPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <Button x:Name="PinPresetBtn" Content="Pinned" Style="{StaticResource V4WaToolbarButtonStyle}"
+                                    Click="PinPresetBtn_Click" FontWeight="SemiBold" />
+                            <Button Content="Save" Style="{StaticResource V4WaToolbarButtonStyle}" Click="DummyAction_Click" Tag="Full preset snapshot saved (dummy preview)" />
+                            <Button Content="Load" Style="{StaticResource V4WaToolbarButtonStyle}" Click="DummyAction_Click" Tag="Batch JSON preset loader opened (dummy preview)" />
+                        </StackPanel>
                     </Grid>
                 </Border>
 
-                <!-- Equalizer Card (Clean title + Icon Box + Uniform 34px Controls) -->
+                <!-- Equalizer Card (Wraps right toolbar to Row 1 when narrow) -->
                 <Border x:Name="EqCard" Style="{StaticResource V4WaCardStyle}">
                     <StackPanel Spacing="14">
-                        <Grid ColumnSpacing="12">
+                        <Grid ColumnSpacing="12" RowSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition x:Name="EqActionsCol" Width="Auto" />
                             </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
 
-                            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                                 <Border x:Name="EqIconBox" Width="32" Height="32" CornerRadius="6"
                                         Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1">
                                     <FontIcon x:Name="EqIcon" Glyph="&#xE9E9;" FontSize="15" Foreground="{StaticResource V4WaAccentLightBrush}" />
@@ -178,8 +191,8 @@
                                 </Border>
                             </StackPanel>
 
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <ComboBox x:Name="EqPresetCombo" Style="{StaticResource V4WaToolbarComboStyle}" Width="154" SelectionChanged="EqPresetCombo_SelectionChanged" SelectedIndex="0">
+                            <StackPanel x:Name="EqActionsPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <ComboBox x:Name="EqPresetCombo" Style="{StaticResource V4WaToolbarComboStyle}" Width="140" SelectionChanged="EqPresetCombo_SelectionChanged" SelectedIndex="0">
                                     <ComboBoxItem Content="Custom" />
                                     <ComboBoxItem Content="Flat" />
                                     <ComboBoxItem Content="V-Shape Fun" />
@@ -189,7 +202,7 @@
                                 </ComboBox>
                                 <Button Content="Save" Style="{StaticResource V4WaToolbarButtonStyle}" Click="DummyAction_Click" Tag="EQ preset saved (dummy preview)" />
                                 <Button Content="Load" Style="{StaticResource V4WaToolbarButtonStyle}" Click="DummyAction_Click" Tag="EQ preset loader opened (dummy preview)" />
-                                <Button Content="Reset EQ" Style="{StaticResource V4WaToolbarButtonStyle}" Click="ResetEqBtn_Click" />
+                                <Button Content="Reset" Style="{StaticResource V4WaToolbarButtonStyle}" Click="ResetEqBtn_Click" />
                                 <ToggleSwitch x:Name="EqToggle" IsOn="True" OnContent="" OffContent="" MinWidth="0" Toggled="ModuleToggle_Toggled" />
                             </StackPanel>
                         </Grid>
@@ -207,54 +220,57 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- SETTINGS VIEW (Responsive Windows 11 Settings Layout) -->
-        <Grid x:Name="SettingsSplitGrid" Grid.Row="2" Visibility="Collapsed" MaxWidth="1280" HorizontalAlignment="Stretch" Padding="20,16,20,24">
+        <!-- SETTINGS VIEW (Responsive Sidebar collapses to compact Icon-Only Rail on narrow screens) -->
+        <Grid x:Name="SettingsSplitGrid" Grid.Row="2" Visibility="Collapsed" MaxWidth="1280" HorizontalAlignment="Stretch" Padding="16,14,16,20">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="SettingsSidebarCol" Width="236" />
+                <ColumnDefinition x:Name="SettingsSidebarCol" Width="220" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left Category Sidebar -->
-            <StackPanel Grid.Column="0" Spacing="4" Margin="0,4,18,0">
+            <!-- Left Category Sidebar (auto-collapses to icon-only rail when width < 760px) -->
+            <StackPanel x:Name="SettingsSidebarPanel" Grid.Column="0" Spacing="4" Margin="0,4,14,0">
                 <Button x:Name="NavAppearanceBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                        Padding="0" Height="40" CornerRadius="4" BorderThickness="0" Click="SettingsNav_Click" Tag="Appearance">
+                        Padding="0" Height="40" CornerRadius="4" BorderThickness="0" Click="SettingsNav_Click" Tag="Appearance"
+                        ToolTipService.ToolTip="Appearance">
                     <Grid>
                         <Border x:Name="NavAppearancePill" Width="3" Height="16" CornerRadius="2" HorizontalAlignment="Left" VerticalAlignment="Center"
                                 Background="{StaticResource V4WaAccentLightBrush}" />
-                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="14,0,12,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="14,0,10,0" VerticalAlignment="Center">
                             <FontIcon x:Name="NavAppearanceIcon" Glyph="&#xE790;" FontSize="15" Foreground="{StaticResource V4WaAccentLightBrush}" />
-                            <TextBlock Text="Appearance" FontSize="13.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavAppearanceLabel" Text="Appearance" FontSize="13.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
                         </StackPanel>
                     </Grid>
                 </Button>
 
                 <Button x:Name="NavDevicesBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                        Padding="0" Height="40" CornerRadius="4" BorderThickness="0" Click="SettingsNav_Click" Tag="Devices">
+                        Padding="0" Height="40" CornerRadius="4" BorderThickness="0" Click="SettingsNav_Click" Tag="Devices"
+                        ToolTipService.ToolTip="Devices &amp; APO">
                     <Grid>
                         <Border x:Name="NavDevicesPill" Width="3" Height="16" CornerRadius="2" HorizontalAlignment="Left" VerticalAlignment="Center"
                                 Background="{StaticResource V4WaAccentLightBrush}" Visibility="Collapsed" />
-                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="14,0,12,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="14,0,10,0" VerticalAlignment="Center">
                             <FontIcon x:Name="NavDevicesIcon" Glyph="&#xE7F6;" FontSize="15" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
-                            <TextBlock Text="Devices &amp; APO" FontSize="13.5" FontWeight="Medium" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavDevicesLabel" Text="Devices &amp; APO" FontSize="13.5" FontWeight="Medium" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
                         </StackPanel>
                     </Grid>
                 </Button>
 
                 <Button x:Name="NavAboutBtn" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                        Padding="0" Height="40" CornerRadius="4" BorderThickness="0" Click="SettingsNav_Click" Tag="About">
+                        Padding="0" Height="40" CornerRadius="4" BorderThickness="0" Click="SettingsNav_Click" Tag="About"
+                        ToolTipService.ToolTip="About">
                     <Grid>
                         <Border x:Name="NavAboutPill" Width="3" Height="16" CornerRadius="2" HorizontalAlignment="Left" VerticalAlignment="Center"
                                 Background="{StaticResource V4WaAccentLightBrush}" Visibility="Collapsed" />
-                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="14,0,12,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="12" Margin="14,0,10,0" VerticalAlignment="Center">
                             <FontIcon x:Name="NavAboutIcon" Glyph="&#xE946;" FontSize="15" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
-                            <TextBlock Text="About" FontSize="13.5" FontWeight="Medium" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavAboutLabel" Text="About" FontSize="13.5" FontWeight="Medium" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
                         </StackPanel>
                     </Grid>
                 </Button>
             </StackPanel>
 
-            <!-- Right Settings Content Area -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="4,0,4,20">
+            <!-- Right Settings Content Area (extra right padding so scrollbar never overlaps card border) -->
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="4,0,14,20">
                 <Grid>
                     <!-- PAGE 1: APPEARANCE -->
                     <StackPanel x:Name="SettingsAppearancePage" Spacing="14">
@@ -265,16 +281,20 @@
                                 <StackPanel Spacing="2">
                                     <TextBlock Text="Theme" FontSize="15" FontWeight="SemiBold" Foreground="White" />
                                     <TextBlock Text="Choose between native Windows 11 Acrylic translucency or pure Dark OLED black."
-                                               FontSize="12.5" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
+                                               FontSize="12.5" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextWrapping="Wrap" />
                                 </StackPanel>
 
-                                <Grid ColumnSpacing="10">
+                                <Grid ColumnSpacing="10" RowSpacing="10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition x:Name="ThemeOledCol" Width="*" />
                                     </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
 
-                                    <Button x:Name="ThemeAcrylicBtn" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    <Button x:Name="ThemeAcrylicBtn" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                                             Padding="14,12" CornerRadius="6" BorderThickness="1" Click="ThemePresetBtn_Click" Tag="Acrylic">
                                         <StackPanel Spacing="3">
                                             <TextBlock Text="Acrylic" FontSize="14" FontWeight="SemiBold" Foreground="White" />
@@ -282,7 +302,7 @@
                                         </StackPanel>
                                     </Button>
 
-                                    <Button x:Name="ThemeOledBtn" Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    <Button x:Name="ThemeOledBtn" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                                             Padding="14,12" CornerRadius="6" BorderThickness="1" Click="ThemePresetBtn_Click" Tag="DarkOLED">
                                         <StackPanel Spacing="3">
                                             <TextBlock Text="Dark OLED" FontSize="14" FontWeight="SemiBold" Foreground="White" />
@@ -306,132 +326,161 @@
                                 </Grid.RowDefinitions>
 
                                 <StackPanel Grid.Row="0" Grid.Column="0" Spacing="16">
-                                    <Grid>
-                                        <StackPanel Spacing="2">
-                                            <TextBlock Text="Auto Sync Windows Accent Color" FontSize="14.5" FontWeight="SemiBold" Foreground="White" />
+                                    <!-- Proper 2-column Grid so text NEVER overlaps ToggleSwitch! -->
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="Auto Sync Windows Accent Color" FontSize="14.5" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap" />
                                             <TextBlock Text="Automatically match your Windows 11 Personalization accent color." FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextWrapping="Wrap" />
                                         </StackPanel>
-                                        <ToggleSwitch x:Name="AutoAccentToggle" HorizontalAlignment="Right" IsOn="False" OnContent="" OffContent="" MinWidth="0"
+                                        <ToggleSwitch x:Name="AutoAccentToggle" Grid.Column="1" VerticalAlignment="Center" IsOn="False" OnContent="" OffContent="" MinWidth="0"
                                                       Toggled="AutoAccentToggle_Toggled" />
                                     </Grid>
 
                                     <StackPanel Spacing="8">
                                         <TextBlock Text="Quick Accent Swatches" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFE4E4E7" />
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Button Width="34" Height="34" CornerRadius="6" Background="#FF10B981" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                            <Button Width="32" Height="32" CornerRadius="6" Background="#FF10B981" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                     Click="Swatch_Click" Tag="#10B981" ToolTipService.ToolTip="V4Wa Emerald (#10B981)" />
-                                            <Button Width="34" Height="34" CornerRadius="6" Background="#FF0A84FF" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                            <Button Width="32" Height="32" CornerRadius="6" Background="#FF0A84FF" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                     Click="Swatch_Click" Tag="#0A84FF" ToolTipService.ToolTip="Apple Blue (#0A84FF)" />
-                                            <Button Width="34" Height="34" CornerRadius="6" Background="#FF8B5CF6" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                            <Button Width="32" Height="32" CornerRadius="6" Background="#FF8B5CF6" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                     Click="Swatch_Click" Tag="#8B5CF6" ToolTipService.ToolTip="Studio Violet (#8B5CF6)" />
-                                            <Button Width="34" Height="34" CornerRadius="6" Background="#FFF43F5E" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                            <Button Width="32" Height="32" CornerRadius="6" Background="#FFF43F5E" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                     Click="Swatch_Click" Tag="#F43F5E" ToolTipService.ToolTip="Crimson Rose (#F43F5E)" />
-                                            <Button Width="34" Height="34" CornerRadius="6" Background="#FFF59E0B" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                            <Button Width="32" Height="32" CornerRadius="6" Background="#FFF59E0B" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                     Click="Swatch_Click" Tag="#F59E0B" ToolTipService.ToolTip="Warm Amber (#F59E0B)" />
-                                            <Button Width="34" Height="34" CornerRadius="6" Background="#FF06B6D4" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                            <Button Width="32" Height="32" CornerRadius="6" Background="#FF06B6D4" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                     Click="Swatch_Click" Tag="#06B6D4" ToolTipService.ToolTip="Hi-Res Cyan (#06B6D4)" />
                                         </StackPanel>
                                     </StackPanel>
 
                                     <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12,10">
-                                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                                            <Border Width="28" Height="28" CornerRadius="4" Background="{StaticResource V4WaAccentBrush}" />
-                                            <StackPanel Spacing="1">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" Width="28" Height="28" CornerRadius="4" Background="{StaticResource V4WaAccentBrush}" />
+                                            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                                 <TextBlock Text="Active Accent Color" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
-                                                <TextBlock x:Name="ActiveAccentHexText" Text="#10B981 · RGB(16, 185, 129)" FontFamily="Consolas" FontSize="13" FontWeight="SemiBold" Foreground="White" />
+                                                <TextBlock x:Name="ActiveAccentHexText" Text="#10B981 · RGB(16, 185, 129)" FontFamily="Consolas" FontSize="13" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap" />
                                             </StackPanel>
-                                        </StackPanel>
+                                        </Grid>
                                     </Border>
                                 </StackPanel>
 
-                                <!-- Native WinUI 3 RGB Color Picker -->
+                                <!-- Native WinUI 3 RGB Color Picker wrapped in DownOnly Viewbox so it never overflows! -->
                                 <StackPanel x:Name="AccentPickerPanel" Grid.Row="0" Grid.Column="1" Spacing="6">
                                     <TextBlock Text="Custom RGB Color Picker" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFE4E4E7" />
-                                    <ColorPicker x:Name="AccentColorPicker"
-                                                 Color="#FF10B981"
-                                                 ColorSpectrumShape="Box"
-                                                 IsMoreButtonVisible="False"
-                                                 IsColorSliderVisible="True"
-                                                 IsColorChannelTextInputVisible="True"
-                                                 IsHexInputVisible="True"
-                                                 IsAlphaEnabled="False"
-                                                 ColorChanged="AccentColorPicker_ColorChanged" />
+                                    <Viewbox StretchDirection="DownOnly" HorizontalAlignment="Left">
+                                        <ColorPicker x:Name="AccentColorPicker"
+                                                     Color="#FF10B981"
+                                                     ColorSpectrumShape="Box"
+                                                     IsMoreButtonVisible="False"
+                                                     IsColorSliderVisible="True"
+                                                     IsColorChannelTextInputVisible="True"
+                                                     IsHexInputVisible="True"
+                                                     IsAlphaEnabled="False"
+                                                     ColorChanged="AccentColorPicker_ColorChanged" />
+                                    </Viewbox>
                                 </StackPanel>
                             </Grid>
                         </Border>
                     </StackPanel>
 
-                    <!-- PAGE 2: DEVICES & APO -->
+                    <!-- PAGE 2: DEVICES & APO (Proper 2-column / wrapping Grids everywhere) -->
                     <StackPanel x:Name="SettingsDevicesPage" Spacing="14" Visibility="Collapsed">
                         <TextBlock Text="Devices &amp; APO" FontSize="22" FontWeight="Bold" Foreground="White" Margin="2,0,0,4" />
 
                         <Border x:Name="DevicesApoCard" Style="{StaticResource V4WaCardStyle}">
                             <StackPanel Spacing="14">
-                                <Grid ColumnSpacing="12">
-                                    <StackPanel Spacing="4">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                            <TextBlock Text="Headphones (CX31993+MAX97220 HiFiAudio)" FontSize="15" FontWeight="SemiBold" Foreground="White" />
-                                            <Border Height="22" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
-                                                <TextBlock Text="DEFAULT · MFX APO ACTIVE" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
-                                            </Border>
-                                        </StackPanel>
+                                <Grid ColumnSpacing="12" RowSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition x:Name="DevicesActionsCol" Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="4">
+                                        <TextBlock Text="Headphones (CX31993+MAX97220 HiFiAudio)" FontSize="15" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap" />
+                                        <Border HorizontalAlignment="Left" Height="22" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
+                                            <TextBlock Text="DEFAULT · MFX APO ACTIVE" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
+                                        </Border>
                                         <TextBlock Text="Endpoint GUID: {d62a84b9-0a81-4d82-891d-d7a6ef88fb4d} · 384.0 kHz / 32-bit IEEE Float · 2ch"
                                                    FontFamily="Consolas" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+
+                                    <StackPanel x:Name="DevicesActionsPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                         <Button Content="Install / Repair APO" Style="{StaticResource V4WaToolbarButtonStyle}"
                                                 Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}"
                                                 Foreground="{StaticResource V4WaAccentTextBrush}" FontWeight="SemiBold"
                                                 Click="DummyAction_Click" Tag="APO Install script triggered (dummy preview)" />
-                                        <Button Content="1-Click Restore Factory" Style="{StaticResource V4WaToolbarButtonStyle}"
+                                        <Button Content="Restore Factory" Style="{StaticResource V4WaToolbarButtonStyle}"
                                                 Click="DummyAction_Click" Tag="Factory Registry backup restore triggered (dummy preview)" />
                                     </StackPanel>
                                 </Grid>
 
-                                <Grid ColumnSpacing="10">
+                                <Grid ColumnSpacing="10" RowSpacing="10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition x:Name="DevicesCmd2Col" Width="*" />
                                     </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
 
-                                    <Border Grid.Column="0" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                    <Border Grid.Row="0" Grid.Column="0" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
                                         <StackPanel Spacing="6">
-                                            <TextBlock Text="Install MFX APO (Run as Admin)" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource V4WaAccentLightBrush}" />
+                                            <TextBlock Text="Install MFX APO (Run as Admin)" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource V4WaAccentLightBrush}" TextWrapping="Wrap" />
                                             <TextBlock Text="powershell -ExecutionPolicy Bypass -File scripts\install_apo.ps1 -EndpointGuid &quot;{d62a84b9-0a81-4d82-891d-d7a6ef88fb4d}&quot;"
                                                        FontFamily="Consolas" FontSize="11" Foreground="#FFE4E4E7" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Grid.Column="1" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+                                    <Border x:Name="DevicesCmd2Border" Grid.Row="0" Grid.Column="1" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
                                         <StackPanel Spacing="6">
-                                            <TextBlock Text="1-Click Restore Factory Audio (Run as Admin)" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource V4WaAccentLightBrush}" />
+                                            <TextBlock Text="1-Click Restore Factory Audio (Run as Admin)" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource V4WaAccentLightBrush}" TextWrapping="Wrap" />
                                             <TextBlock Text="powershell -ExecutionPolicy Bypass -File scripts\uninstall_apo.ps1 -EndpointGuid &quot;{d62a84b9-0a81-4d82-891d-d7a6ef88fb4d}&quot;"
                                                        FontFamily="Consolas" FontSize="11" Foreground="#FFE4E4E7" TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
                                 </Grid>
 
-                                <Grid Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="14,10">
-                                    <StackPanel Spacing="2">
-                                        <TextBlock Text="Speakers (Realtek High Definition Audio)" FontSize="13.5" FontWeight="Medium" Foreground="#FFE4E4E7" />
-                                        <TextBlock Text="48.0 kHz / 24-bit · 2ch · APO Not Installed" FontFamily="Consolas" FontSize="11.5" Foreground="{StaticResource V4WaMutedBrush}" />
+                                <Grid Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="14,10" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="2">
+                                        <TextBlock Text="Speakers (Realtek High Definition Audio)" FontSize="13.5" FontWeight="Medium" Foreground="#FFE4E4E7" TextWrapping="Wrap" />
+                                        <TextBlock Text="48.0 kHz / 24-bit · 2ch · APO Not Installed" FontFamily="Consolas" FontSize="11.5" Foreground="{StaticResource V4WaMutedBrush}" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <Button Content="Attach APO" Style="{StaticResource V4WaToolbarButtonStyle}" HorizontalAlignment="Right"
+                                    <Button Grid.Column="1" Content="Attach APO" Style="{StaticResource V4WaToolbarButtonStyle}"
                                             Click="DummyAction_Click" Tag="Attach APO to Realtek Speakers (dummy preview)" />
                                 </Grid>
 
-                                <Grid Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="14,10">
-                                    <StackPanel Spacing="3">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                            <TextBlock Text="foobar2000 v2.x Status Reporter" FontSize="14" FontWeight="SemiBold" Foreground="White" />
-                                            <Border Height="22" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="7,0">
-                                                <TextBlock Text="BIT-TRANSPARENT · v0.4.1" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
-                                            </Border>
-                                        </StackPanel>
+                                <Grid Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="14,10" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" Spacing="3">
+                                        <TextBlock Text="foobar2000 v2.x Status Reporter" FontSize="14" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap" />
+                                        <Border HorizontalAlignment="Left" Height="22" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="7,0">
+                                            <TextBlock Text="BIT-TRANSPARENT · v0.4.1" FontFamily="Consolas" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
+                                        </Border>
                                         <TextBlock Text="Pure zero-modification telemetry bridge reporting FLAC / Hi-Res / Shared vs Exclusive mode in real time."
                                                    FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextWrapping="Wrap" />
                                     </StackPanel>
-                                    <Button Content="Check Status" Style="{StaticResource V4WaToolbarButtonStyle}" HorizontalAlignment="Right"
+                                    <Button Grid.Column="1" Content="Check Status" Style="{StaticResource V4WaToolbarButtonStyle}"
                                             Click="DummyAction_Click" Tag="foobar2000 Status Reporter connected (dummy preview)" />
                                 </Grid>
                             </StackPanel>
@@ -444,7 +493,7 @@
 
                         <Border x:Name="AboutCard" Style="{StaticResource V4WaCardStyle}">
                             <StackPanel Spacing="10">
-                                <TextBlock Text="V4Wa — ViPER4Windows Alternative" FontSize="17" FontWeight="Bold" Foreground="White" />
+                                <TextBlock Text="V4Wa — ViPER4Windows Alternative" FontSize="17" FontWeight="Bold" Foreground="White" TextWrapping="Wrap" />
                                 <TextBlock TextWrapping="Wrap" FontSize="13" Foreground="#FFE4E4E7"
                                            Text="'a' stands for Alternative — a clean-room modern Windows 10/11 Hi-Res MFX Audio Processing Object (44.1–384 kHz, 64-bit internal DSP) uniting full ViPER4Windows and ViPER4Android FX sound modules in one native WinUI 3 app." />
                                 <TextBlock Text="Engine: C++23 Real-Time DSP · 17 Modules · Zero-Allocation Audio Thread · Seqlock IPC"
