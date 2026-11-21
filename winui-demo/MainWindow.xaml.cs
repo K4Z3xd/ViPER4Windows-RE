@@ -475,7 +475,8 @@ public sealed partial class MainWindow : Window
             var (status, devices) = await _bridge.PollLiveTelemetryAsync();
             _liveStatus = status;
 
-            string DeviceSig(AudioDeviceModel d) => $"{d.Guid}|{d.IsDefault}|{d.SampleRate}|{_bridge.IsApoInstalledOnDevice(d.Guid)}";
+            string DeviceSig(AudioDeviceModel d) =>
+                $"{d.Guid}|{d.IsDefault}|{d.SampleRate}|{d.BitsPerSample}|{_bridge.IsApoInstalledOnDevice(d.Guid)}|{_bridge.IsApoActiveOnDevice(d, status, MasterToggle.IsOn)}";
             bool devicesChanged = devices.Count != _devices.Count ||
                                   !devices.Select(DeviceSig).SequenceEqual(_devices.Select(DeviceSig));
             _devices = devices;
@@ -545,7 +546,8 @@ public sealed partial class MainWindow : Window
 
         foreach (var dev in _devices)
         {
-            bool apoActive = _bridge.IsApoInstalledOnDevice(dev.Guid);
+            bool apoInstalled = _bridge.IsApoInstalledOnDevice(dev.Guid);
+            bool apoActive = _bridge.IsApoActiveOnDevice(dev, _liveStatus, MasterToggle.IsOn);
             var cardStack = new StackPanel { Spacing = 12 };
 
             var topGrid = new Grid { ColumnSpacing = 12, RowSpacing = 10 };
@@ -572,21 +574,42 @@ public sealed partial class MainWindow : Window
             badges.Children.Add(new Border
             {
                 Height = 22,
-                Background = apoActive ? AccentBgBrush : SubtleBgBrush,
-                BorderBrush = apoActive ? AccentBorderBrush : CardBorderBrush,
+                Background = SubtleBgBrush,
+                BorderBrush = apoInstalled ? AccentBorderBrush : CardBorderBrush,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(8, 0, 8, 0),
                 Child = new TextBlock
                 {
-                    Text = apoActive ? "MFX APO ACTIVE" : "NOT ATTACHED",
+                    Text = apoInstalled ? "INSTALLED" : "NOT INSTALLED",
                     FontFamily = new FontFamily("Consolas"),
                     FontSize = 10.5,
                     FontWeight = FontWeights.Bold,
-                    Foreground = apoActive ? AccentTextBrush : MutedBrush,
+                    Foreground = apoInstalled ? TextPrimaryBrush : MutedBrush,
                     VerticalAlignment = VerticalAlignment.Center
                 }
             });
+            if (apoActive)
+            {
+                badges.Children.Add(new Border
+                {
+                    Height = 22,
+                    Background = AccentBgBrush,
+                    BorderBrush = AccentBorderBrush,
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(8, 0, 8, 0),
+                    Child = new TextBlock
+                    {
+                        Text = "ACTIVE",
+                        FontFamily = new FontFamily("Consolas"),
+                        FontSize = 10.5,
+                        FontWeight = FontWeights.Bold,
+                        Foreground = AccentTextBrush,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                });
+            }
             info.Children.Add(badges);
             info.Children.Add(new TextBlock
             {
@@ -1739,13 +1762,20 @@ public sealed partial class MainWindow : Window
 
     private void RefreshStatusPill()
     {
+        var defDev = _devices.FirstOrDefault(d => d.IsDefault) ?? _devices.FirstOrDefault();
+        bool defaultInstalled = defDev != null && _bridge.IsApoInstalledOnDevice(defDev.Guid);
         bool isExclusive = string.Equals(_liveStatus.Mode, "Exclusive Mode", StringComparison.OrdinalIgnoreCase);
-        bool working = MasterToggle.IsOn && !isExclusive;
+        bool working = MasterToggle.IsOn && defaultInstalled && !isExclusive;
         StatusPill.Background = working ? AccentBgBrush : CardBgBrush;
         StatusPill.BorderBrush = working ? AccentBorderBrush : CardBorderBrush;
         StatusDot.Fill = working ? AccentLightBrush : MutedBrush;
         StatusText.Text = working ? "WORKING" : "NOT WORKING";
         StatusText.Foreground = working ? AccentTextBrush : TextSecondaryBrush;
+        ToolTipService.SetToolTip(StatusPill,
+            !MasterToggle.IsOn ? "Master Engine Power is OFF" :
+            !defaultInstalled ? "V4Wa APO is not installed on the current default audio device" :
+            isExclusive ? "Bypassed by WASAPI Exclusive Mode" :
+            "V4Wa APO is installed and processing audio on the default device");
     }
 
     private void RefreshVisualStates()

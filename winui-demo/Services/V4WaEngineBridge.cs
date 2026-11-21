@@ -219,20 +219,57 @@ public sealed class V4WaEngineBridge
         return AppContext.BaseDirectory;
     }
 
-    public bool IsApoInstalledOnDevice(string deviceGuid)
+    public bool IsComDllRegistered()
     {
-        if (string.IsNullOrWhiteSpace(deviceGuid)) return false;
         try
         {
-            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+            using var key = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(
+                @"CLSID\{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}\InprocServer32");
+            var dllPath = key?.GetValue(null)?.ToString();
+            return !string.IsNullOrWhiteSpace(dllPath) && File.Exists(dllPath);
+        }
+        catch { return false; }
+    }
+
+    public bool IsApoInstalledOnDevice(string deviceGuid)
+    {
+        if (string.IsNullOrWhiteSpace(deviceGuid) || !IsComDllRegistered()) return false;
+        try
+        {
+            using var fxKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
                 $@"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\{deviceGuid}\FxProperties");
-            var val = key?.GetValue("{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6")?.ToString();
-            return string.Equals(val, "{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}", StringComparison.OrdinalIgnoreCase);
+            var val = fxKey?.GetValue("{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6")?.ToString();
+            if (!string.Equals(val, "{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // Check Windows Audio Enhancements circuit-breaker (DisableSysFx == 1 means Windows bypassed the APO)
+            var disFx = fxKey?.GetValue("{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5");
+            if (disFx is int df && df != 0) return false;
+
+            using var propsKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\{deviceGuid}\Properties");
+            var disPr = propsKey?.GetValue("{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5");
+            if (disPr is int dp && dp != 0) return false;
+
+            return true;
         }
         catch
         {
             return false;
         }
+    }
+
+    public bool IsApoActiveOnDevice(AudioDeviceModel dev, LiveSourceStatusModel status, bool masterEnabled)
+    {
+        if (!masterEnabled || !dev.IsDefault || !IsApoInstalledOnDevice(dev.Guid)) return false;
+        if (!string.Equals(status.Mode, "Shared Mode", StringComparison.OrdinalIgnoreCase)) return false;
+        try
+        {
+            if (!File.Exists(ApoDiagPath)) return false;
+            string diag = File.ReadAllText(ApoDiagPath);
+            return diag.Contains("LockForProcess OK", StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
     }
 
     // ==================== DIRECT BINARY SEQLOCK IPC (< 0.1 ms) ====================
