@@ -153,6 +153,15 @@ try {
     }
     icacls $InstallDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX" /T 2>$null | Out-Null
 
+    # Ensure audiodg.exe (LOCAL SERVICE) can read .irs / .vdc files from the app's root folders if installed there
+    $appRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    foreach ($sub in @("irs", "vdc")) {
+        $assetDir = Join-Path $appRoot $sub
+        if (Test-Path $assetDir) {
+            icacls $assetDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)R" /T 2>$null | Out-Null
+        }
+    }
+
     # 3. Register COM + Windows APO
     Write-Host "[2/5] Registering ViPERHiResAPO.dll..." -ForegroundColor Cyan
     $regProc = Start-Process -FilePath "regsvr32.exe" -ArgumentList "/s `"$InstalledDll`"" -Wait -PassThru

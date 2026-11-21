@@ -70,8 +70,15 @@ public sealed partial class MainWindow : Window
     private int _lastModuleCols = 3;
     private int _lastPresetCols = 4;
 
-    private Color _accentBase = Color.FromArgb(255, 16, 185, 129);
-    private Color? _accentGradientEnd = null;
+    private int _accentColorCount = 1; // 1 = Solid, 2 = 2-Color Gradient, 3 = 3-Color Tri-Gradient
+    private readonly Color[] _accentStops =
+    {
+        Color.FromArgb(255, 16, 185, 129),  // Stop 0: Emerald
+        Color.FromArgb(255, 6, 182, 212),   // Stop 1: Cyan
+        Color.FromArgb(255, 139, 92, 246)   // Stop 2: Violet
+    };
+    private int _selectedColorStop = 0;
+    private Color _accentBase => _accentStops[0];
     private readonly UISettings _osUiSettings = new();
 
     // Limiter power button inside Output card
@@ -150,32 +157,40 @@ public sealed partial class MainWindow : Window
             {
                 if (_uiSettingsModel.AutoAccent)
                 {
-                    ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), null, syncPicker: true, persist: false);
+                    ApplyAccentStops(1, _osUiSettings.GetColorValue(UIColorType.Accent), null, null, syncPicker: true, persist: false);
                 }
             });
         };
 
         if (_uiSettingsModel.AutoAccent)
         {
-            ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), null, syncPicker: true, persist: false);
+            ApplyAccentStops(1, _osUiSettings.GetColorValue(UIColorType.Accent), null, null, syncPicker: true, persist: false);
         }
         else
         {
-            var startC = ParseHexColor(_uiSettingsModel.AccentColorHex, Color.FromArgb(255, 16, 185, 129));
-            Color? endC = !string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientEndHex)
-                ? ParseHexColor(_uiSettingsModel.AccentGradientEndHex, startC)
-                : null;
-            ApplyAccentColor(startC, endC, syncPicker: true, persist: false);
+            var c0 = ParseHexColor(_uiSettingsModel.AccentColorHex, Color.FromArgb(255, 16, 185, 129));
+            var c1 = !string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientMidHex)
+                ? ParseHexColor(_uiSettingsModel.AccentGradientMidHex, Color.FromArgb(255, 6, 182, 212))
+                : (!string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientEndHex)
+                    ? ParseHexColor(_uiSettingsModel.AccentGradientEndHex, Color.FromArgb(255, 6, 182, 212))
+                    : Color.FromArgb(255, 6, 182, 212));
+            var c2 = !string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientEndHex)
+                ? ParseHexColor(_uiSettingsModel.AccentGradientEndHex, Color.FromArgb(255, 139, 92, 246))
+                : Color.FromArgb(255, 139, 92, 246);
+
+            int count = _uiSettingsModel.AccentColorCount;
+            if (count < 1 || count > 3)
+            {
+                count = !string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientMidHex) && !string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientEndHex) ? 3
+                      : !string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientEndHex) ? 2 : 1;
+            }
+            ApplyAccentStops(count, c0, c1, c2, syncPicker: true, persist: false);
         }
 
         ApplySurfaceTheme(_uiSettingsModel.Theme, persist: false);
         SelectSettingsCategory("Appearance");
 
         HydrateUiFromLiveParams();
-
-        FoobarPluginStatusText.Text = _bridge.IsFoobarPluginInstalled()
-            ? "INSTALLED · BIT-TRANSPARENT v0.4.1"
-            : "NOT DETECTED";
 
         _pollTimer.Interval = TimeSpan.FromMilliseconds(900);
         _pollTimer.Tick += async (_, _) => await PollLiveTelemetrySafeAsync();
@@ -185,54 +200,67 @@ public sealed partial class MainWindow : Window
 
     // ==================== GRADIENT & ACCENT BRUSH HELPERS ====================
 
+    private LinearGradientBrush BuildGradient(Color[] stops, byte alpha, Point start, Point end)
+    {
+        var g = new LinearGradientBrush { StartPoint = start, EndPoint = end };
+        if (stops.Length == 2)
+        {
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(alpha, stops[0].R, stops[0].G, stops[0].B), Offset = 0 });
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(alpha, stops[1].R, stops[1].G, stops[1].B), Offset = 1 });
+        }
+        else
+        {
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(alpha, stops[0].R, stops[0].G, stops[0].B), Offset = 0 });
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(alpha, stops[1].R, stops[1].G, stops[1].B), Offset = 0.5 });
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(alpha, stops[2].R, stops[2].G, stops[2].B), Offset = 1 });
+        }
+        return g;
+    }
+
+    private Color[] GetActiveStops() => _accentColorCount switch
+    {
+        3 => new[] { _accentStops[0], _accentStops[1], _accentStops[2] },
+        2 => new[] { _accentStops[0], _accentStops[1] },
+        _ => new[] { _accentStops[0] }
+    };
+
     private Brush MakeAccentBgBrush()
     {
-        if (_accentGradientEnd is Color endC)
-        {
-            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
-            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(62, _accentBase.R, _accentBase.G, _accentBase.B), Offset = 0 });
-            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(62, endC.R, endC.G, endC.B), Offset = 1 });
-            return g;
-        }
+        if (_accentColorCount >= 2)
+            return BuildGradient(GetActiveStops(), 62, new Point(0, 0), new Point(1, 1));
         return AccentBgBrush;
     }
 
     private Brush MakeAccentBorderBrush()
     {
-        if (_accentGradientEnd is Color endC)
+        if (_accentColorCount >= 2)
         {
-            var c1 = BlendColor(_accentBase, Colors.White, 0.28);
-            var c2 = BlendColor(endC, Colors.White, 0.28);
-            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
-            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(180, c1.R, c1.G, c1.B), Offset = 0 });
-            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(180, c2.R, c2.G, c2.B), Offset = 1 });
-            return g;
+            var lightStops = GetActiveStops().Select(c => BlendColor(c, Colors.White, 0.28)).ToArray();
+            return BuildGradient(lightStops, 180, new Point(0, 0), new Point(1, 1));
         }
         return AccentBorderBrush;
     }
 
     private Brush MakeAccentStrongBrush()
     {
-        if (_accentGradientEnd is Color endC)
-        {
-            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
-            g.GradientStops.Add(new GradientStop { Color = _accentBase, Offset = 0 });
-            g.GradientStops.Add(new GradientStop { Color = endC, Offset = 1 });
-            return g;
-        }
+        if (_accentColorCount >= 2)
+            return BuildGradient(GetActiveStops(), 255, new Point(0, 0), new Point(1, 1));
+        return AccentBrush;
+    }
+
+    private Brush MakeAccentHorizontalBrush()
+    {
+        if (_accentColorCount >= 2)
+            return BuildGradient(GetActiveStops(), 255, new Point(0, 0.5), new Point(1, 0.5));
         return AccentBrush;
     }
 
     private Brush MakeAccentStrokeBrush()
     {
-        if (_accentGradientEnd is Color endC)
+        if (_accentColorCount >= 2)
         {
-            var c1 = BlendColor(_accentBase, Colors.White, 0.25);
-            var c2 = BlendColor(endC, Colors.White, 0.25);
-            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
-            g.GradientStops.Add(new GradientStop { Color = c1, Offset = 0 });
-            g.GradientStops.Add(new GradientStop { Color = c2, Offset = 1 });
-            return g;
+            var lightStops = GetActiveStops().Select(c => BlendColor(c, Colors.White, 0.25)).ToArray();
+            return BuildGradient(lightStops, 255, new Point(0, 0), new Point(1, 0));
         }
         return AccentLightBrush;
     }
@@ -679,20 +707,31 @@ public sealed partial class MainWindow : Window
         return Color.FromArgb(255, lerp(a.R, b.R), lerp(a.G, b.G), lerp(a.B, b.B));
     }
 
-    private void ApplyAccentColor(Color baseColor, Color? gradientEnd, bool syncPicker, bool persist = true)
-    {
-        _accentBase = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
-        _accentGradientEnd = gradientEnd is Color ge ? Color.FromArgb(255, ge.R, ge.G, ge.B) : null;
+    private static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
 
-        var effectiveMid = _accentGradientEnd is Color e ? BlendColor(_accentBase, e, 0.5) : _accentBase;
+    private void ApplyAccentStops(int count, Color c0, Color? c1, Color? c2, bool syncPicker, bool persist = true)
+    {
+        _accentColorCount = Math.Clamp(count, 1, 3);
+        _accentStops[0] = Color.FromArgb(255, c0.R, c0.G, c0.B);
+        if (c1 is Color v1) _accentStops[1] = Color.FromArgb(255, v1.R, v1.G, v1.B);
+        if (c2 is Color v2) _accentStops[2] = Color.FromArgb(255, v2.R, v2.G, v2.B);
+        if (_selectedColorStop >= _accentColorCount) _selectedColorStop = _accentColorCount - 1;
+
+        var effectiveMid = _accentColorCount switch
+        {
+            3 => _accentStops[1],
+            2 => BlendColor(_accentStops[0], _accentStops[1], 0.5),
+            _ => _accentStops[0]
+        };
+
         var light = BlendColor(effectiveMid, Colors.White, 0.28);
         var text = BlendColor(effectiveMid, Colors.White, 0.62);
         var dark = BlendColor(effectiveMid, Colors.Black, 0.22);
 
-        AccentBrush.Color = _accentBase;
+        AccentBrush.Color = _accentStops[0];
         AccentLightBrush.Color = light;
         AccentTextBrush.Color = text;
-        AccentBgBrush.Color = Color.FromArgb(52, _accentBase.R, _accentBase.G, _accentBase.B);
+        AccentBgBrush.Color = Color.FromArgb(52, _accentStops[0].R, _accentStops[0].G, _accentStops[0].B);
         AccentBorderBrush.Color = Color.FromArgb(160, light.R, light.G, light.B);
 
         var res = Application.Current.Resources;
@@ -701,23 +740,24 @@ public sealed partial class MainWindow : Window
         if (res["SliderTrackValueFillPressed"] is SolidColorBrush s3) s3.Color = dark;
         if (res["SliderThumbBackgroundPressed"] is SolidColorBrush s4) s4.Color = light;
 
-        string hex1 = $"#{_accentBase.R:X2}{_accentBase.G:X2}{_accentBase.B:X2}";
-        if (_accentGradientEnd is Color gEnd)
+        string hex0 = ToHex(_accentStops[0]);
+        string hex1 = ToHex(_accentStops[1]);
+        string hex2 = ToHex(_accentStops[2]);
+
+        ActiveAccentHexText.Text = _accentColorCount switch
         {
-            string hex2 = $"#{gEnd.R:X2}{gEnd.G:X2}{gEnd.B:X2}";
-            ActiveAccentHexText.Text = $"Gradient · {hex1} → {hex2}";
-            ActiveAccentSwatchBox.Background = MakeAccentStrongBrush();
-        }
-        else
-        {
-            ActiveAccentHexText.Text = $"{hex1} · RGB({_accentBase.R}, {_accentBase.G}, {_accentBase.B})";
-            ActiveAccentSwatchBox.Background = AccentBrush;
-        }
+            3 => $"Tri-Gradient · {hex0} → {hex1} → {hex2}",
+            2 => $"Gradient · {hex0} → {hex1}",
+            _ => $"{hex0} · RGB({_accentStops[0].R}, {_accentStops[0].G}, {_accentStops[0].B})"
+        };
+        ActiveAccentSwatchBox.Background = MakeAccentStrongBrush();
 
         if (persist)
         {
-            _uiSettingsModel.AccentColorHex = hex1;
-            _uiSettingsModel.AccentGradientEndHex = _accentGradientEnd is Color g2 ? $"#{g2.R:X2}{g2.G:X2}{g2.B:X2}" : null;
+            _uiSettingsModel.AccentColorCount = _accentColorCount;
+            _uiSettingsModel.AccentColorHex = hex0;
+            _uiSettingsModel.AccentGradientMidHex = _accentColorCount == 3 ? hex1 : null;
+            _uiSettingsModel.AccentGradientEndHex = _accentColorCount == 2 ? hex1 : (_accentColorCount == 3 ? hex2 : null);
             _bridge.SaveUiSettings(_uiSettingsModel);
         }
 
@@ -725,15 +765,51 @@ public sealed partial class MainWindow : Window
         {
             bool prev = _isUpdating;
             _isUpdating = true;
-            AccentColorPicker.Color = _accentBase;
+            AccentColorPicker.Color = _accentStops[_selectedColorStop];
             _isUpdating = prev;
         }
+
+        UpdateCustomColorFlyoutUi();
 
         if (!_isUpdating)
         {
             RebuildPinnedPresets();
             RefreshVisualStates();
         }
+    }
+
+    private void UpdateCustomColorFlyoutUi()
+    {
+        var countBtns = new[] { ColorCount1Btn, ColorCount2Btn, ColorCount3Btn };
+        for (int i = 0; i < countBtns.Length; i++)
+        {
+            bool active = _accentColorCount == (i + 1);
+            countBtns[i].Background = active ? MakeAccentBgBrush() : TransparentBrush;
+            countBtns[i].BorderBrush = active ? MakeAccentBorderBrush() : TransparentBrush;
+            countBtns[i].Foreground = active ? AccentTextBrush : TextSecondaryBrush;
+        }
+
+        Stop0Btn.Visibility = Visibility.Visible;
+        Stop1Btn.Visibility = _accentColorCount >= 2 ? Visibility.Visible : Visibility.Collapsed;
+        Stop2Btn.Visibility = _accentColorCount >= 3 ? Visibility.Visible : Visibility.Collapsed;
+        Stop1Col.Width = _accentColorCount >= 2 ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Stop2Col.Width = _accentColorCount >= 3 ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        StopSelectorGrid.ColumnSpacing = _accentColorCount >= 2 ? 6 : 0;
+
+        Stop0Dot.Background = new SolidColorBrush(_accentStops[0]);
+        Stop1Dot.Background = new SolidColorBrush(_accentStops[1]);
+        Stop2Dot.Background = new SolidColorBrush(_accentStops[2]);
+
+        var stopBtns = new[] { Stop0Btn, Stop1Btn, Stop2Btn };
+        for (int i = 0; i < stopBtns.Length; i++)
+        {
+            bool sel = _selectedColorStop == i;
+            stopBtns[i].Background = sel ? MakeAccentBgBrush() : SubtleBgBrush;
+            stopBtns[i].BorderBrush = sel ? MakeAccentBorderBrush() : CardBorderBrush;
+            stopBtns[i].Foreground = sel ? AccentTextBrush : TextDimBrush;
+        }
+
+        CustomPreviewBar.Background = MakeAccentHorizontalBrush();
     }
 
     private void ApplySurfaceTheme(string theme, bool persist = true)
@@ -1696,6 +1772,7 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateThemePresetButtons();
+        UpdateCustomColorFlyoutUi();
         SelectSettingsCategory(_activeSettingsCategory);
         UpdateEqModeButtons();
         DrawEqCurve();
@@ -1820,7 +1897,7 @@ public sealed partial class MainWindow : Window
         _uiSettingsModel.AutoAccent = !_uiSettingsModel.AutoAccent;
         _bridge.SaveUiSettings(_uiSettingsModel);
         if (_uiSettingsModel.AutoAccent)
-            ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), null, syncPicker: true, persist: false);
+            ApplyAccentStops(1, _osUiSettings.GetColorValue(UIColorType.Accent), null, null, syncPicker: true, persist: false);
         else
             RefreshVisualStates();
     }
@@ -1830,22 +1907,59 @@ public sealed partial class MainWindow : Window
         if (sender is Button btn && btn.Tag is string hex)
         {
             _uiSettingsModel.AutoAccent = false;
-            ApplyAccentColor(ParseHexColor(hex, _accentBase), null, syncPicker: true);
+            _selectedColorStop = 0;
+            ApplyAccentStops(1, ParseHexColor(hex, _accentStops[0]), null, null, syncPicker: true);
         }
     }
 
     private void GradientSwatch_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is string pair)
+        if (sender is Button btn && btn.Tag is string spec)
         {
-            var parts = pair.Split('|');
+            var parts = spec.Split('|');
             if (parts.Length == 2)
             {
                 _uiSettingsModel.AutoAccent = false;
-                var c1 = ParseHexColor(parts[0], _accentBase);
-                var c2 = ParseHexColor(parts[1], _accentBase);
-                ApplyAccentColor(c1, c2, syncPicker: true);
+                _selectedColorStop = 0;
+                ApplyAccentStops(2,
+                    ParseHexColor(parts[0], _accentStops[0]),
+                    ParseHexColor(parts[1], _accentStops[1]),
+                    null, syncPicker: true);
             }
+            else if (parts.Length == 3)
+            {
+                _uiSettingsModel.AutoAccent = false;
+                _selectedColorStop = 0;
+                ApplyAccentStops(3,
+                    ParseHexColor(parts[0], _accentStops[0]),
+                    ParseHexColor(parts[1], _accentStops[1]),
+                    ParseHexColor(parts[2], _accentStops[2]),
+                    syncPicker: true);
+            }
+        }
+    }
+
+    private void ColorCountBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && int.TryParse(btn.Tag?.ToString(), out int count))
+        {
+            _uiSettingsModel.AutoAccent = false;
+            count = Math.Clamp(count, 1, 3);
+            if (_selectedColorStop >= count) _selectedColorStop = count - 1;
+            ApplyAccentStops(count, _accentStops[0], _accentStops[1], _accentStops[2], syncPicker: true);
+        }
+    }
+
+    private void ColorStopBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && int.TryParse(btn.Tag?.ToString(), out int stopIdx))
+        {
+            _selectedColorStop = Math.Clamp(stopIdx, 0, _accentColorCount - 1);
+            bool prev = _isUpdating;
+            _isUpdating = true;
+            AccentColorPicker.Color = _accentStops[_selectedColorStop];
+            _isUpdating = prev;
+            UpdateCustomColorFlyoutUi();
         }
     }
 
@@ -1853,7 +1967,8 @@ public sealed partial class MainWindow : Window
     {
         if (_isUpdating) return;
         _uiSettingsModel.AutoAccent = false;
-        ApplyAccentColor(args.NewColor, null, syncPicker: false);
+        _accentStops[_selectedColorStop] = Color.FromArgb(255, args.NewColor.R, args.NewColor.G, args.NewColor.B);
+        ApplyAccentStops(_accentColorCount, _accentStops[0], _accentStops[1], _accentStops[2], syncPicker: false);
     }
 
     private void PresetCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

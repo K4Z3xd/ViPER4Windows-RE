@@ -307,7 +307,8 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
-                                    <Button x:Name="ThemeAcrylicBtn" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    <Button x:Name="ThemeAcrylicBtn" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MinHeight="76"
+                                            HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
                                             Padding="14,12" CornerRadius="6" BorderThickness="1" Click="ThemePresetBtn_Click" Tag="Acrylic">
                                         <StackPanel Spacing="3">
                                             <TextBlock Text="Acrylic" FontFamily="Segoe UI" FontSize="14" FontWeight="SemiBold" Foreground="White" />
@@ -315,7 +316,8 @@
                                         </StackPanel>
                                     </Button>
 
-                                    <Button x:Name="ThemeOledBtn" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                                    <Button x:Name="ThemeOledBtn" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MinHeight="76"
+                                            HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
                                             Padding="14,12" CornerRadius="6" BorderThickness="1" Click="ThemePresetBtn_Click" Tag="DarkOLED">
                                         <StackPanel Spacing="3">
                                             <TextBlock Text="Dark OLED" FontFamily="Segoe UI" FontSize="14" FontWeight="SemiBold" Foreground="White" />
@@ -347,39 +349,30 @@
                                     </Button>
                                 </Grid>
 
-                                <!-- Quick Solid Accent Swatches -->
+                                <!-- Quick Solid Accent Swatches (Uniform 44x32) -->
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="Quick Solid Accents" FontFamily="Segoe UI" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFE4E4E7" />
                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Button Width="34" Height="34" CornerRadius="6" Background="#FF10B981" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" Background="#FF10B981" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="Swatch_Click" Tag="#10B981" ToolTipService.ToolTip="Studio Emerald (#10B981)" />
-                                        <Button Width="34" Height="34" CornerRadius="6" Background="#FF0A84FF" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" Background="#FF0A84FF" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="Swatch_Click" Tag="#0A84FF" ToolTipService.ToolTip="Azure Blue (#0A84FF)" />
-                                        <Button Width="34" Height="34" CornerRadius="6" Background="#FF8B5CF6" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" Background="#FF8B5CF6" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="Swatch_Click" Tag="#8B5CF6" ToolTipService.ToolTip="Studio Violet (#8B5CF6)" />
-                                        <Button Width="34" Height="34" CornerRadius="6" Background="#FFF43F5E" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" Background="#FFF43F5E" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="Swatch_Click" Tag="#F43F5E" ToolTipService.ToolTip="Crimson Rose (#F43F5E)" />
-                                        <Button Width="34" Height="34" CornerRadius="6" Background="#FFF59E0B" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" Background="#FFF59E0B" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="Swatch_Click" Tag="#F59E0B" ToolTipService.ToolTip="Warm Amber (#F59E0B)" />
-                                        <Button Width="34" Height="34" CornerRadius="6" Background="#FF06B6D4" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" Background="#FF06B6D4" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="Swatch_Click" Tag="#06B6D4" ToolTipService.ToolTip="Hi-Res Cyan (#06B6D4)" />
                                     </StackPanel>
                                 </StackPanel>
 
-                                <!-- Quick Gradient Accent Palettes -->
+                                <!-- Quick Gradient Accent Palettes (Uniform 44x32 matching Solid row) -->
                                 <StackPanel Spacing="8">
                                     <TextBlock Text="Gradient Palettes" FontFamily="Segoe UI" FontSize="12.5" FontWeight="SemiBold" Foreground="#FFE4E4E7" />
-                                    <Grid ColumnSpacing="8" RowSpacing="8" x:Name="GradientSwatchesGrid">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <Button Grid.Column="0" Width="46" Height="34" CornerRadius="6" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Width="44" Height="32" CornerRadius="5" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="GradientSwatch_Click" Tag="#10B981|#06B6D4" ToolTipService.ToolTip="Aurora Emerald (#10B981 → #06B6D4)">
                                             <Button.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -389,7 +382,7 @@
                                             </Button.Background>
                                         </Button>
 
-                                        <Button Grid.Column="1" Width="46" Height="34" CornerRadius="6" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="GradientSwatch_Click" Tag="#3B82F6|#8B5CF6" ToolTipService.ToolTip="Oceanic Violet (#3B82F6 → #8B5CF6)">
                                             <Button.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -399,7 +392,7 @@
                                             </Button.Background>
                                         </Button>
 
-                                        <Button Grid.Column="2" Width="46" Height="34" CornerRadius="6" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="GradientSwatch_Click" Tag="#F43F5E|#F59E0B" ToolTipService.ToolTip="Sunset Coral (#F43F5E → #F59E0B)">
                                             <Button.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -409,17 +402,18 @@
                                             </Button.Background>
                                         </Button>
 
-                                        <Button Grid.Column="3" Width="46" Height="34" CornerRadius="6" BorderBrush="#90FFFFFF" BorderThickness="1"
-                                                Click="GradientSwatch_Click" Tag="#EC4899|#8B5CF6" ToolTipService.ToolTip="Cyber Neon (#EC4899 → #8B5CF6)">
+                                        <Button Width="44" Height="32" CornerRadius="5" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                                Click="GradientSwatch_Click" Tag="#EC4899|#8B5CF6|#06B6D4" ToolTipService.ToolTip="Cyber Prism (#EC4899 → #8B5CF6 → #06B6D4)">
                                             <Button.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                     <GradientStop Color="#FFEC4899" Offset="0" />
-                                                    <GradientStop Color="#FF8B5CF6" Offset="1" />
+                                                    <GradientStop Color="#FF8B5CF6" Offset="0.5" />
+                                                    <GradientStop Color="#FF06B6D4" Offset="1" />
                                                 </LinearGradientBrush>
                                             </Button.Background>
                                         </Button>
 
-                                        <Button Grid.Column="4" Width="46" Height="34" CornerRadius="6" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                        <Button Width="44" Height="32" CornerRadius="5" BorderBrush="#90FFFFFF" BorderThickness="1"
                                                 Click="GradientSwatch_Click" Tag="#34D399|#38BDF8" ToolTipService.ToolTip="Mint Sky (#34D399 → #38BDF8)">
                                             <Button.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -429,19 +423,20 @@
                                             </Button.Background>
                                         </Button>
 
-                                        <Button Grid.Column="5" Width="46" Height="34" CornerRadius="6" BorderBrush="#90FFFFFF" BorderThickness="1"
-                                                Click="GradientSwatch_Click" Tag="#FB7185|#FBBF24" ToolTipService.ToolTip="Golden Rose (#FB7185 → #FBBF24)">
+                                        <Button Width="44" Height="32" CornerRadius="5" BorderBrush="#90FFFFFF" BorderThickness="1"
+                                                Click="GradientSwatch_Click" Tag="#FB7185|#FBBF24|#34D399" ToolTipService.ToolTip="Solar Aurora (#FB7185 → #FBBF24 → #34D399)">
                                             <Button.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                     <GradientStop Color="#FFFB7185" Offset="0" />
-                                                    <GradientStop Color="#FFFBBF24" Offset="1" />
+                                                    <GradientStop Color="#FFFBBF24" Offset="0.5" />
+                                                    <GradientStop Color="#FF34D399" Offset="1" />
                                                 </LinearGradientBrush>
                                             </Button.Background>
                                         </Button>
-                                    </Grid>
+                                    </StackPanel>
                                 </StackPanel>
 
-                                <!-- Active Accent Preview + On-Demand Custom Color Flyout Button -->
+                                <!-- Active Accent Preview + On-Demand 1–3 Color Custom Color Flyout -->
                                 <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12,10">
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>
@@ -449,7 +444,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <Border x:Name="ActiveAccentSwatchBox" Grid.Column="0" Width="32" Height="32" CornerRadius="5" Background="{StaticResource V4WaAccentBrush}" BorderBrush="#66FFFFFF" BorderThickness="1" />
+                                        <Border x:Name="ActiveAccentSwatchBox" Grid.Column="0" Width="34" Height="34" CornerRadius="5" Background="{StaticResource V4WaAccentBrush}" BorderBrush="#66FFFFFF" BorderThickness="1" />
                                         <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                             <TextBlock Text="Active Accent" FontFamily="Segoe UI" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
                                             <TextBlock x:Name="ActiveAccentHexText" Text="#10B981 · RGB(16, 185, 129)" FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap" />
@@ -461,8 +456,53 @@
                                             </StackPanel>
                                             <Button.Flyout>
                                                 <Flyout Placement="BottomEdgeAlignedRight">
-                                                    <StackPanel Spacing="10">
-                                                        <TextBlock Text="Custom RGB Color" FontFamily="Segoe UI" FontSize="13" FontWeight="SemiBold" Foreground="White" />
+                                                    <StackPanel Spacing="12" Width="312">
+                                                        <TextBlock Text="Custom Accent Builder" FontFamily="Segoe UI" FontSize="14" FontWeight="SemiBold" Foreground="White" />
+
+                                                        <!-- 1 / 2 / 3 Color Mode Selector -->
+                                                        <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="5" Padding="3">
+                                                            <Grid ColumnSpacing="4">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <Button x:Name="ColorCount1Btn" Grid.Column="0" Content="1 · Solid" HorizontalAlignment="Stretch" Height="30" CornerRadius="4" FontFamily="Segoe UI" FontSize="12" Click="ColorCountBtn_Click" Tag="1" />
+                                                                <Button x:Name="ColorCount2Btn" Grid.Column="1" Content="2 · Gradient" HorizontalAlignment="Stretch" Height="30" CornerRadius="4" FontFamily="Segoe UI" FontSize="12" Click="ColorCountBtn_Click" Tag="2" />
+                                                                <Button x:Name="ColorCount3Btn" Grid.Column="2" Content="3 · Tri-Grad" HorizontalAlignment="Stretch" Height="30" CornerRadius="4" FontFamily="Segoe UI" FontSize="12" Click="ColorCountBtn_Click" Tag="3" />
+                                                            </Grid>
+                                                        </Border>
+
+                                                        <!-- Interactive Stop Selector Pills -->
+                                                        <Grid x:Name="StopSelectorGrid" ColumnSpacing="6">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition x:Name="Stop1Col" Width="0" />
+                                                                <ColumnDefinition x:Name="Stop2Col" Width="0" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Button x:Name="Stop0Btn" Grid.Column="0" HorizontalAlignment="Stretch" Height="32" CornerRadius="4" BorderThickness="1" Click="ColorStopBtn_Click" Tag="0">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <Border x:Name="Stop0Dot" Width="14" Height="14" CornerRadius="3" Background="#FF10B981" BorderBrush="#80FFFFFF" BorderThickness="1" />
+                                                                    <TextBlock Text="Color 1" FontFamily="Segoe UI" FontSize="12" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                            <Button x:Name="Stop1Btn" Grid.Column="1" HorizontalAlignment="Stretch" Height="32" CornerRadius="4" BorderThickness="1" Click="ColorStopBtn_Click" Tag="1" Visibility="Collapsed">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <Border x:Name="Stop1Dot" Width="14" Height="14" CornerRadius="3" Background="#FF06B6D4" BorderBrush="#80FFFFFF" BorderThickness="1" />
+                                                                    <TextBlock Text="Color 2" FontFamily="Segoe UI" FontSize="12" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                            <Button x:Name="Stop2Btn" Grid.Column="2" HorizontalAlignment="Stretch" Height="32" CornerRadius="4" BorderThickness="1" Click="ColorStopBtn_Click" Tag="2" Visibility="Collapsed">
+                                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                    <Border x:Name="Stop2Dot" Width="14" Height="14" CornerRadius="3" Background="#FF8B5CF6" BorderBrush="#80FFFFFF" BorderThickness="1" />
+                                                                    <TextBlock Text="Color 3" FontFamily="Segoe UI" FontSize="12" />
+                                                                </StackPanel>
+                                                            </Button>
+                                                        </Grid>
+
+                                                        <!-- Live Gradient Strip Preview -->
+                                                        <Border x:Name="CustomPreviewBar" Height="18" CornerRadius="4" BorderBrush="#66FFFFFF" BorderThickness="1" Background="{StaticResource V4WaAccentBrush}" />
+
                                                         <ColorPicker x:Name="AccentColorPicker"
                                                                      Color="#FF10B981"
                                                                      ColorSpectrumShape="Box"
@@ -482,7 +522,7 @@
                         </Border>
                     </StackPanel>
 
-                    <!-- PAGE 2: DEVICES & APO -->
+                    <!-- PAGE 2: DEVICES & APO (Clean, foobar2000 removed) -->
                     <StackPanel x:Name="SettingsDevicesPage" Spacing="14" Visibility="Collapsed">
                         <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
@@ -498,26 +538,9 @@
                         </Grid>
 
                         <StackPanel x:Name="DevicesListPanel" Spacing="12" />
-
-                        <Border Style="{StaticResource V4WaCardStyle}">
-                            <Grid ColumnSpacing="12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Spacing="4">
-                                    <TextBlock Text="foobar2000 v2.x Status Reporter" FontFamily="Segoe UI" FontSize="14.5" FontWeight="SemiBold" Foreground="White" TextWrapping="Wrap" />
-                                    <Border HorizontalAlignment="Left" Height="22" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="7,0">
-                                        <TextBlock x:Name="FoobarPluginStatusText" Text="CHECKING..." FontFamily="Segoe UI" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
-                                    </Border>
-                                    <TextBlock Text="Pure bit-transparent telemetry bridge reporting FLAC / Hi-Res playback info in real time."
-                                               FontFamily="Segoe UI" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextWrapping="Wrap" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
                     </StackPanel>
 
-                    <!-- PAGE 3: ABOUT (Another ViPER4Windows RE + AI-Powered Credits + Tech Stack) -->
+                    <!-- PAGE 3: ABOUT (Another ViPER4Windows RE + AI-Powered Credits, foobar2000 removed) -->
                     <StackPanel x:Name="SettingsAboutPage" Spacing="14" Visibility="Collapsed">
                         <TextBlock Text="About" FontFamily="Segoe UI" FontSize="22" FontWeight="Bold" Foreground="White" Margin="2,0,0,4" />
 
@@ -544,8 +567,6 @@
                                     <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
                                                Text="• AutoEQ (Jaakko Pasanen) — open-source headphone frequency response correction and ViPER-DDC (.vdc) profile ecosystem." />
                                     <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• foobar2000 SDK (Peter Pawlowski) — bit-transparent v2.x playback telemetry plugin interface." />
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
                                                Text="• Microsoft Windows App SDK &amp; Fluent Design System — WinUI 3 native controls, Acrylic backdrop, and Core Audio APO framework." />
                                 </StackPanel>
                             </StackPanel>
@@ -557,7 +578,7 @@
                                 <TextBlock Text="Tools &amp; Technologies" FontFamily="Segoe UI" FontSize="15" FontWeight="SemiBold" Foreground="White" />
                                 <StackPanel Spacing="6">
                                     <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• C++23 (MSVC) — 64-bit internal DSP engine (17 modules, 44.1–384 kHz), COM MFX APO (ViPERHiResAPO.dll), Core Audio CLI (viper_ctl), native GUI launcher, and foobar2000 component." />
+                                               Text="• C++23 (MSVC) — 64-bit internal DSP engine (17 modules, 44.1–384 kHz), COM MFX APO (ViPERHiResAPO.dll), Core Audio CLI (viper_ctl), and native GUI launcher." />
                                     <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
                                                Text="• C# &amp; .NET 8 + WinUI 3 (Windows App SDK 1.7) — native Windows 11 desktop console with lock-free binary seqlock IPC." />
                                     <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"

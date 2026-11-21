@@ -149,7 +149,9 @@ public sealed class UiSettingsModel
     public List<string> PinnedModules { get; set; } = new();
     public string Theme { get; set; } = "Acrylic";
     public bool AutoAccent { get; set; } = false;
+    public int AccentColorCount { get; set; } = 1; // 1 = Solid, 2 = 2-Color Gradient, 3 = 3-Color Gradient
     public string AccentColorHex { get; set; } = "#10B981";
+    public string? AccentGradientMidHex { get; set; } = null;
     public string? AccentGradientEndHex { get; set; } = null;
 }
 
@@ -163,13 +165,14 @@ public sealed class V4WaEngineBridge
     public string LiveParamsPath => Path.Combine(ProgramDataDir, "live_params.bin");
     public string FoobarStatusPath => Path.Combine(ProgramDataDir, "foobar_status.json");
     public string ApoDiagPath => Path.Combine(ProgramDataDir, "apo_diag.txt");
-    public string IrsDir => Path.Combine(ProgramDataDir, "irs");
     public string ActiveIrPath => Path.Combine(ProgramDataDir, "active_ir.txt");
-    public string DdcDir => Path.Combine(ProgramDataDir, "ddc");
     public string ActiveDdcPath => Path.Combine(ProgramDataDir, "active_ddc.txt");
-    public string PresetsDir => Path.Combine(ProgramDataDir, "presets");
-    public string EqPresetsDir => Path.Combine(ProgramDataDir, "eq_presets");
     public string UiSettingsPath => Path.Combine(ProgramDataDir, "v4wa_ui_settings.json");
+
+    public string IrsDir { get; }
+    public string DdcDir { get; }
+    public string PresetsDir { get; }
+    public string EqPresetsDir { get; }
 
     public string RepoRoot { get; }
     public string ViperCtlPath { get; }
@@ -198,11 +201,33 @@ public sealed class V4WaEngineBridge
         string localUninstall = Path.Combine(AppContext.BaseDirectory, "scripts", "uninstall_apo.ps1");
         UninstallScriptPath = File.Exists(localUninstall) ? localUninstall : Path.Combine(RepoRoot, "scripts", "uninstall_apo.ps1");
 
+        // When installed in "<InstallRoot>\bin\", use "<InstallRoot>\irs", "<InstallRoot>\vdc", "<InstallRoot>\preset" directly!
+        string? installRoot = Directory.GetParent(AppContext.BaseDirectory.TrimEnd('\\', '/'))?.FullName;
+        bool hasInstalledAssetFolders = !string.IsNullOrEmpty(installRoot) &&
+            (Directory.Exists(Path.Combine(installRoot, "irs")) ||
+             Directory.Exists(Path.Combine(installRoot, "vdc")) ||
+             Directory.Exists(Path.Combine(installRoot, "preset")));
+
+        if (hasInstalledAssetFolders && installRoot != null)
+        {
+            IrsDir = Path.Combine(installRoot, "irs");
+            DdcDir = Path.Combine(installRoot, "vdc");
+            PresetsDir = Path.Combine(installRoot, "preset");
+            EqPresetsDir = Path.Combine(installRoot, "preset", "eq");
+        }
+        else
+        {
+            IrsDir = Path.Combine(ProgramDataDir, "irs");
+            DdcDir = Path.Combine(ProgramDataDir, "ddc");
+            PresetsDir = Path.Combine(ProgramDataDir, "presets");
+            EqPresetsDir = Path.Combine(ProgramDataDir, "eq_presets");
+        }
+
         Directory.CreateDirectory(ProgramDataDir);
-        Directory.CreateDirectory(IrsDir);
-        Directory.CreateDirectory(DdcDir);
-        Directory.CreateDirectory(PresetsDir);
-        Directory.CreateDirectory(EqPresetsDir);
+        try { Directory.CreateDirectory(IrsDir); } catch { }
+        try { Directory.CreateDirectory(DdcDir); } catch { }
+        try { Directory.CreateDirectory(PresetsDir); } catch { }
+        try { Directory.CreateDirectory(EqPresetsDir); } catch { }
     }
 
     private static string FindRepoRoot()
