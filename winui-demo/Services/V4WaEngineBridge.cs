@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -149,6 +150,7 @@ public sealed class UiSettingsModel
     public string Theme { get; set; } = "Acrylic";
     public bool AutoAccent { get; set; } = false;
     public string AccentColorHex { get; set; } = "#10B981";
+    public string? AccentGradientEndHex { get; set; } = null;
 }
 
 public sealed class V4WaEngineBridge
@@ -490,6 +492,7 @@ public sealed class V4WaEngineBridge
                 Arguments = arg,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
+                StandardOutputEncoding = Encoding.UTF8,
                 CreateNoWindow = true
             };
             using var proc = Process.Start(psi);

@@ -10,11 +10,12 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Windows 11 Fluent Corner Radius Tokens -->
+            <!-- Windows 11 Fluent Corner Radius & Typography Tokens -->
             <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>
             <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+            <FontFamily x:Key="ContentControlThemeFontFamily">Segoe UI</FontFamily>
 
-            <!-- V4Wa Dynamic Theme Brushes (mutated live by Appearance Engine) -->
+            <!-- Dynamic Theme Brushes (mutated live by Appearance Engine) -->
             <SolidColorBrush x:Key="V4WaAccentBrush" Color="#FF10B981" />
             <SolidColorBrush x:Key="V4WaAccentLightBrush" Color="#FF34D399" />
             <SolidColorBrush x:Key="V4WaAccentTextBrush" Color="#FFA7F3D0" />
@@ -30,9 +31,6 @@
             <SolidColorBrush x:Key="V4WaTextSecondaryBrush" Color="#FFB4B4BE" />
 
             <!-- Fluent Control Accent Overrides (mutated live) -->
-            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#FF10B981" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#FF34D399" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#FF059669" />
             <SolidColorBrush x:Key="SliderTrackValueFill" Color="#FF10B981" />
             <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="#FF34D399" />
             <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#FF059669" />
@@ -49,11 +47,12 @@
                 <Setter Property="Padding" Value="16" />
             </Style>
 
-            <!-- Unified Toolbar Button Style (34px height, 4px Windows 11 corners) -->
+            <!-- Unified Toolbar Button Style (34px height, 4px Windows 11 corners, Segoe UI) -->
             <Style x:Key="V4WaToolbarButtonStyle" TargetType="Button">
                 <Setter Property="Height" Value="34" />
                 <Setter Property="Padding" Value="14,0" />
                 <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="FontFamily" Value="Segoe UI" />
                 <Setter Property="FontSize" Value="12.5" />
                 <Setter Property="FontWeight" Value="Medium" />
                 <Setter Property="VerticalAlignment" Value="Center" />
@@ -62,11 +61,12 @@
                 <Setter Property="BorderThickness" Value="1" />
             </Style>
 
-            <!-- Unified Toolbar ComboBox Style (34px height, 4px Windows 11 corners) -->
+            <!-- Unified Toolbar ComboBox Style (34px height, 4px Windows 11 corners, Segoe UI) -->
             <Style x:Key="V4WaToolbarComboStyle" TargetType="ComboBox">
                 <Setter Property="Height" Value="34" />
                 <Setter Property="MinHeight" Value="34" />
                 <Setter Property="CornerRadius" Value="4" />
+                <Setter Property="FontFamily" Value="Segoe UI" />
                 <Setter Property="FontSize" Value="12.5" />
                 <Setter Property="VerticalAlignment" Value="Center" />
                 <Setter Property="Background" Value="{StaticResource V4WaSubtleBgBrush}" />

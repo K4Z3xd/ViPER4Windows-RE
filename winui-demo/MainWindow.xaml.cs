@@ -28,7 +28,9 @@ public sealed partial class MainWindow : Window
         public Border IconBox { get; init; } = null!;
         public FontIcon Icon { get; init; } = null!;
         public Button PinBtn { get; init; } = null!;
-        public ToggleSwitch? Toggle { get; init; }
+        public Button? PowerBtn { get; init; }
+        public FontIcon? PowerIcon { get; init; }
+        public Func<bool> GetEnabled { get; set; } = () => true;
         public Func<bool> IsActive { get; set; } = () => false;
         public Action<bool> RefreshVisual { get; set; } = _ => { };
     }
@@ -40,6 +42,8 @@ public sealed partial class MainWindow : Window
         "250", "360", "500", "750", "1k", "1.5k",
         "2k", "3k", "4k", "6k", "8k", "16k"
     };
+
+    private static readonly FontFamily UiFont = new("Segoe UI");
 
     private readonly V4WaEngineBridge _bridge = new();
     private DspParamsModel _liveParams = new();
@@ -62,19 +66,19 @@ public sealed partial class MainWindow : Window
     private bool _isUpdating = true;
     private bool _settingsOpen = false;
     private string _activeSettingsCategory = "Appearance";
-    private double _currentWindowWidth = 1240;
-    private int _lastModuleCols = 2;
+    private double _currentWindowWidth = 1280;
+    private int _lastModuleCols = 3;
     private int _lastPresetCols = 4;
 
     private Color _accentBase = Color.FromArgb(255, 16, 185, 129);
+    private Color? _accentGradientEnd = null;
     private readonly UISettings _osUiSettings = new();
 
-    // Module UI handles
-    private ToggleSwitch _limiterToggle = null!, _bassToggle = null!, _clarityToggle = null!, _dynToggle = null!;
-    private ToggleSwitch _tubeToggle = null!, _analogToggle = null!, _ddcToggle = null!, _convToggle = null!;
-    private ToggleSwitch _vseToggle = null!, _surroundToggle = null!, _fieldToggle = null!, _vhsToggle = null!;
-    private ToggleSwitch _reverbToggle = null!, _compToggle = null!, _agcToggle = null!, _cureToggle = null!;
+    // Limiter power button inside Output card
+    private Button _limiterPowerBtn = null!;
+    private FontIcon _limiterPowerIcon = null!;
 
+    // Slider handles
     private Slider _masterGainSlider = null!, _panSlider = null!, _limiterSlider = null!;
     private Slider _bassFreqSlider = null!, _bassGainSlider = null!, _clarityGainSlider = null!;
     private Slider _dynBassSlider = null!, _tubeDriveSlider = null!;
@@ -84,7 +88,6 @@ public sealed partial class MainWindow : Window
     private Slider _revRoomSlider = null!, _revWidthSlider = null!, _revDampSlider = null!, _revWetSlider = null!, _revDrySlider = null!;
     private Slider _compThreshSlider = null!, _compRatioSlider = null!, _compAtkSlider = null!, _compRelSlider = null!, _compMakeupSlider = null!;
     private Slider _agcStrengthSlider = null!, _agcMaxGainSlider = null!, _agcThreshSlider = null!;
-
     private ComboBox _ddcCombo = null!, _irsCombo = null!;
 
     // Shared mutable Theme Brushes
@@ -130,73 +133,125 @@ public sealed partial class MainWindow : Window
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
-        AppWindow.Resize(new SizeInt32(1260, 880));
+        // Wide default window showing 3 crisp columns immediately
+        AppWindow.Resize(new SizeInt32(1320, 880));
 
-        // 1. Load saved UI preferences & real live APO parameters
         _uiSettingsModel = _bridge.LoadUiSettings();
         _liveParams = _bridge.ReadLiveParams();
         ReloadPresetsLists();
 
-        // 2. Build all 17 DSP module cards
         BuildAllDspCards();
         LayoutDspCards();
-
-        // 3. Populate IRS / DDC files from C:\ProgramData\ViPERHiRes
         RefreshIrsAndDdcCombos();
 
-        // 4. Apply saved Appearance (Theme + Accent)
         _osUiSettings.ColorValuesChanged += (_, _) =>
         {
             DispatcherQueue.TryEnqueue(() =>
             {
                 if (_uiSettingsModel.AutoAccent)
                 {
-                    ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), syncPicker: true, persist: false);
+                    ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), null, syncPicker: true, persist: false);
                 }
             });
         };
 
-        AutoAccentToggle.IsOn = _uiSettingsModel.AutoAccent;
-        AccentColorPicker.IsEnabled = !_uiSettingsModel.AutoAccent;
         if (_uiSettingsModel.AutoAccent)
-            ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), syncPicker: true, persist: false);
+        {
+            ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), null, syncPicker: true, persist: false);
+        }
         else
-            ApplyAccentColor(ParseHexColor(_uiSettingsModel.AccentColorHex, Color.FromArgb(255, 16, 185, 129)), syncPicker: true, persist: false);
+        {
+            var startC = ParseHexColor(_uiSettingsModel.AccentColorHex, Color.FromArgb(255, 16, 185, 129));
+            Color? endC = !string.IsNullOrWhiteSpace(_uiSettingsModel.AccentGradientEndHex)
+                ? ParseHexColor(_uiSettingsModel.AccentGradientEndHex, startC)
+                : null;
+            ApplyAccentColor(startC, endC, syncPicker: true, persist: false);
+        }
 
         ApplySurfaceTheme(_uiSettingsModel.Theme, persist: false);
         SelectSettingsCategory("Appearance");
 
-        // 5. Hydrate all UI controls from real live_params.bin (without overwriting live engine!)
         HydrateUiFromLiveParams();
 
-        // 6. Check foobar2000 plugin status
         FoobarPluginStatusText.Text = _bridge.IsFoobarPluginInstalled()
             ? "INSTALLED · BIT-TRANSPARENT v0.4.1"
             : "NOT DETECTED";
 
-        // 7. Start live telemetry polling (900 ms)
         _pollTimer.Interval = TimeSpan.FromMilliseconds(900);
         _pollTimer.Tick += async (_, _) => await PollLiveTelemetrySafeAsync();
         _pollTimer.Start();
         _ = PollLiveTelemetrySafeAsync();
     }
 
+    // ==================== GRADIENT & ACCENT BRUSH HELPERS ====================
+
+    private Brush MakeAccentBgBrush()
+    {
+        if (_accentGradientEnd is Color endC)
+        {
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(62, _accentBase.R, _accentBase.G, _accentBase.B), Offset = 0 });
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(62, endC.R, endC.G, endC.B), Offset = 1 });
+            return g;
+        }
+        return AccentBgBrush;
+    }
+
+    private Brush MakeAccentBorderBrush()
+    {
+        if (_accentGradientEnd is Color endC)
+        {
+            var c1 = BlendColor(_accentBase, Colors.White, 0.28);
+            var c2 = BlendColor(endC, Colors.White, 0.28);
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(180, c1.R, c1.G, c1.B), Offset = 0 });
+            g.GradientStops.Add(new GradientStop { Color = Color.FromArgb(180, c2.R, c2.G, c2.B), Offset = 1 });
+            return g;
+        }
+        return AccentBorderBrush;
+    }
+
+    private Brush MakeAccentStrongBrush()
+    {
+        if (_accentGradientEnd is Color endC)
+        {
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+            g.GradientStops.Add(new GradientStop { Color = _accentBase, Offset = 0 });
+            g.GradientStops.Add(new GradientStop { Color = endC, Offset = 1 });
+            return g;
+        }
+        return AccentBrush;
+    }
+
+    private Brush MakeAccentStrokeBrush()
+    {
+        if (_accentGradientEnd is Color endC)
+        {
+            var c1 = BlendColor(_accentBase, Colors.White, 0.25);
+            var c2 = BlendColor(endC, Colors.White, 0.25);
+            var g = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+            g.GradientStops.Add(new GradientStop { Color = c1, Offset = 0 });
+            g.GradientStops.Add(new GradientStop { Color = c2, Offset = 1 });
+            return g;
+        }
+        return AccentLightBrush;
+    }
+
+    private void StylePowerButton(Button btn, FontIcon icon, bool isOn)
+    {
+        btn.Background = isOn ? MakeAccentBgBrush() : SubtleBgBrush;
+        btn.BorderBrush = isOn ? MakeAccentBorderBrush() : CardBorderBrush;
+        icon.Foreground = isOn ? AccentLightBrush : MutedBrush;
+    }
+
     // ==================== BUILT-IN PRESETS ====================
 
     private static List<PresetModel> CreateBuiltinPresets() => new()
     {
+        new PresetModel { Name = "Flat Reference", Subtitle = "Transparent bit-clean studio baseline", IsBuiltin = true, Params = new DspParamsModel() },
         new PresetModel
         {
-            Name = "Flat Reference",
-            Subtitle = "Transparent bit-clean studio baseline",
-            IsBuiltin = true,
-            Params = new DspParamsModel()
-        },
-        new PresetModel
-        {
-            Name = "Hi-Res Audiophile",
-            Subtitle = "Extended sub-bass + XHiFi micro-detail",
-            IsBuiltin = true,
+            Name = "Hi-Res Audiophile", Subtitle = "Extended sub-bass + XHiFi micro-detail", IsBuiltin = true,
             Params = new DspParamsModel
             {
                 EqEnabled = true,
@@ -209,9 +264,7 @@ public sealed partial class MainWindow : Window
         },
         new PresetModel
         {
-            Name = "Deep Bass Boost",
-            Subtitle = "Subwoofer harmonic punch for IEMs",
-            IsBuiltin = true,
+            Name = "Deep Bass Boost", Subtitle = "Subwoofer harmonic punch for IEMs", IsBuiltin = true,
             Params = new DspParamsModel
             {
                 EqEnabled = true,
@@ -223,9 +276,7 @@ public sealed partial class MainWindow : Window
         },
         new PresetModel
         {
-            Name = "Warm Tube Studio",
-            Subtitle = "6N1J analog warmth + vocal focus",
-            IsBuiltin = true,
+            Name = "Warm Tube Studio", Subtitle = "6N1J analog warmth + vocal focus", IsBuiltin = true,
             Params = new DspParamsModel
             {
                 EqEnabled = true,
@@ -242,30 +293,10 @@ public sealed partial class MainWindow : Window
     private static List<EqPresetModel> CreateBuiltinEqPresets() => new()
     {
         new EqPresetModel { Name = "Flat", EqMode = 0, IsBuiltin = true, EqBandsDb = new float[10], EqBands18Db = new float[18] },
-        new EqPresetModel
-        {
-            Name = "V-Shape Fun", EqMode = 0, IsBuiltin = true,
-            EqBandsDb = new[] { 3.5f, 4.0f, 2.0f, 0f, -1.5f, -1.0f, 0.5f, 2.0f, 3.5f, 3.0f },
-            EqBands18Db = Interpolate10To18(new[] { 3.5f, 4.0f, 2.0f, 0f, -1.5f, -1.0f, 0.5f, 2.0f, 3.5f, 3.0f })
-        },
-        new EqPresetModel
-        {
-            Name = "Vocal Focus", EqMode = 0, IsBuiltin = true,
-            EqBandsDb = new[] { -1.0f, -0.5f, 0f, 1.0f, 2.0f, 3.0f, 3.5f, 2.0f, 0.5f, 0f },
-            EqBands18Db = Interpolate10To18(new[] { -1.0f, -0.5f, 0f, 1.0f, 2.0f, 3.0f, 3.5f, 2.0f, 0.5f, 0f })
-        },
-        new EqPresetModel
-        {
-            Name = "Deep Basshead", EqMode = 1, IsBuiltin = true,
-            EqBandsDb = new[] { 5.5f, 6.0f, 3.5f, 1.0f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f },
-            EqBands18Db = Interpolate10To18(new[] { 5.5f, 6.0f, 3.5f, 1.0f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f })
-        },
-        new EqPresetModel
-        {
-            Name = "Acoustic & Jazz", EqMode = 1, IsBuiltin = true,
-            EqBandsDb = new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0f, 0.5f, 1.5f, 2.0f, 2.5f, 2.0f },
-            EqBands18Db = Interpolate10To18(new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0f, 0.5f, 1.5f, 2.0f, 2.5f, 2.0f })
-        }
+        new EqPresetModel { Name = "V-Shape Fun", EqMode = 0, IsBuiltin = true, EqBandsDb = new[] { 3.5f, 4.0f, 2.0f, 0f, -1.5f, -1.0f, 0.5f, 2.0f, 3.5f, 3.0f }, EqBands18Db = Interpolate10To18(new[] { 3.5f, 4.0f, 2.0f, 0f, -1.5f, -1.0f, 0.5f, 2.0f, 3.5f, 3.0f }) },
+        new EqPresetModel { Name = "Vocal Focus", EqMode = 0, IsBuiltin = true, EqBandsDb = new[] { -1.0f, -0.5f, 0f, 1.0f, 2.0f, 3.0f, 3.5f, 2.0f, 0.5f, 0f }, EqBands18Db = Interpolate10To18(new[] { -1.0f, -0.5f, 0f, 1.0f, 2.0f, 3.0f, 3.5f, 2.0f, 0.5f, 0f }) },
+        new EqPresetModel { Name = "Deep Basshead", EqMode = 1, IsBuiltin = true, EqBandsDb = new[] { 5.5f, 6.0f, 3.5f, 1.0f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f }, EqBands18Db = Interpolate10To18(new[] { 5.5f, 6.0f, 3.5f, 1.0f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f }) },
+        new EqPresetModel { Name = "Acoustic & Jazz", EqMode = 1, IsBuiltin = true, EqBandsDb = new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0f, 0.5f, 1.5f, 2.0f, 2.5f, 2.0f }, EqBands18Db = Interpolate10To18(new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0f, 0.5f, 1.5f, 2.0f, 2.5f, 2.0f }) }
     };
 
     private void ReloadPresetsLists()
@@ -326,66 +357,41 @@ public sealed partial class MainWindow : Window
     private void PushLiveParams()
     {
         if (_isUpdating) return;
-        _liveParams.MasterEnabled = MasterToggle.IsOn;
         _liveParams.MasterGainDb = (float)_masterGainSlider.Value;
         _liveParams.OutputPan = (float)(_panSlider.Value / 100.0);
-        _liveParams.LimiterEnabled = _limiterToggle.IsOn;
         _liveParams.LimiterThresholdDb = (float)_limiterSlider.Value;
 
-        _liveParams.EqEnabled = EqToggle.IsOn;
-        _liveParams.BassEnabled = _bassToggle.IsOn;
         _liveParams.BassFrequencyHz = (float)_bassFreqSlider.Value;
         _liveParams.BassGainDb = (float)_bassGainSlider.Value;
-
-        _liveParams.ClarityEnabled = _clarityToggle.IsOn;
         _liveParams.ClarityGainDb = (float)_clarityGainSlider.Value;
-
-        _liveParams.DynamicEnabled = _dynToggle.IsOn;
         _liveParams.DynamicBass = (float)_dynBassSlider.Value;
-
-        _liveParams.TubeEnabled = _tubeToggle.IsOn;
         _liveParams.TubeDrive = (float)(_tubeDriveSlider.Value / 100.0);
 
-        _liveParams.AnalogXEnabled = _analogToggle.IsOn;
-        _liveParams.DdcEnabled = _ddcToggle.IsOn;
-
-        _liveParams.ConvolverEnabled = _convToggle.IsOn;
         _liveParams.ConvolverCrossChannel = (float)(_convCrossSlider.Value / 100.0);
         _liveParams.ConvolverWetMix = (float)(_convWetSlider.Value / 100.0);
-
-        _liveParams.VseEnabled = _vseToggle.IsOn;
         _liveParams.VseStrength = (float)(_vseSlider.Value / 100.0);
 
-        _liveParams.SurroundEnabled = _surroundToggle.IsOn;
         _liveParams.SurroundDelayMs = (float)_surroundDelaySlider.Value;
         _liveParams.StereoWidth = (float)(_stereoWidthSlider.Value / 100.0);
 
-        _liveParams.FieldSurroundEnabled = _fieldToggle.IsOn;
         _liveParams.FieldSurroundStrength = (float)(_fieldStrengthSlider.Value / 100.0);
         _liveParams.FieldSurroundMidImage = (float)(_fieldMidSlider.Value / 100.0);
 
-        _liveParams.VhsEnabled = _vhsToggle.IsOn;
-
-        _liveParams.ReverbEnabled = _reverbToggle.IsOn;
         _liveParams.ReverbRoomSize = (float)(_revRoomSlider.Value / 100.0);
         _liveParams.ReverbWidth = (float)(_revWidthSlider.Value / 100.0);
         _liveParams.ReverbDamping = (float)(_revDampSlider.Value / 100.0);
         _liveParams.ReverbWet = (float)(_revWetSlider.Value / 100.0);
         _liveParams.ReverbDry = (float)(_revDrySlider.Value / 100.0);
 
-        _liveParams.CompEnabled = _compToggle.IsOn;
         _liveParams.CompThresholdDb = (float)_compThreshSlider.Value;
         _liveParams.CompRatio = (float)_compRatioSlider.Value;
         _liveParams.CompAttackMs = (float)_compAtkSlider.Value;
         _liveParams.CompReleaseMs = (float)_compRelSlider.Value;
         _liveParams.CompMakeupDb = (float)_compMakeupSlider.Value;
 
-        _liveParams.AgcEnabled = _agcToggle.IsOn;
         _liveParams.AgcStrength = (float)(_agcStrengthSlider.Value / 100.0);
         _liveParams.AgcMaxGainDb = (float)_agcMaxGainSlider.Value;
         _liveParams.AgcOutputThreshDb = (float)_agcThreshSlider.Value;
-
-        _liveParams.CureEnabled = _cureToggle.IsOn;
 
         try { _bridge.WriteLiveParams(_liveParams); } catch { }
         RefreshVisualStates();
@@ -395,66 +401,41 @@ public sealed partial class MainWindow : Window
     {
         _isUpdating = true;
 
-        MasterToggle.IsOn = _liveParams.MasterEnabled;
         _masterGainSlider.Value = Math.Clamp(_liveParams.MasterGainDb, -24, 12);
         _panSlider.Value = Math.Clamp(_liveParams.OutputPan * 100.0, -100, 100);
-        _limiterToggle.IsOn = _liveParams.LimiterEnabled;
         _limiterSlider.Value = Math.Clamp(_liveParams.LimiterThresholdDb, -6, 0);
 
-        EqToggle.IsOn = _liveParams.EqEnabled;
-        _bassToggle.IsOn = _liveParams.BassEnabled;
         _bassFreqSlider.Value = Math.Clamp(_liveParams.BassFrequencyHz, 30, 120);
         _bassGainSlider.Value = Math.Clamp(_liveParams.BassGainDb, 0, 15);
-
-        _clarityToggle.IsOn = _liveParams.ClarityEnabled;
         _clarityGainSlider.Value = Math.Clamp(_liveParams.ClarityGainDb, 0, 15);
-
-        _dynToggle.IsOn = _liveParams.DynamicEnabled;
         _dynBassSlider.Value = Math.Clamp(_liveParams.DynamicBass, 0, 100);
-
-        _tubeToggle.IsOn = _liveParams.TubeEnabled;
         _tubeDriveSlider.Value = Math.Clamp(_liveParams.TubeDrive * 100.0, 0, 100);
 
-        _analogToggle.IsOn = _liveParams.AnalogXEnabled;
-        _ddcToggle.IsOn = _liveParams.DdcEnabled;
-
-        _convToggle.IsOn = _liveParams.ConvolverEnabled;
         _convCrossSlider.Value = Math.Clamp(_liveParams.ConvolverCrossChannel * 100.0, 0, 100);
         _convWetSlider.Value = Math.Clamp(_liveParams.ConvolverWetMix * 100.0, 0, 100);
-
-        _vseToggle.IsOn = _liveParams.VseEnabled;
         _vseSlider.Value = Math.Clamp(_liveParams.VseStrength * 100.0, 0, 100);
 
-        _surroundToggle.IsOn = _liveParams.SurroundEnabled;
         _surroundDelaySlider.Value = Math.Clamp(_liveParams.SurroundDelayMs, 0, 20);
         _stereoWidthSlider.Value = Math.Clamp(_liveParams.StereoWidth * 100.0, 0, 200);
 
-        _fieldToggle.IsOn = _liveParams.FieldSurroundEnabled;
         _fieldStrengthSlider.Value = Math.Clamp(_liveParams.FieldSurroundStrength * 100.0, 0, 100);
         _fieldMidSlider.Value = Math.Clamp(_liveParams.FieldSurroundMidImage * 100.0, 0, 100);
 
-        _vhsToggle.IsOn = _liveParams.VhsEnabled;
-
-        _reverbToggle.IsOn = _liveParams.ReverbEnabled;
         _revRoomSlider.Value = Math.Clamp(_liveParams.ReverbRoomSize * 100.0, 0, 100);
         _revWidthSlider.Value = Math.Clamp(_liveParams.ReverbWidth * 100.0, 0, 100);
         _revDampSlider.Value = Math.Clamp(_liveParams.ReverbDamping * 100.0, 0, 100);
         _revWetSlider.Value = Math.Clamp(_liveParams.ReverbWet * 100.0, 0, 100);
         _revDrySlider.Value = Math.Clamp(_liveParams.ReverbDry * 100.0, 0, 100);
 
-        _compToggle.IsOn = _liveParams.CompEnabled;
         _compThreshSlider.Value = Math.Clamp(_liveParams.CompThresholdDb, -40, 0);
         _compRatioSlider.Value = Math.Clamp(_liveParams.CompRatio, 1, 20);
         _compAtkSlider.Value = Math.Clamp(_liveParams.CompAttackMs, 1, 100);
         _compRelSlider.Value = Math.Clamp(_liveParams.CompReleaseMs, 20, 500);
         _compMakeupSlider.Value = Math.Clamp(_liveParams.CompMakeupDb, 0, 18);
 
-        _agcToggle.IsOn = _liveParams.AgcEnabled;
         _agcStrengthSlider.Value = Math.Clamp(_liveParams.AgcStrength * 100.0, 0, 100);
         _agcMaxGainSlider.Value = Math.Clamp(_liveParams.AgcMaxGainDb, 0, 24);
         _agcThreshSlider.Value = Math.Clamp(_liveParams.AgcOutputThreshDb, -12, 0);
-
-        _cureToggle.IsOn = _liveParams.CureEnabled;
 
         RebuildEqSliders();
         _uiSettingsModel.SelectedEqPresetName = MatchEqPresetName(_liveParams.EqBandsDb, _liveParams.EqBands18Db, (int)_liveParams.EqMode);
@@ -476,7 +457,7 @@ public sealed partial class MainWindow : Window
             _liveStatus = status;
 
             string DeviceSig(AudioDeviceModel d) =>
-                $"{d.Guid}|{d.IsDefault}|{d.SampleRate}|{d.BitsPerSample}|{_bridge.IsApoInstalledOnDevice(d.Guid)}|{_bridge.IsApoActiveOnDevice(d, status, MasterToggle.IsOn)}";
+                $"{d.Guid}|{d.IsDefault}|{d.SampleRate}|{d.BitsPerSample}|{_bridge.IsApoInstalledOnDevice(d.Guid)}|{_bridge.IsApoActiveOnDevice(d, status, _liveParams.MasterEnabled)}";
             bool devicesChanged = devices.Count != _devices.Count ||
                                   !devices.Select(DeviceSig).SequenceEqual(_devices.Select(DeviceSig));
             _devices = devices;
@@ -499,7 +480,6 @@ public sealed partial class MainWindow : Window
         }
 
         SignalSourceText.Text = _liveStatus.Source.ToUpperInvariant();
-        SignalModeText.Text = _liveStatus.Mode.ToUpperInvariant();
 
         if (_liveStatus.ExtraApps.Count > 0)
         {
@@ -537,6 +517,7 @@ public sealed partial class MainWindow : Window
             DevicesListPanel.Children.Add(new TextBlock
             {
                 Text = "Waiting for Windows Audio service (Audiosrv)... Click Refresh Devices if needed.",
+                FontFamily = UiFont,
                 Foreground = TextSecondaryBrush,
                 FontSize = 13,
                 TextWrapping = TextWrapping.Wrap
@@ -547,7 +528,7 @@ public sealed partial class MainWindow : Window
         foreach (var dev in _devices)
         {
             bool apoInstalled = _bridge.IsApoInstalledOnDevice(dev.Guid);
-            bool apoActive = _bridge.IsApoActiveOnDevice(dev, _liveStatus, MasterToggle.IsOn);
+            bool apoActive = _bridge.IsApoActiveOnDevice(dev, _liveStatus, _liveParams.MasterEnabled);
             var cardStack = new StackPanel { Spacing = 12 };
 
             var topGrid = new Grid { ColumnSpacing = 12, RowSpacing = 10 };
@@ -555,84 +536,43 @@ public sealed partial class MainWindow : Window
             topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             var info = new StackPanel { Spacing = 4 };
-            info.Children.Add(new TextBlock { Text = dev.Name, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, TextWrapping = TextWrapping.Wrap });
+            info.Children.Add(new TextBlock { Text = dev.Name, FontFamily = UiFont, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, TextWrapping = TextWrapping.Wrap });
 
             var badges = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             if (dev.IsDefault)
             {
                 badges.Children.Add(new Border
                 {
-                    Height = 22,
-                    Background = SubtleBgBrush,
-                    BorderBrush = CardBorderBrush,
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(4),
-                    Padding = new Thickness(8, 0, 8, 0),
-                    Child = new TextBlock { Text = "DEFAULT", FontFamily = new FontFamily("Consolas"), FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = TextDimBrush, VerticalAlignment = VerticalAlignment.Center }
+                    Height = 22, Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 0, 8, 0),
+                    Child = new TextBlock { Text = "DEFAULT", FontFamily = UiFont, FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = TextDimBrush, VerticalAlignment = VerticalAlignment.Center }
                 });
             }
             badges.Children.Add(new Border
             {
-                Height = 22,
-                Background = SubtleBgBrush,
-                BorderBrush = apoInstalled ? AccentBorderBrush : CardBorderBrush,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(8, 0, 8, 0),
-                Child = new TextBlock
-                {
-                    Text = apoInstalled ? "INSTALLED" : "NOT INSTALLED",
-                    FontFamily = new FontFamily("Consolas"),
-                    FontSize = 10.5,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = apoInstalled ? TextPrimaryBrush : MutedBrush,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
+                Height = 22, Background = SubtleBgBrush, BorderBrush = apoInstalled ? MakeAccentBorderBrush() : CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 0, 8, 0),
+                Child = new TextBlock { Text = apoInstalled ? "INSTALLED" : "NOT INSTALLED", FontFamily = UiFont, FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = apoInstalled ? TextPrimaryBrush : MutedBrush, VerticalAlignment = VerticalAlignment.Center }
             });
             if (apoActive)
             {
                 badges.Children.Add(new Border
                 {
-                    Height = 22,
-                    Background = AccentBgBrush,
-                    BorderBrush = AccentBorderBrush,
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(4),
-                    Padding = new Thickness(8, 0, 8, 0),
-                    Child = new TextBlock
-                    {
-                        Text = "ACTIVE",
-                        FontFamily = new FontFamily("Consolas"),
-                        FontSize = 10.5,
-                        FontWeight = FontWeights.Bold,
-                        Foreground = AccentTextBrush,
-                        VerticalAlignment = VerticalAlignment.Center
-                    }
+                    Height = 22, Background = MakeAccentBgBrush(), BorderBrush = MakeAccentBorderBrush(), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Padding = new Thickness(8, 0, 8, 0),
+                    Child = new TextBlock { Text = "ACTIVE", FontFamily = UiFont, FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = AccentTextBrush, VerticalAlignment = VerticalAlignment.Center }
                 });
             }
             info.Children.Add(badges);
             info.Children.Add(new TextBlock
             {
                 Text = $"GUID: {dev.Guid} · {dev.SampleRate / 1000.0:0.0} kHz / {dev.BitsPerSample}-bit · {dev.Channels}ch",
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = 11.5,
-                Foreground = TextSecondaryBrush,
-                TextWrapping = TextWrapping.Wrap
+                FontFamily = UiFont, FontSize = 12, Foreground = TextSecondaryBrush, TextWrapping = TextWrapping.Wrap
             });
 
             var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
             string guid = dev.Guid;
             var installBtn = new Button
             {
-                Content = "Install / Repair APO",
-                Height = 34,
-                Padding = new Thickness(12, 0, 12, 0),
-                CornerRadius = new CornerRadius(4),
-                Background = AccentBgBrush,
-                BorderBrush = AccentBorderBrush,
-                Foreground = AccentTextBrush,
-                FontWeight = FontWeights.SemiBold,
-                FontSize = 12.5
+                Content = "Install / Repair APO", Height = 34, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(4),
+                Background = MakeAccentBgBrush(), BorderBrush = MakeAccentBorderBrush(), Foreground = AccentTextBrush, FontFamily = UiFont, FontWeight = FontWeights.SemiBold, FontSize = 12.5
             };
             installBtn.Click += async (_, _) =>
             {
@@ -640,13 +580,13 @@ public sealed partial class MainWindow : Window
                 _apoOpBusy = true;
                 try
                 {
-                    ShowToast("Installing V4Wa MFX APO...");
+                    ShowToast("Installing MFX APO...");
                     var (launched, exitCode) = await _bridge.RunApoScriptElevatedAsync(true, guid);
                     await Task.Delay(500);
                     await PollLiveTelemetrySafeAsync();
                     RebuildDevicesListUi();
                     if (!launched) ShowToast("UAC cancelled or install script not found.");
-                    else if (exitCode == 0) ShowToast("V4Wa MFX APO installed successfully!");
+                    else if (exitCode == 0) ShowToast("MFX APO installed successfully!");
                     else ShowToast($"APO install failed (code {exitCode}). See apo_install.log.");
                 }
                 finally { _apoOpBusy = false; }
@@ -654,13 +594,8 @@ public sealed partial class MainWindow : Window
 
             var restoreBtn = new Button
             {
-                Content = "Restore Factory",
-                Height = 34,
-                Padding = new Thickness(12, 0, 12, 0),
-                CornerRadius = new CornerRadius(4),
-                Background = SubtleBgBrush,
-                BorderBrush = CardBorderBrush,
-                FontSize = 12.5
+                Content = "Restore Factory", Height = 34, Padding = new Thickness(12, 0, 12, 0), CornerRadius = new CornerRadius(4),
+                Background = SubtleBgBrush, BorderBrush = CardBorderBrush, FontFamily = UiFont, FontSize = 12.5
             };
             restoreBtn.Click += async (_, _) =>
             {
@@ -689,23 +624,18 @@ public sealed partial class MainWindow : Window
             topGrid.Children.Add(actions);
             cardStack.Children.Add(topGrid);
 
-            // Command copy box for default device
             if (dev.IsDefault)
             {
                 string installCmd = $"powershell -ExecutionPolicy Bypass -File \"{_bridge.InstallScriptPath}\" -EndpointGuid \"{guid}\"";
                 var cmdBox = new Border
                 {
-                    Background = SubtleBgBrush,
-                    BorderBrush = CardBorderBrush,
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(6),
-                    Padding = new Thickness(12, 8, 12, 8)
+                    Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(12, 8, 12, 8)
                 };
                 var cmdGrid = new Grid { ColumnSpacing = 10 };
                 cmdGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 cmdGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var cmdText = new TextBlock { Text = installCmd, FontFamily = new FontFamily("Consolas"), FontSize = 11, Foreground = TextDimBrush, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-                var copyBtn = new Button { Content = "Copy Cmd", Height = 30, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(4), Background = CardBgBrush, BorderBrush = CardBorderBrush, FontSize = 11.5 };
+                var cmdText = new TextBlock { Text = installCmd, FontFamily = UiFont, FontSize = 11.5, Foreground = TextDimBrush, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+                var copyBtn = new Button { Content = "Copy Cmd", Height = 30, Padding = new Thickness(10, 0, 10, 0), CornerRadius = new CornerRadius(4), Background = CardBgBrush, BorderBrush = CardBorderBrush, FontFamily = UiFont, FontSize = 11.5 };
                 copyBtn.Click += (_, _) =>
                 {
                     var dp = new DataPackage();
@@ -723,11 +653,7 @@ public sealed partial class MainWindow : Window
 
             DevicesListPanel.Children.Add(new Border
             {
-                Background = CardBgBrush,
-                BorderBrush = CardBorderBrush,
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(16),
+                Background = CardBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16),
                 Child = cardStack
             });
         }
@@ -753,12 +679,15 @@ public sealed partial class MainWindow : Window
         return Color.FromArgb(255, lerp(a.R, b.R), lerp(a.G, b.G), lerp(a.B, b.B));
     }
 
-    private void ApplyAccentColor(Color baseColor, bool syncPicker, bool persist = true)
+    private void ApplyAccentColor(Color baseColor, Color? gradientEnd, bool syncPicker, bool persist = true)
     {
         _accentBase = Color.FromArgb(255, baseColor.R, baseColor.G, baseColor.B);
-        var light = BlendColor(_accentBase, Colors.White, 0.28);
-        var text = BlendColor(_accentBase, Colors.White, 0.62);
-        var dark = BlendColor(_accentBase, Colors.Black, 0.22);
+        _accentGradientEnd = gradientEnd is Color ge ? Color.FromArgb(255, ge.R, ge.G, ge.B) : null;
+
+        var effectiveMid = _accentGradientEnd is Color e ? BlendColor(_accentBase, e, 0.5) : _accentBase;
+        var light = BlendColor(effectiveMid, Colors.White, 0.28);
+        var text = BlendColor(effectiveMid, Colors.White, 0.62);
+        var dark = BlendColor(effectiveMid, Colors.Black, 0.22);
 
         AccentBrush.Color = _accentBase;
         AccentLightBrush.Color = light;
@@ -767,20 +696,28 @@ public sealed partial class MainWindow : Window
         AccentBorderBrush.Color = Color.FromArgb(160, light.R, light.G, light.B);
 
         var res = Application.Current.Resources;
-        if (res["ToggleSwitchFillOn"] is SolidColorBrush t1) t1.Color = _accentBase;
-        if (res["ToggleSwitchFillOnPointerOver"] is SolidColorBrush t2) t2.Color = light;
-        if (res["ToggleSwitchFillOnPressed"] is SolidColorBrush t3) t3.Color = dark;
-        if (res["SliderTrackValueFill"] is SolidColorBrush s1) s1.Color = _accentBase;
+        if (res["SliderTrackValueFill"] is SolidColorBrush s1) s1.Color = effectiveMid;
         if (res["SliderTrackValueFillPointerOver"] is SolidColorBrush s2) s2.Color = light;
         if (res["SliderTrackValueFillPressed"] is SolidColorBrush s3) s3.Color = dark;
         if (res["SliderThumbBackgroundPressed"] is SolidColorBrush s4) s4.Color = light;
 
-        string hex = $"#{_accentBase.R:X2}{_accentBase.G:X2}{_accentBase.B:X2}";
-        ActiveAccentHexText.Text = $"{hex} · RGB({_accentBase.R}, {_accentBase.G}, {_accentBase.B})";
+        string hex1 = $"#{_accentBase.R:X2}{_accentBase.G:X2}{_accentBase.B:X2}";
+        if (_accentGradientEnd is Color gEnd)
+        {
+            string hex2 = $"#{gEnd.R:X2}{gEnd.G:X2}{gEnd.B:X2}";
+            ActiveAccentHexText.Text = $"Gradient · {hex1} → {hex2}";
+            ActiveAccentSwatchBox.Background = MakeAccentStrongBrush();
+        }
+        else
+        {
+            ActiveAccentHexText.Text = $"{hex1} · RGB({_accentBase.R}, {_accentBase.G}, {_accentBase.B})";
+            ActiveAccentSwatchBox.Background = AccentBrush;
+        }
 
         if (persist)
         {
-            _uiSettingsModel.AccentColorHex = hex;
+            _uiSettingsModel.AccentColorHex = hex1;
+            _uiSettingsModel.AccentGradientEndHex = _accentGradientEnd is Color g2 ? $"#{g2.R:X2}{g2.G:X2}{g2.B:X2}" : null;
             _bridge.SaveUiSettings(_uiSettingsModel);
         }
 
@@ -792,7 +729,11 @@ public sealed partial class MainWindow : Window
             _isUpdating = prev;
         }
 
-        if (!_isUpdating) RefreshVisualStates();
+        if (!_isUpdating)
+        {
+            RebuildPinnedPresets();
+            RefreshVisualStates();
+        }
     }
 
     private void ApplySurfaceTheme(string theme, bool persist = true)
@@ -833,10 +774,10 @@ public sealed partial class MainWindow : Window
     private void UpdateThemePresetButtons()
     {
         bool isAcrylic = _uiSettingsModel.Theme != "DarkOLED";
-        ThemeAcrylicBtn.Background = isAcrylic ? AccentBgBrush : SubtleBgBrush;
-        ThemeAcrylicBtn.BorderBrush = isAcrylic ? AccentBorderBrush : CardBorderBrush;
-        ThemeOledBtn.Background = !isAcrylic ? AccentBgBrush : SubtleBgBrush;
-        ThemeOledBtn.BorderBrush = !isAcrylic ? AccentBorderBrush : CardBorderBrush;
+        ThemeAcrylicBtn.Background = isAcrylic ? MakeAccentBgBrush() : SubtleBgBrush;
+        ThemeAcrylicBtn.BorderBrush = isAcrylic ? MakeAccentBorderBrush() : CardBorderBrush;
+        ThemeOledBtn.Background = !isAcrylic ? MakeAccentBgBrush() : SubtleBgBrush;
+        ThemeOledBtn.BorderBrush = !isAcrylic ? MakeAccentBorderBrush() : CardBorderBrush;
     }
 
     private void SelectSettingsCategory(string category)
@@ -859,6 +800,7 @@ public sealed partial class MainWindow : Window
             bool active = category == key;
             btn.Background = active ? CardBgBrush : TransparentBrush;
             pill.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+            pill.Background = MakeAccentStrongBrush();
             icon.Foreground = active ? AccentLightBrush : TextSecondaryBrush;
         }
     }
@@ -874,7 +816,7 @@ public sealed partial class MainWindow : Window
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        left.Children.Add(new TextBlock { Text = label, FontSize = 13, Foreground = TextDimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
+        left.Children.Add(new TextBlock { Text = label, FontFamily = UiFont, FontSize = 13, Foreground = TextDimBrush, TextTrimming = TextTrimming.CharacterEllipsis });
         if (!string.IsNullOrEmpty(tooltip))
         {
             var tipIcon = new FontIcon { Glyph = "\uE946", FontSize = 12, Foreground = MutedBrush };
@@ -885,8 +827,8 @@ public sealed partial class MainWindow : Window
         var valText = new TextBlock
         {
             Text = formatter(val),
-            FontFamily = new FontFamily("Consolas"),
-            FontSize = 13.5,
+            FontFamily = UiFont,
+            FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             Foreground = TextPrimaryBrush,
             VerticalAlignment = VerticalAlignment.Center
@@ -913,11 +855,7 @@ public sealed partial class MainWindow : Window
     {
         var border = new Border
         {
-            Background = SubtleBgBrush,
-            BorderBrush = CardBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(3)
+            Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(3)
         };
         var grid = new Grid { ColumnSpacing = 4 };
         var buttons = new Button[labels.Length];
@@ -928,13 +866,8 @@ public sealed partial class MainWindow : Window
             int idx = i;
             var btn = new Button
             {
-                Content = labels[i],
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Height = 32,
-                CornerRadius = new CornerRadius(4),
-                FontSize = 12,
-                Padding = new Thickness(6, 0, 6, 0),
-                BorderThickness = new Thickness(1)
+                Content = labels[i], HorizontalAlignment = HorizontalAlignment.Stretch, Height = 32, CornerRadius = new CornerRadius(4),
+                FontFamily = UiFont, FontSize = 12, Padding = new Thickness(6, 0, 6, 0), BorderThickness = new Thickness(1)
             };
             btn.Click += (_, _) => { setter(idx); PushLiveParams(); };
             Grid.SetColumn(btn, i);
@@ -950,11 +883,7 @@ public sealed partial class MainWindow : Window
     {
         var border = new Border
         {
-            Background = SubtleBgBrush,
-            BorderBrush = CardBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(4)
+            Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Padding = new Thickness(4)
         };
         var stack = new StackPanel { Spacing = 4 };
         var buttons = new Button[labels.Length];
@@ -964,14 +893,8 @@ public sealed partial class MainWindow : Window
             int idx = i;
             var btn = new Button
             {
-                Content = labels[i],
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                Height = 34,
-                CornerRadius = new CornerRadius(4),
-                FontSize = 12.5,
-                Padding = new Thickness(12, 0, 12, 0),
-                BorderThickness = new Thickness(1)
+                Content = labels[i], HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left,
+                Height = 34, CornerRadius = new CornerRadius(4), FontFamily = UiFont, FontSize = 12.5, Padding = new Thickness(12, 0, 12, 0), BorderThickness = new Thickness(1)
             };
             btn.Click += (_, _) => { setter(idx); PushLiveParams(); };
             stack.Children.Add(btn);
@@ -984,20 +907,15 @@ public sealed partial class MainWindow : Window
 
     private DspCardEntry RegisterCard(
         string id, int order, string glyph, string title, string tooltip,
-        bool hasToggle, Action<StackPanel, DspCardEntry> buildBody)
+        Func<bool>? getEnabled, Action<bool>? setEnabled, Action<StackPanel, DspCardEntry> buildBody)
     {
         var icon = new FontIcon { Glyph = glyph, FontSize = 15, Foreground = AccentLightBrush };
         var iconBox = new Border
         {
-            Width = 32,
-            Height = 32,
-            CornerRadius = new CornerRadius(6),
-            Background = AccentBgBrush,
-            BorderBrush = AccentBorderBrush,
-            BorderThickness = new Thickness(1),
+            Width = 32, Height = 32, CornerRadius = new CornerRadius(6), Background = AccentBgBrush, BorderBrush = AccentBorderBrush, BorderThickness = new Thickness(1),
             Child = icon
         };
-        var titleBlock = new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var titleBlock = new TextBlock { Text = title, FontFamily = UiFont, FontSize = 14.5, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
 
         var leftHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center };
         leftHeader.Children.Add(iconBox);
@@ -1012,14 +930,8 @@ public sealed partial class MainWindow : Window
         var pinBtn = new Button
         {
             Content = new FontIcon { Glyph = "\uE718", FontSize = 12 },
-            Padding = new Thickness(0),
-            Width = 30,
-            Height = 30,
-            CornerRadius = new CornerRadius(4),
-            Background = SubtleBgBrush,
-            BorderBrush = CardBorderBrush,
-            BorderThickness = new Thickness(1),
-            Foreground = MutedBrush
+            Padding = new Thickness(0), Width = 30, Height = 30, CornerRadius = new CornerRadius(4),
+            Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), Foreground = MutedBrush
         };
         ToolTipService.SetToolTip(pinBtn, "Pin module to top");
         pinBtn.Click += (_, _) =>
@@ -1031,17 +943,30 @@ public sealed partial class MainWindow : Window
             RefreshVisualStates();
         };
 
-        ToggleSwitch? toggle = null;
-        var rightHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        Button? powerBtn = null;
+        FontIcon? powerIcon = null;
+        var rightHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         rightHeader.Children.Add(pinBtn);
-        if (hasToggle)
+
+        if (getEnabled != null && setEnabled != null)
         {
-            toggle = new ToggleSwitch { IsOn = false, OnContent = "", OffContent = "", MinWidth = 0 };
-            toggle.Toggled += (_, _) => PushLiveParams();
-            rightHeader.Children.Add(toggle);
+            powerIcon = new FontIcon { Glyph = "\uE7E8", FontSize = 13, Foreground = MutedBrush };
+            powerBtn = new Button
+            {
+                Content = powerIcon,
+                Padding = new Thickness(0), Width = 30, Height = 30, CornerRadius = new CornerRadius(4),
+                Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1)
+            };
+            ToolTipService.SetToolTip(powerBtn, $"Toggle {title} (On / Off)");
+            powerBtn.Click += (_, _) =>
+            {
+                setEnabled(!getEnabled());
+                PushLiveParams();
+            };
+            rightHeader.Children.Add(powerBtn);
         }
 
-        var headerGrid = new Grid { ColumnSpacing = 10 };
+        var headerGrid = new Grid { ColumnSpacing = 8 };
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(leftHeader, 0);
@@ -1054,24 +979,16 @@ public sealed partial class MainWindow : Window
 
         var root = new Border
         {
-            Background = CardBgBrush,
-            BorderBrush = CardBorderBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(16),
+            Background = CardBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16),
             Child = bodyStack
         };
 
         var entry = new DspCardEntry
         {
-            Id = id,
-            DefaultOrder = order,
-            Root = root,
-            IconBox = iconBox,
-            Icon = icon,
-            PinBtn = pinBtn,
-            Toggle = toggle,
-            IsActive = () => toggle == null ? MasterToggle.IsOn : (MasterToggle.IsOn && toggle.IsOn)
+            Id = id, DefaultOrder = order, Root = root, IconBox = iconBox, Icon = icon,
+            PinBtn = pinBtn, PowerBtn = powerBtn, PowerIcon = powerIcon,
+            GetEnabled = getEnabled ?? (() => true),
+            IsActive = () => _liveParams.MasterEnabled && (getEnabled == null || getEnabled())
         };
 
         buildBody(bodyStack, entry);
@@ -1085,9 +1002,8 @@ public sealed partial class MainWindow : Window
     {
         RegisterCard("bass", 1, "\uE7F5", "ViPER Bass",
             "Enhances low-end weight and punch.\n• Natural: clean sub-bass shelf\n• PureBass+: tight punch with 2nd harmonics\n• Subwoofer: deep sub-harmonic rumble",
-            true, (body, card) =>
+            () => _liveParams.BassEnabled, v => _liveParams.BassEnabled = v, (body, card) =>
             {
-                _bassToggle = card.Toggle!;
                 var (seg, btns) = CreateSegmentedButtons(new[] { "Natural", "PureBass+", "Subwoofer" }, v => _liveParams.BassMode = (uint)v);
                 var freq = CreateSliderRow("Bass Frequency", "Cutoff frequency (30–120 Hz).", 30, 120, 60, 5, v => $"{v:0} Hz");
                 var gain = CreateSliderRow("Bass Gain", "Boost intensity in dB.", 0, 15, 3.5, 0.5, v => $"+{v:0.0} dB");
@@ -1105,15 +1021,14 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("clarity", 2, "\uE767", "ViPER Clarity",
             "Restores vocal presence and micro-detail.\n• Natural: transparent upper-mid lift\n• OZone+: sparkling vocal definition\n• XHiFi: crisp high-frequency air",
-            true, (body, card) =>
+            () => _liveParams.ClarityEnabled, v => _liveParams.ClarityEnabled = v, (body, card) =>
             {
-                _clarityToggle = card.Toggle!;
                 var (seg, btns) = CreateSegmentedButtons(new[] { "Natural", "OZone+", "XHiFi" }, v => _liveParams.ClarityMode = (uint)v);
                 var gain = CreateSliderRow("Clarity Gain", "Detail restoration strength (0–15 dB).", 0, 15, 3.5, 0.5, v => $"+{v:0.0} dB");
                 _clarityGainSlider = gain.Slider;
                 body.Children.Add(seg);
                 body.Children.Add(gain.Panel);
-                body.Children.Add(new TextBlock { Text = "Restores micro-detail and upper-harmonic air without harsh sibilance.", FontSize = 12, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap });
+                body.Children.Add(new TextBlock { Text = "Restores micro-detail and upper-harmonic air without harsh sibilance.", FontFamily = UiFont, FontSize = 12, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap });
                 card.RefreshVisual = active =>
                 {
                     StyleModeButtons(btns, (int)_liveParams.ClarityMode, active);
@@ -1123,9 +1038,8 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("dynamic", 3, "\uE9D2", "Dynamic System",
             "Optimizes dynamic excursion and bass response for your listening hardware.",
-            true, (body, card) =>
+            () => _liveParams.DynamicEnabled, v => _liveParams.DynamicEnabled = v, (body, card) =>
             {
-                _dynToggle = card.Toggle!;
                 var (stacked, btns) = CreateStackedRowButtons(new[] { "Common", "Extreme", "High-End", "Studio" }, v => _liveParams.DynamicDevice = (uint)v);
                 var bass = CreateSliderRow("Dynamic Bass", "Transient bass punch percentage (0–100%).", 0, 100, 25, 5, v => $"{v:0}%");
                 _dynBassSlider = bass.Slider;
@@ -1140,7 +1054,7 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("master", 4, "\uE83D", "Output Gain, Pan & Limiter",
             "Controls master output volume, L/R channel balance, and zero-clipping brickwall limiter.",
-            false, (body, card) =>
+            null, null, (body, card) =>
             {
                 var gain = CreateSliderRow("Master Gain", "Pre-limiter output level (-24 to +12 dB).", -24, 12, 0, 0.5, v => v > 0 ? $"+{v:0.0} dB" : $"{v:0.0} dB");
                 var pan = CreateSliderRow("Output Pan", "Stereo channel balance (-100% Left to +100% Right).", -100, 100, 0, 5, v => Math.Abs(v) < 1 ? "Center" : (v < 0 ? $"L {Math.Abs(v):0}%" : $"R {v:0}%"));
@@ -1150,13 +1064,19 @@ public sealed partial class MainWindow : Window
                 var limRow = new Grid { Margin = new Thickness(0, 4, 0, 0), ColumnSpacing = 10 };
                 limRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 limRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                var limLabel = new TextBlock { Text = "Brickwall Limiter", FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, VerticalAlignment = VerticalAlignment.Center };
-                _limiterToggle = new ToggleSwitch { IsOn = true, OnContent = "", OffContent = "", MinWidth = 0 };
-                _limiterToggle.Toggled += (_, _) => PushLiveParams();
+                var limLabel = new TextBlock { Text = "Brickwall Limiter", FontFamily = UiFont, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, VerticalAlignment = VerticalAlignment.Center };
+                _limiterPowerIcon = new FontIcon { Glyph = "\uE7E8", FontSize = 13, Foreground = AccentLightBrush };
+                _limiterPowerBtn = new Button
+                {
+                    Content = _limiterPowerIcon, Padding = new Thickness(0), Width = 30, Height = 30, CornerRadius = new CornerRadius(4),
+                    Background = AccentBgBrush, BorderBrush = AccentBorderBrush, BorderThickness = new Thickness(1)
+                };
+                ToolTipService.SetToolTip(_limiterPowerBtn, "Toggle Brickwall Limiter");
+                _limiterPowerBtn.Click += (_, _) => { _liveParams.LimiterEnabled = !_liveParams.LimiterEnabled; PushLiveParams(); };
                 Grid.SetColumn(limLabel, 0);
-                Grid.SetColumn(_limiterToggle, 1);
+                Grid.SetColumn(_limiterPowerBtn, 1);
                 limRow.Children.Add(limLabel);
-                limRow.Children.Add(_limiterToggle);
+                limRow.Children.Add(_limiterPowerBtn);
 
                 var limThresh = CreateSliderRow("Limiter Threshold", "Hard ceiling preventing digital clipping (-6.0 to 0.0 dBFS).", -6, 0, -0.3, 0.1, v => $"{v:0.0} dBFS");
                 _limiterSlider = limThresh.Slider;
@@ -1168,16 +1088,17 @@ public sealed partial class MainWindow : Window
                 card.RefreshVisual = active =>
                 {
                     gain.Slider.Opacity = pan.Slider.Opacity = active ? 1.0 : 0.45;
-                    limThresh.Slider.Opacity = (active && _limiterToggle.IsOn) ? 1.0 : 0.45;
+                    bool limOn = active && _liveParams.LimiterEnabled;
+                    StylePowerButton(_limiterPowerBtn, _limiterPowerIcon, limOn);
+                    limThresh.Slider.Opacity = limOn ? 1.0 : 0.45;
                 };
             });
 
         RegisterCard("analogx", 5, "\uE950", "AnalogX",
             "Models dense, smooth solid-state harmonic saturation—tighter and more balanced than 6N1J tube warmth.",
-            true, (body, card) =>
+            () => _liveParams.AnalogXEnabled, v => _liveParams.AnalogXEnabled = v, (body, card) =>
             {
-                _analogToggle = card.Toggle!;
-                body.Children.Add(new TextBlock { Text = "Solid-state harmonic signature for richer body and analog smoothness.", FontSize = 12, Foreground = TextSecondaryBrush, TextWrapping = TextWrapping.Wrap });
+                body.Children.Add(new TextBlock { Text = "Solid-state harmonic signature for richer body and analog smoothness.", FontFamily = UiFont, FontSize = 12, Foreground = TextSecondaryBrush, TextWrapping = TextWrapping.Wrap });
                 var (seg, btns) = CreateSegmentedButtons(new[] { "Slight", "Moderate", "Extreme" }, v => _liveParams.AnalogXLevel = (uint)v);
                 body.Children.Add(seg);
                 card.RefreshVisual = active => StyleModeButtons(btns, (int)_liveParams.AnalogXLevel, active);
@@ -1185,22 +1106,20 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("tube", 6, "\uEA80", "Tube Simulator (6N1J)",
             "Simulates even-order vacuum tube harmonics of a classic 6N1J preamp for lush, warm vocals.",
-            true, (body, card) =>
+            () => _liveParams.TubeEnabled, v => _liveParams.TubeEnabled = v, (body, card) =>
             {
-                _tubeToggle = card.Toggle!;
                 var drive = CreateSliderRow("Harmonic Drive", "Even-order tube saturation intensity (0–100%).", 0, 100, 25, 1, v => $"{v:0}%");
                 _tubeDriveSlider = drive.Slider;
                 body.Children.Add(drive.Panel);
-                body.Children.Add(new TextBlock { Text = "Softens digital edge with warm vacuum-tube harmonics.", FontSize = 12, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap });
+                body.Children.Add(new TextBlock { Text = "Softens digital edge with warm vacuum-tube harmonics.", FontFamily = UiFont, FontSize = 12, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap });
                 card.RefreshVisual = active => drive.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
         RegisterCard("ddc", 7, "\uE7F6", "ViPER-DDC",
             "Loads ViPER4Android / AutoEQ .vdc biquad profiles to correct headphone frequency response up to 384 kHz.",
-            true, (body, card) =>
+            () => _liveParams.DdcEnabled, v => _liveParams.DdcEnabled = v, (body, card) =>
             {
-                _ddcToggle = card.Toggle!;
-                _ddcCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, MinHeight = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, PlaceholderText = "Select .vdc profile..." };
+                _ddcCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, MinHeight = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, FontFamily = UiFont, PlaceholderText = "Select .vdc profile..." };
                 _ddcCombo.SelectionChanged += (_, _) =>
                 {
                     if (_isUpdating) return;
@@ -1211,7 +1130,7 @@ public sealed partial class MainWindow : Window
                         ShowToast($"Loaded DDC: {fn}");
                     }
                 };
-                var uploadBtn = new Button { Content = "Upload .vdc Profile", HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush };
+                var uploadBtn = new Button { Content = "Upload .vdc Profile", HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, FontFamily = UiFont };
                 uploadBtn.Click += async (_, _) => await UploadDdcFileAsync();
                 body.Children.Add(_ddcCombo);
                 body.Children.Add(uploadBtn);
@@ -1220,10 +1139,9 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("convolver", 8, "\uE9F5", "Convolver",
             "Partitioned FFT convolution engine for .irs and .wav impulse responses with automatic Hi-Res resampling.",
-            true, (body, card) =>
+            () => _liveParams.ConvolverEnabled, v => _liveParams.ConvolverEnabled = v, (body, card) =>
             {
-                _convToggle = card.Toggle!;
-                _irsCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, MinHeight = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, PlaceholderText = "Select .irs / .wav file..." };
+                _irsCombo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, MinHeight = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, FontFamily = UiFont, PlaceholderText = "Select .irs / .wav file..." };
                 _irsCombo.SelectionChanged += (_, _) =>
                 {
                     if (_isUpdating) return;
@@ -1234,7 +1152,7 @@ public sealed partial class MainWindow : Window
                         ShowToast($"Loaded IR: {fn}");
                     }
                 };
-                var uploadBtn = new Button { Content = "Upload .irs / .wav File", HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush };
+                var uploadBtn = new Button { Content = "Upload .irs / .wav File", HorizontalAlignment = HorizontalAlignment.Stretch, Height = 34, CornerRadius = new CornerRadius(4), Background = SubtleBgBrush, BorderBrush = CardBorderBrush, FontFamily = UiFont };
                 uploadBtn.Click += async (_, _) => await UploadIrsFileAsync();
                 var cross = CreateSliderRow("Cross Channel", "Blends L/R channels across the impulse response (0–100%).", 0, 100, 0, 5, v => $"{v:0}%");
                 var wet = CreateSliderRow("Wet Mix", "Convolver dry/wet balance (0–100%).", 0, 100, 100, 5, v => $"{v:0}%");
@@ -1253,21 +1171,19 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("vse", 9, "\uE9D9", "Spectrum Extension",
             "Synthesizes missing upper-harmonic air above 8 kHz for compressed streams.",
-            true, (body, card) =>
+            () => _liveParams.VseEnabled, v => _liveParams.VseEnabled = v, (body, card) =>
             {
-                _vseToggle = card.Toggle!;
                 var str = CreateSliderRow("Effect Strength", "High-frequency harmonic exciter strength (0–100%).", 0, 100, 50, 5, v => $"{v:0}%");
                 _vseSlider = str.Slider;
                 body.Children.Add(str.Panel);
-                body.Children.Add(new TextBlock { Text = "Reconstructs lost high-frequency sparkle in lossy audio.", FontSize = 12, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap });
+                body.Children.Add(new TextBlock { Text = "Reconstructs lost high-frequency sparkle in lossy audio.", FontFamily = UiFont, FontSize = 12, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap });
                 card.RefreshVisual = active => str.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
         RegisterCard("surround", 10, "\uE8D6", "Differential Surround",
             "Expands stereo soundstage using subtle Haas inter-aural delay and Mid/Side stereo widening.",
-            true, (body, card) =>
+            () => _liveParams.SurroundEnabled, v => _liveParams.SurroundEnabled = v, (body, card) =>
             {
-                _surroundToggle = card.Toggle!;
                 var delay = CreateSliderRow("Haas Delay", "Inter-channel delay (0–20 ms).", 0, 20, 6.0, 0.5, v => $"{v:0.0} ms");
                 var width = CreateSliderRow("Stereo Width", "Mid/Side expansion (0% Mono, 100% Normal, 200% Wide).", 0, 200, 100, 5, v => $"{v:0}%");
                 _surroundDelaySlider = delay.Slider;
@@ -1279,9 +1195,8 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("field", 11, "\uE774", "Field Surround",
             "Psychoacoustic soundstage enhancer with independent center vocal image control.",
-            true, (body, card) =>
+            () => _liveParams.FieldSurroundEnabled, v => _liveParams.FieldSurroundEnabled = v, (body, card) =>
             {
-                _fieldToggle = card.Toggle!;
                 var str = CreateSliderRow("Surround Strength", "Ambient spatial width (0–100%).", 0, 100, 40, 5, v => $"{v:0}%");
                 var mid = CreateSliderRow("Mid Image", "Center vocal focus and stability (0–100%).", 0, 100, 50, 5, v => $"{v:0}%");
                 _fieldStrengthSlider = str.Slider;
@@ -1293,10 +1208,9 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("vhs", 12, "\uE7F6", "Headphone Surround+",
             "5-level early-reflection virtualizer simulating out-of-head loudspeaker staging on headphones.",
-            true, (body, card) =>
+            () => _liveParams.VhsEnabled, v => _liveParams.VhsEnabled = v, (body, card) =>
             {
-                _vhsToggle = card.Toggle!;
-                body.Children.Add(new TextBlock { Text = "Select room reflection depth from intimate studio (Lv 1) to concert hall (Lv 5).", FontSize = 12, Foreground = TextSecondaryBrush, TextWrapping = TextWrapping.Wrap });
+                body.Children.Add(new TextBlock { Text = "Select room reflection depth from intimate studio (Lv 1) to concert hall (Lv 5).", FontFamily = UiFont, FontSize = 12, Foreground = TextSecondaryBrush, TextWrapping = TextWrapping.Wrap });
                 var (seg, btns) = CreateSegmentedButtons(new[] { "Lv 1", "Lv 2", "Lv 3", "Lv 4", "Lv 5" }, v => _liveParams.VhsLevel = (uint)(v + 1));
                 body.Children.Add(seg);
                 card.RefreshVisual = active => StyleModeButtons(btns, Math.Clamp((int)_liveParams.VhsLevel - 1, 0, 4), active);
@@ -1304,75 +1218,49 @@ public sealed partial class MainWindow : Window
 
         RegisterCard("reverb", 13, "\uE8F1", "Reverberation",
             "Sample-rate invariant 8-comb + 4-allpass stereo room simulator.",
-            true, (body, card) =>
+            () => _liveParams.ReverbEnabled, v => _liveParams.ReverbEnabled = v, (body, card) =>
             {
-                _reverbToggle = card.Toggle!;
                 var room = CreateSliderRow("Room Size", "Virtual acoustic chamber size.", 0, 100, 35, 5, v => $"{v:0}%");
                 var width = CreateSliderRow("Sound Field Width", "Stereo spread of reverb tails.", 0, 100, 50, 5, v => $"{v:0}%");
                 var damp = CreateSliderRow("Damping", "High-frequency wall absorption.", 0, 100, 25, 5, v => $"{v:0}%");
                 var wet = CreateSliderRow("Wet Signal", "Reverb reflection mix level.", 0, 100, 20, 5, v => $"{v:0}%");
                 var dry = CreateSliderRow("Dry Signal", "Direct original signal level.", 0, 100, 85, 5, v => $"{v:0}%");
-                _revRoomSlider = room.Slider;
-                _revWidthSlider = width.Slider;
-                _revDampSlider = damp.Slider;
-                _revWetSlider = wet.Slider;
-                _revDrySlider = dry.Slider;
-                body.Children.Add(room.Panel);
-                body.Children.Add(width.Panel);
-                body.Children.Add(damp.Panel);
-                body.Children.Add(wet.Panel);
-                body.Children.Add(dry.Panel);
-                card.RefreshVisual = active =>
-                    room.Slider.Opacity = width.Slider.Opacity = damp.Slider.Opacity = wet.Slider.Opacity = dry.Slider.Opacity = active ? 1.0 : 0.45;
+                _revRoomSlider = room.Slider; _revWidthSlider = width.Slider; _revDampSlider = damp.Slider; _revWetSlider = wet.Slider; _revDrySlider = dry.Slider;
+                body.Children.Add(room.Panel); body.Children.Add(width.Panel); body.Children.Add(damp.Panel); body.Children.Add(wet.Panel); body.Children.Add(dry.Panel);
+                card.RefreshVisual = active => room.Slider.Opacity = width.Slider.Opacity = damp.Slider.Opacity = wet.Slider.Opacity = dry.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
         RegisterCard("comp", 14, "\uE9D5", "FET Compressor",
             "Analog-style FET dynamic range compressor for punchy, consistent loudness.",
-            true, (body, card) =>
+            () => _liveParams.CompEnabled, v => _liveParams.CompEnabled = v, (body, card) =>
             {
-                _compToggle = card.Toggle!;
                 var thresh = CreateSliderRow("Threshold", "Level above which compression engages.", -40, 0, -18, 1, v => $"{v:0} dB");
                 var ratio = CreateSliderRow("Ratio", "Compression ratio (1:1 to 20:1).", 1, 20, 3, 0.5, v => $"{v:0.0}:1");
                 var atk = CreateSliderRow("Attack", "Response time to transients.", 1, 100, 10, 1, v => $"{v:0} ms");
                 var rel = CreateSliderRow("Release", "Recovery time after peak.", 20, 500, 120, 10, v => $"{v:0} ms");
                 var makeup = CreateSliderRow("Makeup Gain", "Post-compression level boost.", 0, 18, 3, 0.5, v => $"+{v:0.0} dB");
-                _compThreshSlider = thresh.Slider;
-                _compRatioSlider = ratio.Slider;
-                _compAtkSlider = atk.Slider;
-                _compRelSlider = rel.Slider;
-                _compMakeupSlider = makeup.Slider;
-                body.Children.Add(thresh.Panel);
-                body.Children.Add(ratio.Panel);
-                body.Children.Add(atk.Panel);
-                body.Children.Add(rel.Panel);
-                body.Children.Add(makeup.Panel);
-                card.RefreshVisual = active =>
-                    thresh.Slider.Opacity = ratio.Slider.Opacity = atk.Slider.Opacity = rel.Slider.Opacity = makeup.Slider.Opacity = active ? 1.0 : 0.45;
+                _compThreshSlider = thresh.Slider; _compRatioSlider = ratio.Slider; _compAtkSlider = atk.Slider; _compRelSlider = rel.Slider; _compMakeupSlider = makeup.Slider;
+                body.Children.Add(thresh.Panel); body.Children.Add(ratio.Panel); body.Children.Add(atk.Panel); body.Children.Add(rel.Panel); body.Children.Add(makeup.Panel);
+                card.RefreshVisual = active => thresh.Slider.Opacity = ratio.Slider.Opacity = atk.Slider.Opacity = rel.Slider.Opacity = makeup.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
         RegisterCard("agc", 15, "\uE767", "Playback Gain Control",
             "Automatically levels quiet and loud tracks to a comfortable target loudness.",
-            true, (body, card) =>
+            () => _liveParams.AgcEnabled, v => _liveParams.AgcEnabled = v, (body, card) =>
             {
-                _agcToggle = card.Toggle!;
                 var str = CreateSliderRow("Effect Strength", "Leveling responsiveness (0–100%).", 0, 100, 50, 5, v => $"{v:0}%");
                 var maxG = CreateSliderRow("Max Gain", "Maximum boost applied to quiet tracks.", 0, 24, 12, 1, v => $"+{v:0} dB");
                 var thresh = CreateSliderRow("Output Threshold", "Target output loudness ceiling.", -12, 0, -1, 0.5, v => $"{v:0.0} dBFS");
-                _agcStrengthSlider = str.Slider;
-                _agcMaxGainSlider = maxG.Slider;
-                _agcThreshSlider = thresh.Slider;
-                body.Children.Add(str.Panel);
-                body.Children.Add(maxG.Panel);
-                body.Children.Add(thresh.Panel);
+                _agcStrengthSlider = str.Slider; _agcMaxGainSlider = maxG.Slider; _agcThreshSlider = thresh.Slider;
+                body.Children.Add(str.Panel); body.Children.Add(maxG.Panel); body.Children.Add(thresh.Panel);
                 card.RefreshVisual = active => str.Slider.Opacity = maxG.Slider.Opacity = thresh.Slider.Opacity = active ? 1.0 : 0.45;
             });
 
         RegisterCard("cure", 16, "\uE95E", "Cure Tech+",
             "Binaural 0.26 ms ITD crossfeed that reduces long-session headphone listening fatigue.",
-            true, (body, card) =>
+            () => _liveParams.CureEnabled, v => _liveParams.CureEnabled = v, (body, card) =>
             {
-                _cureToggle = card.Toggle!;
-                body.Children.Add(new TextBlock { Text = "Blends subtle opposite-channel cues for natural loudspeaker-like comfort.", FontSize = 12, Foreground = TextSecondaryBrush, TextWrapping = TextWrapping.Wrap });
+                body.Children.Add(new TextBlock { Text = "Blends subtle opposite-channel cues for natural loudspeaker-like comfort.", FontFamily = UiFont, FontSize = 12, Foreground = TextSecondaryBrush, TextWrapping = TextWrapping.Wrap });
                 var (seg, btns) = CreateSegmentedButtons(new[] { "Slight", "Moderate", "Extreme" }, v => _liveParams.CureLevel = (uint)v);
                 body.Children.Add(seg);
                 card.RefreshVisual = active => StyleModeButtons(btns, (int)_liveParams.CureLevel, active);
@@ -1421,9 +1309,6 @@ public sealed partial class MainWindow : Window
         if (file == null) return;
         (_irsFiles, _activeIrs) = _bridge.ImportIrsFile(file.Path, _liveParams);
         RefreshIrsAndDdcCombos();
-        _isUpdating = true;
-        _convToggle.IsOn = true;
-        _isUpdating = false;
         RefreshVisualStates();
         ShowToast($"Imported & activated IR: {file.Name}");
     }
@@ -1434,16 +1319,15 @@ public sealed partial class MainWindow : Window
         if (file == null) return;
         (_ddcFiles, _activeDdc) = _bridge.ImportDdcFile(file.Path, _liveParams);
         RefreshIrsAndDdcCombos();
-        _isUpdating = true;
-        _ddcToggle.IsOn = true;
-        _isUpdating = false;
         RefreshVisualStates();
         ShowToast($"Imported & activated DDC: {file.Name}");
     }
 
+    private static int ComputeModuleCols(double width) => Math.Clamp((int)((width - 40) / 370), 1, 5);
+
     private void LayoutDspCards()
     {
-        int cols = _currentWindowWidth < 820 ? 1 : 2;
+        int cols = ComputeModuleCols(_currentWindowWidth);
         _lastModuleCols = cols;
 
         ModulesGrid.Children.Clear();
@@ -1493,7 +1377,7 @@ public sealed partial class MainWindow : Window
         }
 
         PinnedPresetsGrid.Visibility = Visibility.Visible;
-        int maxCols = _currentWindowWidth >= 960 ? 4 : (_currentWindowWidth >= 560 ? 2 : 1);
+        int maxCols = Math.Clamp((int)((_currentWindowWidth - 40) / 240), 1, Math.Max(1, validPinned.Count));
         int cols = Math.Min(maxCols, validPinned.Count);
         _lastPresetCols = maxCols;
 
@@ -1512,18 +1396,15 @@ public sealed partial class MainWindow : Window
 
             var btn = new Button
             {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(14, 10, 14, 10),
-                CornerRadius = new CornerRadius(8),
-                BorderThickness = new Thickness(1),
-                Background = active ? AccentBgBrush : CardBgBrush,
-                BorderBrush = active ? AccentBorderBrush : CardBorderBrush
+                HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(14, 10, 14, 10), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+                Background = active ? MakeAccentBgBrush() : CardBgBrush,
+                BorderBrush = active ? MakeAccentBorderBrush() : CardBorderBrush
             };
 
             var stack = new StackPanel { Spacing = 2 };
-            stack.Children.Add(new TextBlock { Text = name, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush });
-            stack.Children.Add(new TextBlock { Text = meta.Subtitle ?? "Custom preset", FontSize = 11.5, Foreground = TextSecondaryBrush, TextTrimming = TextTrimming.CharacterEllipsis });
+            stack.Children.Add(new TextBlock { Text = name, FontFamily = UiFont, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush });
+            stack.Children.Add(new TextBlock { Text = meta.Subtitle ?? "Custom preset", FontFamily = UiFont, FontSize = 11.5, Foreground = TextSecondaryBrush, TextTrimming = TextTrimming.CharacterEllipsis });
             btn.Content = stack;
             btn.Click += (_, _) => ApplyPresetByName(name);
 
@@ -1539,11 +1420,9 @@ public sealed partial class MainWindow : Window
         float Mid(float a, float b) => MathF.Round((a + b) / 2f * 2f) / 2f;
         return new[]
         {
-            G(0), Mid(G(0), G(1)), G(1), Mid(G(1), G(2)),
-            G(2), Mid(G(2), G(3)), G(3), Mid(G(3), G(4)),
-            G(4), Mid(G(4), G(5)), G(5), Mid(G(5), G(6)),
-            G(6), Mid(G(6), G(7)), G(7), Mid(G(7), G(8)),
-            G(8), G(9)
+            G(0), Mid(G(0), G(1)), G(1), Mid(G(1), G(2)), G(2), Mid(G(2), G(3)),
+            G(3), Mid(G(3), G(4)), G(4), Mid(G(4), G(5)), G(5), Mid(G(5), G(6)),
+            G(6), Mid(G(6), G(7)), G(7), Mid(G(7), G(8)), G(8), G(9)
         };
     }
 
@@ -1634,24 +1513,14 @@ public sealed partial class MainWindow : Window
             float curVal = i < values.Length ? values[i] : 0f;
             var valText = new TextBlock
             {
-                Text = FormatDb(curVal),
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = is18 ? 10.5 : 12,
-                FontWeight = FontWeights.SemiBold,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = MathF.Abs(curVal) > 0.01f ? AccentLightBrush : TextSecondaryBrush
+                Text = FormatDb(curVal), FontFamily = UiFont, FontSize = is18 ? 10.5 : 12, FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center, Foreground = MathF.Abs(curVal) > 0.01f ? AccentLightBrush : TextSecondaryBrush
             };
 
             int bandIdx = i;
             var slider = new Slider
             {
-                Orientation = Orientation.Vertical,
-                Height = 132,
-                Minimum = -12,
-                Maximum = 12,
-                StepFrequency = 0.5,
-                Value = curVal,
-                HorizontalAlignment = HorizontalAlignment.Center
+                Orientation = Orientation.Vertical, Height = 132, Minimum = -12, Maximum = 12, StepFrequency = 0.5, Value = curVal, HorizontalAlignment = HorizontalAlignment.Center
             };
             slider.ValueChanged += (_, e) =>
             {
@@ -1676,11 +1545,7 @@ public sealed partial class MainWindow : Window
 
             var freqText = new TextBlock
             {
-                Text = labels[i],
-                FontFamily = new FontFamily("Consolas"),
-                FontSize = is18 ? 10 : 11.5,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Foreground = TextSecondaryBrush
+                Text = labels[i], FontFamily = UiFont, FontSize = is18 ? 10.5 : 11.5, HorizontalAlignment = HorizontalAlignment.Center, Foreground = TextSecondaryBrush
             };
 
             col.Children.Add(valText);
@@ -1705,7 +1570,7 @@ public sealed partial class MainWindow : Window
         double h = EqCurveCanvas.ActualHeight;
         if (w < 20 || h < 20) return;
 
-        bool active = MasterToggle.IsOn && EqToggle.IsOn;
+        bool active = _liveParams.MasterEnabled && _liveParams.EqEnabled;
         var values = _liveParams.EqMode == 1 ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
         double padX = 16, padY = 10;
         double usableW = w - padX * 2, usableH = h - padY * 2;
@@ -1714,14 +1579,12 @@ public sealed partial class MainWindow : Window
         EqCurveCanvas.Children.Add(new Line
         {
             X1 = padX, Y1 = midY, X2 = w - padX, Y2 = midY,
-            Stroke = MutedBorderBrush,
-            StrokeDashArray = new DoubleCollection { 4, 4 },
-            StrokeThickness = 1
+            Stroke = MutedBorderBrush, StrokeDashArray = new DoubleCollection { 4, 4 }, StrokeThickness = 1
         });
 
         var polyline = new Polyline
         {
-            Stroke = active ? AccentLightBrush : MutedBrush,
+            Stroke = active ? MakeAccentStrokeBrush() : MutedBrush,
             StrokeThickness = 2.4,
             StrokeLineJoin = PenLineJoin.Round
         };
@@ -1739,7 +1602,7 @@ public sealed partial class MainWindow : Window
 
         var light = AccentLightBrush.Color;
         var grad = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
-        grad.GradientStops.Add(new GradientStop { Color = active ? Color.FromArgb(70, light.R, light.G, light.B) : Color.FromArgb(35, 113, 113, 122), Offset = 0 });
+        grad.GradientStops.Add(new GradientStop { Color = active ? Color.FromArgb(72, light.R, light.G, light.B) : Color.FromArgb(35, 113, 113, 122), Offset = 0 });
         grad.GradientStops.Add(new GradientStop { Color = Color.FromArgb(0, _accentBase.R, _accentBase.G, _accentBase.B), Offset = 1 });
 
         EqCurveCanvas.Children.Add(new Polygon { Points = fillPoints, Fill = grad });
@@ -1765,38 +1628,50 @@ public sealed partial class MainWindow : Window
         var defDev = _devices.FirstOrDefault(d => d.IsDefault) ?? _devices.FirstOrDefault();
         bool defaultInstalled = defDev != null && _bridge.IsApoInstalledOnDevice(defDev.Guid);
         bool isExclusive = string.Equals(_liveStatus.Mode, "Exclusive Mode", StringComparison.OrdinalIgnoreCase);
-        bool working = MasterToggle.IsOn && defaultInstalled && !isExclusive;
-        StatusPill.Background = working ? AccentBgBrush : CardBgBrush;
-        StatusPill.BorderBrush = working ? AccentBorderBrush : CardBorderBrush;
-        StatusDot.Fill = working ? AccentLightBrush : MutedBrush;
+        bool working = _liveParams.MasterEnabled && defaultInstalled && !isExclusive;
+        StatusPill.Background = working ? MakeAccentBgBrush() : CardBgBrush;
+        StatusPill.BorderBrush = working ? MakeAccentBorderBrush() : CardBorderBrush;
+        StatusDot.Fill = working ? MakeAccentStrongBrush() : MutedBrush;
         StatusText.Text = working ? "WORKING" : "NOT WORKING";
         StatusText.Foreground = working ? AccentTextBrush : TextSecondaryBrush;
         ToolTipService.SetToolTip(StatusPill,
-            !MasterToggle.IsOn ? "Master Engine Power is OFF" :
-            !defaultInstalled ? "V4Wa APO is not installed on the current default audio device" :
-            isExclusive ? "Bypassed by WASAPI Exclusive Mode" :
-            "V4Wa APO is installed and processing audio on the default device");
+            !_liveParams.MasterEnabled ? "Master Engine Power is OFF" :
+            !defaultInstalled ? "APO is not installed on the current default audio device" :
+            isExclusive ? "Bypassed by Exclusive Mode" :
+            "ViPER4Windows RE APO is installed and ready on the default device");
     }
 
     private void RefreshVisualStates()
     {
-        bool master = MasterToggle.IsOn;
+        bool master = _liveParams.MasterEnabled;
         RefreshStatusPill();
 
-        SettingsBtn.Background = _settingsOpen ? AccentBgBrush : SubtleBgBrush;
-        SettingsBtn.BorderBrush = _settingsOpen ? AccentBorderBrush : CardBorderBrush;
+        // Power Icon Buttons
+        StylePowerButton(MasterPowerBtn, MasterPowerIcon, master);
+        StylePowerButton(EqPowerBtn, EqPowerIcon, master && _liveParams.EqEnabled);
+        StylePowerButton(AutoAccentPowerBtn, AutoAccentPowerIcon, _uiSettingsModel.AutoAccent);
+
+        // Header Speaker & Signal Path Icon Boxes
+        SpeakerBadge.Background = master ? MakeAccentBgBrush() : SubtleBgBrush;
+        SpeakerBadge.BorderBrush = master ? MakeAccentBorderBrush() : CardBorderBrush;
+        HeaderSpeakerIcon.Foreground = master ? AccentLightBrush : MutedBrush;
+        SignalIconBox.Background = MakeAccentBgBrush();
+        SignalIconBox.BorderBrush = MakeAccentBorderBrush();
+
+        SettingsBtn.Background = _settingsOpen ? MakeAccentBgBrush() : SubtleBgBrush;
+        SettingsBtn.BorderBrush = _settingsOpen ? MakeAccentBorderBrush() : CardBorderBrush;
         SettingsGearIcon.Foreground = _settingsOpen ? AccentLightBrush : TextDimBrush;
 
         bool isPinnedPreset = _uiSettingsModel.PinnedPresets.Contains(_uiSettingsModel.SelectedPresetName);
         PinPresetBtn.Content = isPinnedPreset ? "Pinned" : "Pin";
-        PinPresetBtn.Background = isPinnedPreset ? AccentBgBrush : SubtleBgBrush;
-        PinPresetBtn.BorderBrush = isPinnedPreset ? AccentBorderBrush : CardBorderBrush;
+        PinPresetBtn.Background = isPinnedPreset ? MakeAccentBgBrush() : SubtleBgBrush;
+        PinPresetBtn.BorderBrush = isPinnedPreset ? MakeAccentBorderBrush() : CardBorderBrush;
         PinPresetBtn.Foreground = isPinnedPreset ? AccentTextBrush : TextDimBrush;
 
-        bool eqActive = master && EqToggle.IsOn;
+        bool eqActive = master && _liveParams.EqEnabled;
         EqIcon.Foreground = eqActive ? AccentLightBrush : MutedBrush;
-        EqIconBox.Background = eqActive ? AccentBgBrush : SubtleBgBrush;
-        EqIconBox.BorderBrush = eqActive ? AccentBorderBrush : CardBorderBrush;
+        EqIconBox.Background = eqActive ? MakeAccentBgBrush() : SubtleBgBrush;
+        EqIconBox.BorderBrush = eqActive ? MakeAccentBorderBrush() : CardBorderBrush;
         EqSlidersGrid.Opacity = eqActive ? 1.0 : 0.5;
 
         var eqVals = _liveParams.EqMode == 1 ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
@@ -1807,11 +1682,15 @@ public sealed partial class MainWindow : Window
         {
             bool active = card.IsActive();
             card.Icon.Foreground = active ? AccentLightBrush : MutedBrush;
-            card.IconBox.Background = active ? AccentBgBrush : SubtleBgBrush;
-            card.IconBox.BorderBrush = active ? AccentBorderBrush : CardBorderBrush;
+            card.IconBox.Background = active ? MakeAccentBgBrush() : SubtleBgBrush;
+            card.IconBox.BorderBrush = active ? MakeAccentBorderBrush() : CardBorderBrush;
+            if (card.PowerBtn != null && card.PowerIcon != null)
+            {
+                StylePowerButton(card.PowerBtn, card.PowerIcon, active);
+            }
             bool pinned = _uiSettingsModel.PinnedModules.Contains(card.Id);
-            card.PinBtn.Background = pinned ? AccentBgBrush : SubtleBgBrush;
-            card.PinBtn.BorderBrush = pinned ? AccentBorderBrush : CardBorderBrush;
+            card.PinBtn.Background = pinned ? MakeAccentBgBrush() : SubtleBgBrush;
+            card.PinBtn.BorderBrush = pinned ? MakeAccentBorderBrush() : CardBorderBrush;
             card.PinBtn.Foreground = pinned ? AccentLightBrush : MutedBrush;
             card.RefreshVisual(active);
         }
@@ -1841,8 +1720,8 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                buttons[i].Background = AccentBgBrush;
-                buttons[i].BorderBrush = AccentBorderBrush;
+                buttons[i].Background = MakeAccentBgBrush();
+                buttons[i].BorderBrush = MakeAccentBorderBrush();
                 buttons[i].Foreground = AccentTextBrush;
             }
         }
@@ -1881,10 +1760,13 @@ public sealed partial class MainWindow : Window
         if (w <= 0) return;
         _currentWindowWidth = w;
 
-        int targetModuleCols = w < 820 ? 1 : 2;
+        // 1. Dynamic scaling DSP module columns (1 -> 2 -> 3 -> 4 -> 5 cols!)
+        int targetModuleCols = ComputeModuleCols(w);
         if (targetModuleCols != _lastModuleCols && _cards.Count > 0) LayoutDspCards();
 
-        int targetPresetCols = w >= 960 ? 4 : (w >= 560 ? 2 : 1);
+        // 2. Dynamic scaling Pinned Presets columns
+        int validPinnedCount = _uiSettingsModel.PinnedPresets.Count(n => _allPresets.Any(p => p.Name == n));
+        int targetPresetCols = Math.Clamp((int)((w - 40) / 240), 1, Math.Max(1, validPinnedCount));
         if (targetPresetCols != _lastPresetCols) RebuildPinnedPresets();
 
         SetResponsiveWrap(SignalBadgesPanel, SignalBadgesCol, w < 760);
@@ -1892,15 +1774,16 @@ public sealed partial class MainWindow : Window
         SetResponsiveWrap(EqActionsPanel, EqActionsCol, w < 900);
 
         bool compactSidebar = w < 760;
-        SettingsSidebarCol.Width = new GridLength(compactSidebar ? 54 : 220);
+        double sideW = compactSidebar ? 54 : 220;
+        SettingsSidebarCol.Width = new GridLength(sideW);
         var labelVis = compactSidebar ? Visibility.Collapsed : Visibility.Visible;
         NavAppearanceLabel.Visibility = labelVis;
         NavDevicesLabel.Visibility = labelVis;
         NavAboutLabel.Visibility = labelVis;
         SettingsSidebarPanel.Margin = compactSidebar ? new Thickness(0, 4, 10, 0) : new Thickness(0, 4, 16, 0);
 
+        SettingsContentContainer.Width = Math.Min(1040, Math.Max(280, w - sideW - 72));
         SetResponsiveWrap(ThemeOledBtn, ThemeOledCol, w < 640, equalStarWhenWide: true);
-        SetResponsiveWrap(AccentPickerPanel, AccentPickerCol, w < 920);
     }
 
     private void SetSettingsOpen(bool open)
@@ -1915,6 +1798,8 @@ public sealed partial class MainWindow : Window
 
     private void SettingsBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(!_settingsOpen);
     private void BackToDspBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(false);
+    private void MasterPowerBtn_Click(object sender, RoutedEventArgs e) { _liveParams.MasterEnabled = !_liveParams.MasterEnabled; PushLiveParams(); }
+    private void EqPowerBtn_Click(object sender, RoutedEventArgs e) { _liveParams.EqEnabled = !_liveParams.EqEnabled; PushLiveParams(); }
 
     private void SettingsNav_Click(object sender, RoutedEventArgs e)
     {
@@ -1930,44 +1815,46 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void AutoAccentToggle_Toggled(object sender, RoutedEventArgs e)
+    private void AutoAccentPowerBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (_isUpdating) return;
-        _uiSettingsModel.AutoAccent = AutoAccentToggle.IsOn;
+        _uiSettingsModel.AutoAccent = !_uiSettingsModel.AutoAccent;
         _bridge.SaveUiSettings(_uiSettingsModel);
-        AccentColorPicker.IsEnabled = !AutoAccentToggle.IsOn;
-        if (AutoAccentToggle.IsOn)
-            ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), syncPicker: true, persist: false);
+        if (_uiSettingsModel.AutoAccent)
+            ApplyAccentColor(_osUiSettings.GetColorValue(UIColorType.Accent), null, syncPicker: true, persist: false);
+        else
+            RefreshVisualStates();
     }
 
     private void Swatch_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is string hex)
         {
-            _isUpdating = true;
-            AutoAccentToggle.IsOn = false;
             _uiSettingsModel.AutoAccent = false;
-            AccentColorPicker.IsEnabled = true;
-            _isUpdating = false;
-            ApplyAccentColor(ParseHexColor(hex, _accentBase), syncPicker: true);
+            ApplyAccentColor(ParseHexColor(hex, _accentBase), null, syncPicker: true);
+        }
+    }
+
+    private void GradientSwatch_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string pair)
+        {
+            var parts = pair.Split('|');
+            if (parts.Length == 2)
+            {
+                _uiSettingsModel.AutoAccent = false;
+                var c1 = ParseHexColor(parts[0], _accentBase);
+                var c2 = ParseHexColor(parts[1], _accentBase);
+                ApplyAccentColor(c1, c2, syncPicker: true);
+            }
         }
     }
 
     private void AccentColorPicker_ColorChanged(ColorPicker sender, ColorChangedEventArgs args)
     {
         if (_isUpdating) return;
-        if (AutoAccentToggle.IsOn)
-        {
-            _isUpdating = true;
-            AutoAccentToggle.IsOn = false;
-            _uiSettingsModel.AutoAccent = false;
-            _isUpdating = false;
-        }
-        ApplyAccentColor(args.NewColor, syncPicker: false);
+        _uiSettingsModel.AutoAccent = false;
+        ApplyAccentColor(args.NewColor, null, syncPicker: false);
     }
-
-    private void MasterToggle_Toggled(object sender, RoutedEventArgs e) => PushLiveParams();
-    private void ModuleToggle_Toggled(object sender, RoutedEventArgs e) => PushLiveParams();
 
     private void PresetCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1987,15 +1874,11 @@ public sealed partial class MainWindow : Window
 
     private async Task<string?> PromptNameAsync(string title, string defaultValue)
     {
-        var box = new TextBox { Text = defaultValue, PlaceholderText = "Enter name..." };
+        var box = new TextBox { Text = defaultValue, PlaceholderText = "Enter name...", FontFamily = UiFont };
         var dlg = new ContentDialog
         {
-            Title = title,
-            Content = box,
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = RootBackdropGrid.XamlRoot
+            Title = title, Content = box, PrimaryButtonText = "Save", CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary, XamlRoot = RootBackdropGrid.XamlRoot
         };
         var result = await dlg.ShowAsync();
         return result == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(box.Text) ? box.Text.Trim() : null;
@@ -2007,9 +1890,7 @@ public sealed partial class MainWindow : Window
         if (name == null) return;
         string saved = _bridge.SaveCustomPreset(new PresetModel
         {
-            Name = name,
-            Subtitle = "Custom saved preset",
-            Params = _liveParams.Clone(),
+            Name = name, Subtitle = "Custom saved preset", Params = _liveParams.Clone(),
             ActiveIrs = string.IsNullOrWhiteSpace(_activeIrs) ? null : _activeIrs,
             ActiveDdc = string.IsNullOrWhiteSpace(_activeDdc) ? null : _activeDdc
         });
@@ -2029,8 +1910,7 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                string txt = await File.ReadAllTextAsync(f.Path);
-                var p = JsonSerializer.Deserialize<PresetModel>(txt, V4WaEngineBridge.JsonOpts);
+                var p = JsonSerializer.Deserialize<PresetModel>(await File.ReadAllTextAsync(f.Path), V4WaEngineBridge.JsonOpts);
                 if (p != null)
                 {
                     if (string.IsNullOrWhiteSpace(p.Name)) p.Name = System.IO.Path.GetFileNameWithoutExtension(f.Name);
@@ -2054,8 +1934,7 @@ public sealed partial class MainWindow : Window
         if (name == null) return;
         string saved = _bridge.SaveCustomEqPreset(new EqPresetModel
         {
-            Name = name,
-            EqMode = (int)_liveParams.EqMode,
+            Name = name, EqMode = (int)_liveParams.EqMode,
             EqBandsDb = (float[])_liveParams.EqBandsDb.Clone(),
             EqBands18Db = (float[])_liveParams.EqBands18Db.Clone()
         });
@@ -2074,8 +1953,7 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                string txt = await File.ReadAllTextAsync(f.Path);
-                var ep = JsonSerializer.Deserialize<EqPresetModel>(txt, V4WaEngineBridge.JsonOpts);
+                var ep = JsonSerializer.Deserialize<EqPresetModel>(await File.ReadAllTextAsync(f.Path), V4WaEngineBridge.JsonOpts);
                 if (ep != null)
                 {
                     if (string.IsNullOrWhiteSpace(ep.Name)) ep.Name = System.IO.Path.GetFileNameWithoutExtension(f.Name);
@@ -2133,11 +2011,11 @@ public sealed partial class MainWindow : Window
                 _liveParams.EqBands18Db = Interpolate10To18(_liveParams.EqBandsDb);
             }
 
+            _liveParams.EqEnabled = true;
             _uiSettingsModel.SelectedEqPresetName = name;
             _bridge.SaveUiSettings(_uiSettingsModel);
 
             _isUpdating = true;
-            EqToggle.IsOn = true;
             RebuildEqSliders();
             _isUpdating = false;
             PushLiveParams();
@@ -2184,7 +2062,7 @@ public sealed partial class MainWindow : Window
 
     private async void ShowToast(string msg)
     {
-        ToastBar.Title = "V4Wa";
+        ToastBar.Title = "ViPER4Windows RE";
         ToastBar.Message = msg;
         ToastBar.IsOpen = true;
         await Task.Delay(2400);
