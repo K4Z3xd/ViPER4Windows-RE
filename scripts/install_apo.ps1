@@ -10,6 +10,27 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$ApoClsid = "{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}"
+$ModesAll = @(
+    "{c18e2f7e-933d-4965-b7d1-1eef228d2af3}", # DEFAULT
+    "{4780004e-7133-41d8-8c74-660dadd2c0ee}", # MEDIA
+    "{b26feb0d-ec94-477c-9494-d1ab8e753f6e}", # MOVIE
+    "{98951333-b9cd-48b1-a0a3-ff40682d73f7}"  # COMMUNICATIONS
+)
+$InstallDir = "C:\Program Files\ViPERHiRes"
+$ProgramDataDir = "C:\ProgramData\ViPERHiRes"
+$BackupDir = Join-Path $ProgramDataDir "backups"
+$LogFile = Join-Path $ProgramDataDir "apo_install.log"
+
+function Write-Log([string]$msg) {
+    $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $msg"
+    Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue
+}
+
+# 1. Prepare ProgramData folder with permissions for LOCAL SERVICE (audiodg.exe) & Users (V4Wa UI)
+New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
+icacls $ProgramDataDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M" /grant "BUILTIN\Users:(OI)(CI)M" /grant "Everyone:(OI)(CI)R" /T 2>$null | Out-Null
+
 if (-not $DeviceGuid -and $AutoDefault) {
     $ctlCandidates = @(
         (Join-Path $PSScriptRoot "..\viper_ctl.exe"),
@@ -18,14 +39,17 @@ if (-not $DeviceGuid -and $AutoDefault) {
     $ctl = $ctlCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
     if ($ctl) {
         $json = & $ctl devices 2>$null
-        $devs = $json | ConvertFrom-Json
-        $def = $devs | Where-Object { $_.isDefault } | Select-Object -First 1
-        if (-not $def) { $def = $devs | Select-Object -First 1 }
-        if ($def -and $def.guid) { $DeviceGuid = $def.guid }
+        if ($json) {
+            $devs = $json | ConvertFrom-Json
+            $def = $devs | Where-Object { $_.isDefault } | Select-Object -First 1
+            if (-not $def) { $def = $devs | Select-Object -First 1 }
+            if ($def -and $def.guid) { $DeviceGuid = $def.guid }
+        }
     }
 }
 
 if (-not $DeviceGuid) {
+    Write-Log "ERROR: No target audio device GUID provided or detected."
     throw "No target audio device GUID provided or detected."
 }
 
@@ -38,60 +62,15 @@ if (-not $DllSource) {
     }
 }
 
-$ApoClsid = "{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}"
-$ModesAll = @(
-    "{c18e2f7e-933d-4965-b7d1-1eef228d2af3}", # DEFAULT
-    "{4780004e-7133-41d8-8c74-660dadd2c0ee}", # MEDIA
-    "{b26feb0d-ec94-477c-9494-d1ab8e753f6e}", # MOVIE
-    "{98951333-b9cd-48b1-a0a3-ff40682d73f7}"  # COMMUNICATIONS
-)
-$InstallDir = "C:\Program Files\ViPERHiRes"
-$ProgramDataDir = "C:\ProgramData\ViPERHiRes"
-$BackupDir = Join-Path $ProgramDataDir "backups"
-
 if (-not (Test-Path $DllSource)) {
-    throw "ViPERHiResAPO.dll not found at: $DllSource. Build the project first."
+    Write-Log "ERROR: ViPERHiResAPO.dll not found at $DllSource"
+    throw "ViPERHiResAPO.dll not found at: $DllSource."
 }
 
-# 1. Prepare ProgramData folder with permissions for LOCAL SERVICE (audiodg.exe) & Users (UI)
-New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
-icacls $ProgramDataDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M" /grant "BUILTIN\Users:(OI)(CI)M" /grant "Everyone:(OI)(CI)R" /T | Out-Null
-
-# 2. Copy APO DLL to C:\Program Files\ViPERHiRes (accessible by audiodg.exe / LOCAL SERVICE)
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $InstalledDll = Join-Path $InstallDir "ViPERHiResAPO.dll"
 
-Write-Host "[1/5] Stopping Windows Audio service briefly to replace DLL..." -ForegroundColor Cyan
-Stop-Service -Name "Audiosrv" -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 400
-
-try {
-    Copy-Item -Path $DllSource -Destination $InstalledDll -Force
-    icacls $InstallDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX" /T | Out-Null
-
-    # 3. Register COM + Windows APO
-    Write-Host "[2/5] Registering ViPERHiResAPO.dll..." -ForegroundColor Cyan
-    $regProc = Start-Process -FilePath "regsvr32.exe" -ArgumentList "/s `"$InstalledDll`"" -Wait -PassThru
-    if ($regProc.ExitCode -ne 0) {
-        throw "regsvr32 failed with exit code $($regProc.ExitCode)"
-    }
-
-    # 4. Backup original FxProperties BEFORE touching Registry
-    $RegPathRaw = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\FxProperties"
-    $RegPathPs = "Registry::$RegPathRaw"
-    $BackupFile = Join-Path $BackupDir "$DeviceGuid.original.reg"
-
-    if (-not (Test-Path $BackupFile)) {
-        Write-Host "[3/5] Backing up factory FxProperties to $BackupFile ..." -ForegroundColor Cyan
-        & reg.exe export $RegPathRaw $BackupFile /y | Out-Null
-    } else {
-        Write-Host "[3/5] Original backup already exists: $BackupFile (preserved)" -ForegroundColor Yellow
-    }
-
-    # 5. Take ownership of FxProperties (TrustedInstaller -> Administrators) and attach ViPERHiRes APO (MFX)
-    Write-Host "[4/5] Attaching ViPERHiRes APO (MFX Hi-Res) to device $DeviceGuid ..." -ForegroundColor Cyan
-
-    $csharp = @"
+$csharp = @"
 using System;
 using System.Runtime.InteropServices;
 using System.Security.AccessControl;
@@ -115,16 +94,13 @@ public static class RegOwnership {
 
     static void EnablePrivilege(string name) {
         IntPtr token;
-        if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, 0x0028, out token)) {
+        if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, 0x0028, out token))
             throw new Exception("OpenProcessToken failed: " + Marshal.GetLastWin32Error());
-        }
         TOKEN_PRIVILEGES tp = new TOKEN_PRIVILEGES { PrivilegeCount = 1, Attributes = 2 };
-        if (!LookupPrivilegeValue(null, name, out tp.Luid)) {
+        if (!LookupPrivilegeValue(null, name, out tp.Luid))
             throw new Exception("LookupPrivilegeValue failed for " + name);
-        }
-        if (!AdjustTokenPrivileges(token, false, ref tp, (uint)Marshal.SizeOf(typeof(TOKEN_PRIVILEGES)), IntPtr.Zero, IntPtr.Zero)) {
+        if (!AdjustTokenPrivileges(token, false, ref tp, (uint)Marshal.SizeOf(typeof(TOKEN_PRIVILEGES)), IntPtr.Zero, IntPtr.Zero))
             throw new Exception("AdjustTokenPrivileges failed for " + name);
-        }
     }
 
     public static void GrantAdminFullControl(string subKeyPath) {
@@ -151,36 +127,89 @@ public static class RegOwnership {
 }
 "@
 
-    if (-not ("RegOwnership" -as [type])) {
-        Add-Type -TypeDefinition $csharp
+if (-not ("RegOwnership" -as [type])) {
+    Add-Type -TypeDefinition $csharp
+}
+
+Write-Host "[1/5] Stopping Windows Audio service briefly..." -ForegroundColor Cyan
+Stop-Service -Name "Audiosrv" -Force -ErrorAction SilentlyContinue
+
+# Wait up to 4 seconds for audiodg.exe to exit and release ViPERHiResAPO.dll
+for ($i = 0; $i -lt 20; $i++) {
+    if (-not (Get-Process -Name "audiodg" -ErrorAction SilentlyContinue)) { break }
+    Start-Sleep -Milliseconds 200
+}
+
+try {
+    # 2. Copy APO DLL only if missing or changed (avoids unnecessary file-lock races on multi-device attach)
+    $needCopy = $true
+    if (Test-Path $InstalledDll) {
+        $srcHash = (Get-FileHash -Path $DllSource -Algorithm SHA256).Hash
+        $dstHash = (Get-FileHash -Path $InstalledDll -Algorithm SHA256).Hash
+        if ($srcHash -eq $dstHash) { $needCopy = $false }
+    }
+    if ($needCopy) {
+        Copy-Item -Path $DllSource -Destination $InstalledDll -Force
+    }
+    icacls $InstallDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)RX" /T 2>$null | Out-Null
+
+    # 3. Register COM + Windows APO
+    Write-Host "[2/5] Registering ViPERHiResAPO.dll..." -ForegroundColor Cyan
+    $regProc = Start-Process -FilePath "regsvr32.exe" -ArgumentList "/s `"$InstalledDll`"" -Wait -PassThru
+    if ($regProc.ExitCode -ne 0) {
+        throw "regsvr32 failed with exit code $($regProc.ExitCode)"
     }
 
-    $subKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\FxProperties"
-    [RegOwnership]::GrantAdminFullControl($subKey)
+    # 4. Ensure FxProperties exists (some USB/BT/HDMI devices on clean PCs lack it initially) & backup if present
+    $DeviceSubKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid"
+    $FxSubKey = "$DeviceSubKey\FxProperties"
+    $RegPathRaw = "HKLM\$FxSubKey"
+    $RegPathPs = "Registry::$RegPathRaw"
+    $BackupFile = Join-Path $BackupDir "$DeviceGuid.original.reg"
+    $FreshMarker = Join-Path $BackupDir "$DeviceGuid.created_fresh.marker"
 
-    # Attach as MFX (Mode Effect = ,6) so ALL apps (browsers, music players, games) are processed in one master Hi-Res chain
+    if (Test-Path $RegPathPs) {
+        if (-not (Test-Path $BackupFile)) {
+            Write-Host "[3/5] Backing up factory FxProperties to $BackupFile ..." -ForegroundColor Cyan
+            Start-Process -FilePath "reg.exe" -ArgumentList "export `"$RegPathRaw`" `"$BackupFile`" /y" -NoNewWindow -Wait
+        } else {
+            Write-Host "[3/5] Original backup preserved: $BackupFile" -ForegroundColor Yellow
+        }
+        [RegOwnership]::GrantAdminFullControl($FxSubKey)
+    } else {
+        Write-Host "[3/5] Device has no FxProperties yet; creating cleanly..." -ForegroundColor Yellow
+        [RegOwnership]::GrantAdminFullControl($DeviceSubKey)
+        New-Item -Path $RegPathPs -Force | Out-Null
+        [RegOwnership]::GrantAdminFullControl($FxSubKey)
+        Set-Content -Path $FreshMarker -Value "created_by_v4wa" -ErrorAction SilentlyContinue
+    }
+
+    # 5. Attach V4Wa MFX APO (Mode Effect = ,6) across DEFAULT / MEDIA / MOVIE / COMMUNICATIONS
+    Write-Host "[4/5] Attaching V4Wa Hi-Res MFX APO to device $DeviceGuid ..." -ForegroundColor Cyan
     Remove-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},5" -ErrorAction SilentlyContinue
     New-ItemProperty -Path $RegPathPs -Name "{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6" -Value $ApoClsid -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $RegPathPs -Name "{d3993a3f-99c2-4402-b5ec-a92a0367664b},6" -Value $ModesAll -PropertyType MultiString -Force | Out-Null
-    # Clear Windows 11 Audio Enhancements circuit-breaker inside FxProperties (DisableSysFx = 0)
     New-ItemProperty -Path $RegPathPs -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
 
-    # Ensure Audio Enhancements are enabled (DisableSysFx = 0)
-    $PropsSubKey = "SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\$DeviceGuid\Properties"
-    try {
-        [RegOwnership]::GrantAdminFullControl($PropsSubKey)
-        New-ItemProperty -Path "Registry::HKLM\$PropsSubKey" -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
-    } catch {
-        Write-Warning "Could not update DisableSysFx flag (non-fatal): $_"
+    # Ensure Audio Enhancements are enabled in Properties (DisableSysFx = 0)
+    $PropsSubKey = "$DeviceSubKey\Properties"
+    if (Test-Path "Registry::HKLM\$PropsSubKey") {
+        try {
+            [RegOwnership]::GrantAdminFullControl($PropsSubKey)
+            New-ItemProperty -Path "Registry::HKLM\$PropsSubKey" -Name "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5" -Value 0 -PropertyType DWord -Force | Out-Null
+        } catch {
+            Write-Log "WARN: Could not update DisableSysFx on $DeviceGuid (non-fatal): $_"
+        }
     }
 
-    Write-Host "SUCCESS! ViPERHiRes APO installed on device $DeviceGuid." -ForegroundColor Green
+    Write-Log "SUCCESS: Installed V4Wa MFX APO on $DeviceGuid"
+    Write-Host "SUCCESS! V4Wa APO installed on device $DeviceGuid." -ForegroundColor Green
 } catch {
-    $errMsg = "$(Get-Date -Format o) ERROR installing APO on ${DeviceGuid}: $_"
-    Add-Content -Path (Join-Path $ProgramDataDir "apo_install.log") -Value $errMsg -ErrorAction SilentlyContinue
-    Write-Error $errMsg
+    Write-Log "ERROR installing APO on ${DeviceGuid}: $_"
+    Write-Error $_
     throw
 } finally {
     Write-Host "[5/5] Ensuring Windows Audio service is running..." -ForegroundColor Cyan
+    Start-Service -Name "AudioEndpointBuilder" -ErrorAction SilentlyContinue
     Start-Service -Name "Audiosrv" -ErrorAction SilentlyContinue
 }

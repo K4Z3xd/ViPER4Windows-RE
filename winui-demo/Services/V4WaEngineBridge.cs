@@ -208,14 +208,31 @@ public sealed class V4WaEngineBridge
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "build", "viper_ctl.exe")) ||
+            if (File.Exists(Path.Combine(dir.FullName, "viper_ctl.exe")) ||
+                File.Exists(Path.Combine(dir.FullName, "build", "viper_ctl.exe")) ||
                 File.Exists(Path.Combine(dir.FullName, "scripts", "install_apo.ps1")))
             {
                 return dir.FullName;
             }
             dir = dir.Parent;
         }
-        return @"C:\Users\Administrator\.gemini\antigravity\scratch\ViPERHiRes";
+        return AppContext.BaseDirectory;
+    }
+
+    public bool IsApoInstalledOnDevice(string deviceGuid)
+    {
+        if (string.IsNullOrWhiteSpace(deviceGuid)) return false;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                $@"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render\{deviceGuid}\FxProperties");
+            var val = key?.GetValue("{d04e05a6-594b-4fb6-a80d-01af5eed7d1d},6")?.ToString();
+            return string.Equals(val, "{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     // ==================== DIRECT BINARY SEQLOCK IPC (< 0.1 ms) ====================

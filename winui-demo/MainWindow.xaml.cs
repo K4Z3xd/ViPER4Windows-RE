@@ -474,8 +474,9 @@ public sealed partial class MainWindow : Window
             var (status, devices) = await _bridge.PollLiveTelemetryAsync();
             _liveStatus = status;
 
+            string DeviceSig(AudioDeviceModel d) => $"{d.Guid}|{d.IsDefault}|{d.SampleRate}|{_bridge.IsApoInstalledOnDevice(d.Guid)}";
             bool devicesChanged = devices.Count != _devices.Count ||
-                                  !devices.Select(d => d.Guid + d.IsDefault + d.SampleRate).SequenceEqual(_devices.Select(d => d.Guid + d.IsDefault + d.SampleRate));
+                                  !devices.Select(DeviceSig).SequenceEqual(_devices.Select(DeviceSig));
             _devices = devices;
 
             UpdateTelemetryUi();
@@ -533,15 +534,17 @@ public sealed partial class MainWindow : Window
         {
             DevicesListPanel.Children.Add(new TextBlock
             {
-                Text = "No active playback devices detected.",
+                Text = "Waiting for Windows Audio service (Audiosrv)... Click Refresh Devices if needed.",
                 Foreground = TextSecondaryBrush,
-                FontSize = 13
+                FontSize = 13,
+                TextWrapping = TextWrapping.Wrap
             });
             return;
         }
 
         foreach (var dev in _devices)
         {
+            bool apoActive = _bridge.IsApoInstalledOnDevice(dev.Guid);
             var cardStack = new StackPanel { Spacing = 12 };
 
             var topGrid = new Grid { ColumnSpacing = 12, RowSpacing = 10 };
@@ -550,20 +553,40 @@ public sealed partial class MainWindow : Window
 
             var info = new StackPanel { Spacing = 4 };
             info.Children.Add(new TextBlock { Text = dev.Name, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush, TextWrapping = TextWrapping.Wrap });
+
+            var badges = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
             if (dev.IsDefault)
             {
-                info.Children.Add(new Border
+                badges.Children.Add(new Border
                 {
-                    HorizontalAlignment = HorizontalAlignment.Left,
                     Height = 22,
-                    Background = AccentBgBrush,
-                    BorderBrush = AccentBorderBrush,
+                    Background = SubtleBgBrush,
+                    BorderBrush = CardBorderBrush,
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(4),
                     Padding = new Thickness(8, 0, 8, 0),
-                    Child = new TextBlock { Text = "DEFAULT DEVICE", FontFamily = new FontFamily("Consolas"), FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = AccentTextBrush, VerticalAlignment = VerticalAlignment.Center }
+                    Child = new TextBlock { Text = "DEFAULT", FontFamily = new FontFamily("Consolas"), FontSize = 10.5, FontWeight = FontWeights.Bold, Foreground = TextDimBrush, VerticalAlignment = VerticalAlignment.Center }
                 });
             }
+            badges.Children.Add(new Border
+            {
+                Height = 22,
+                Background = apoActive ? AccentBgBrush : SubtleBgBrush,
+                BorderBrush = apoActive ? AccentBorderBrush : CardBorderBrush,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(8, 0, 8, 0),
+                Child = new TextBlock
+                {
+                    Text = apoActive ? "MFX APO ACTIVE" : "NOT ATTACHED",
+                    FontFamily = new FontFamily("Consolas"),
+                    FontSize = 10.5,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = apoActive ? AccentTextBrush : MutedBrush,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            });
+            info.Children.Add(badges);
             info.Children.Add(new TextBlock
             {
                 Text = $"GUID: {dev.Guid} · {dev.SampleRate / 1000.0:0.0} kHz / {dev.BitsPerSample}-bit · {dev.Channels}ch",
