@@ -10,3 +10,5 @@ dist/
 third_party/
 bin/
 obj/
+installer/stage/
+installer/output/

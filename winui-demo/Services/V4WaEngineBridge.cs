@@ -170,9 +170,9 @@ public sealed class V4WaEngineBridge
     public string UiSettingsPath => Path.Combine(ProgramDataDir, "v4wa_ui_settings.json");
 
     public string RepoRoot { get; }
-    public string ViperCtlPath => Path.Combine(RepoRoot, "build", "viper_ctl.exe");
-    public string InstallScriptPath => Path.Combine(RepoRoot, "scripts", "install_apo.ps1");
-    public string UninstallScriptPath => Path.Combine(RepoRoot, "scripts", "uninstall_apo.ps1");
+    public string ViperCtlPath { get; }
+    public string InstallScriptPath { get; }
+    public string UninstallScriptPath { get; }
 
     public static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -186,6 +186,16 @@ public sealed class V4WaEngineBridge
     public V4WaEngineBridge()
     {
         RepoRoot = FindRepoRoot();
+
+        string localCtl = Path.Combine(AppContext.BaseDirectory, "viper_ctl.exe");
+        ViperCtlPath = File.Exists(localCtl) ? localCtl : Path.Combine(RepoRoot, "build", "viper_ctl.exe");
+
+        string localInstall = Path.Combine(AppContext.BaseDirectory, "scripts", "install_apo.ps1");
+        InstallScriptPath = File.Exists(localInstall) ? localInstall : Path.Combine(RepoRoot, "scripts", "install_apo.ps1");
+
+        string localUninstall = Path.Combine(AppContext.BaseDirectory, "scripts", "uninstall_apo.ps1");
+        UninstallScriptPath = File.Exists(localUninstall) ? localUninstall : Path.Combine(RepoRoot, "scripts", "uninstall_apo.ps1");
+
         Directory.CreateDirectory(ProgramDataDir);
         Directory.CreateDirectory(IrsDir);
         Directory.CreateDirectory(DdcDir);

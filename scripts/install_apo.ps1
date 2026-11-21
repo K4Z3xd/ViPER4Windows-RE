@@ -1,15 +1,41 @@
 #Requires -RunAsAdministrator
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$DeviceGuid,
+    [Alias("EndpointGuid")]
+    [string]$DeviceGuid = "",
+
+    [switch]$AutoDefault,
 
     [string]$DllSource = ""
 )
 
 $ErrorActionPreference = "Stop"
 
+if (-not $DeviceGuid -and $AutoDefault) {
+    $ctlCandidates = @(
+        (Join-Path $PSScriptRoot "..\viper_ctl.exe"),
+        (Join-Path $PSScriptRoot "..\build\viper_ctl.exe")
+    )
+    $ctl = $ctlCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($ctl) {
+        $json = & $ctl devices 2>$null
+        $devs = $json | ConvertFrom-Json
+        $def = $devs | Where-Object { $_.isDefault } | Select-Object -First 1
+        if (-not $def) { $def = $devs | Select-Object -First 1 }
+        if ($def -and $def.guid) { $DeviceGuid = $def.guid }
+    }
+}
+
+if (-not $DeviceGuid) {
+    throw "No target audio device GUID provided or detected."
+}
+
 if (-not $DllSource) {
-    $DllSource = Join-Path $PSScriptRoot "..\build\ViPERHiResAPO.dll"
+    $localDll = Join-Path $PSScriptRoot "..\ViPERHiResAPO.dll"
+    if (Test-Path $localDll) {
+        $DllSource = $localDll
+    } else {
+        $DllSource = Join-Path $PSScriptRoot "..\build\ViPERHiResAPO.dll"
+    }
 }
 
 $ApoClsid = "{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}"
