@@ -1,5 +1,8 @@
 ; V4Wa — ViPER4Windows Alternative (Native WinUI 3 + Hi-Res MFX APO) Installer
-; Built with Inno Setup 6
+; Clean directory layout:
+;   {app}\V4Wa.exe     (native launcher)
+;   {app}\bin\         (all internal runtime, DSP, APO & script files)
+;   {app}\unins000.exe (Windows uninstaller)
 
 #define MyAppName "V4Wa"
 #define MyAppVersion "1.0.0"
@@ -36,19 +39,22 @@ Name: "foobar"; Description: "Install foobar2000 v2.x Status Reporter plugin (bi
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-; Self-contained WinUI 3 native desktop app + runtime
-Source: "stage\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Clean top-level launcher in {app}\V4Wa.exe
+Source: "..\build\V4WaLauncher.exe"; DestDir: "{app}"; DestName: "V4Wa.exe"; Flags: ignoreversion
 
-; Native C++23 Hi-Res APO & CLI helper
-Source: "..\build\ViPERHiResAPO.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\build\viper_ctl.exe"; DestDir: "{app}"; Flags: ignoreversion
+; All internal runtime files neatly packed inside {app}\bin\
+Source: "stage\app\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs
 
-; PowerShell APO install & 1-click factory restore scripts
-Source: "..\scripts\install_apo.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
-Source: "..\scripts\uninstall_apo.ps1"; DestDir: "{app}\scripts"; Flags: ignoreversion
+; Native C++23 Hi-Res APO & CLI helper inside {app}\bin\
+Source: "..\build\ViPERHiResAPO.dll"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "..\build\viper_ctl.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+
+; PowerShell APO install & 1-click factory restore scripts inside {app}\bin\scripts\
+Source: "..\scripts\install_apo.ps1"; DestDir: "{app}\bin\scripts"; Flags: ignoreversion
+Source: "..\scripts\uninstall_apo.ps1"; DestDir: "{app}\bin\scripts"; Flags: ignoreversion
 
 ; Optional foobar2000 v2.x Status Reporter plugin
-Source: "..\build\foo_dsp_viperhires.dll"; DestDir: "{app}\foobar"; Flags: ignoreversion
+Source: "..\build\foo_dsp_viperhires.dll"; DestDir: "{app}\bin\foobar"; Flags: ignoreversion
 Source: "..\build\foo_dsp_viperhires.dll"; DestDir: "{userappdata}\foobar2000-v2\user-components-x64\foo_dsp_viperhires"; Flags: ignoreversion; Tasks: foobar
 
 [Icons]
@@ -57,12 +63,12 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\scripts\install_apo.ps1"" -AutoDefault"; StatusMsg: "Registering V4Wa Hi-Res MFX APO and attaching to default audio device..."; Flags: runhidden waituntilterminated; Tasks: attachapo
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\bin\scripts\install_apo.ps1"" -AutoDefault"; StatusMsg: "Registering V4Wa Hi-Res MFX APO and attaching to default audio device..."; Flags: runhidden waituntilterminated; Tasks: attachapo
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "taskkill.exe"; Parameters: "/F /IM V4Wa.exe"; Flags: runhidden; RunOnceId: "KillV4Wa"
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\scripts\uninstall_apo.ps1"" -AllBackedUp -UnregisterDll"; Flags: runhidden waituntilterminated; RunOnceId: "RestoreAudioApo"
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\bin\scripts\uninstall_apo.ps1"" -AllBackedUp -UnregisterDll"; Flags: runhidden waituntilterminated; RunOnceId: "RestoreAudioApo"
 
 [UninstallDelete]
 Type: files; Name: "{userappdata}\foobar2000-v2\user-components-x64\foo_dsp_viperhires\foo_dsp_viperhires.dll"
