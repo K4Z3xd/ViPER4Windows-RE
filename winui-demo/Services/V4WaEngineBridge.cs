@@ -862,6 +862,7 @@ public sealed class V4WaEngineBridge
             {
                 FileName = "powershell.exe",
                 Arguments = $"-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{script}\" -EndpointGuid \"{endpointGuid}\"",
+                WorkingDirectory = Environment.SystemDirectory,
                 Verb = "runas",
                 UseShellExecute = true
             });
@@ -883,6 +884,7 @@ public sealed class V4WaEngineBridge
             {
                 FileName = "powershell.exe",
                 Arguments = "-NoProfile -WindowStyle Hidden -Command \"Start-Service AudioEndpointBuilder -EA SilentlyContinue; Restart-Service Audiosrv -Force -EA SilentlyContinue; Start-Service Audiosrv -EA SilentlyContinue\"",
+                WorkingDirectory = Environment.SystemDirectory,
                 Verb = "runas",
                 UseShellExecute = true
             });

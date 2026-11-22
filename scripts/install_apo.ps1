@@ -10,6 +10,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Critical: Never leave CWD inside the .NET 8 self-contained app's bin\ folder,
+# otherwise Windows PowerShell 5.1 Add-Type (csc.exe) picks up .NET 8's System.dll!
+Set-Location -Path $env:SystemRoot
+
 $ApoClsid = "{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}"
 $ModesAll = @(
     "{c18e2f7e-933d-4965-b7d1-1eef228d2af3}", # DEFAULT
@@ -82,6 +86,8 @@ using System.Security.Principal;
 using Microsoft.Win32;
 
 public static class RegOwnership {
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetCurrentProcess();
     [DllImport("advapi32.dll", SetLastError = true)]
     static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
     [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
@@ -98,7 +104,7 @@ public static class RegOwnership {
 
     static void EnablePrivilege(string name) {
         IntPtr token;
-        if (!OpenProcessToken(System.Diagnostics.Process.GetCurrentProcess().Handle, 0x0028, out token))
+        if (!OpenProcessToken(GetCurrentProcess(), 0x0028, out token))
             throw new Exception("OpenProcessToken failed: " + Marshal.GetLastWin32Error());
         TOKEN_PRIVILEGES tp = new TOKEN_PRIVILEGES { PrivilegeCount = 1, Attributes = 2 };
         if (!LookupPrivilegeValue(null, name, out tp.Luid))
@@ -131,8 +137,14 @@ public static class RegOwnership {
 }
 "@
 
-if (-not ("RegOwnership" -as [type])) {
-    Add-Type -TypeDefinition $csharp
+try {
+    if (-not ("RegOwnership" -as [type])) {
+        Add-Type -TypeDefinition $csharp
+    }
+} catch {
+    Write-Log "ERROR compiling RegOwnership helper for ${DeviceGuid}: $_"
+    Write-Error $_
+    throw
 }
 
 Write-Host "[1/5] Stopping Windows Audio service briefly..." -ForegroundColor Cyan

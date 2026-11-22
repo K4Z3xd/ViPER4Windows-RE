@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Set-Location -Path $env:SystemRoot
 
 $ProgramDataDir = "C:\ProgramData\ViPERHiRes"
 $BackupDir = Join-Path $ProgramDataDir "backups"
