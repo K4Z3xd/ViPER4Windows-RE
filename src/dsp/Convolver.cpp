@@ -119,11 +119,14 @@ void Convolver::prepare(double sampleRate) {
     fdlR_.assign(kMaxPartitions, std::vector<Complex>(kFftSize, Complex{0.0f, 0.0f}));
     irSpecL_.assign(kMaxPartitions, std::vector<Complex>(kFftSize, Complex{0.0f, 0.0f}));
     irSpecR_.assign(kMaxPartitions, std::vector<Complex>(kFftSize, Complex{0.0f, 0.0f}));
+    irSpecLR_.assign(kMaxPartitions, std::vector<Complex>(kFftSize, Complex{0.0f, 0.0f}));
+    irSpecRL_.assign(kMaxPartitions, std::vector<Complex>(kFftSize, Complex{0.0f, 0.0f}));
 
     samplePos_ = 0;
     fdlIndex_ = 0;
     loadedRevision_ = 0;
     irLoaded_ = false;
+    trueStereo_ = false;
     (void)loadActiveIrFromDisk();
 }
 
@@ -181,7 +184,7 @@ bool Convolver::loadWavFile(const std::wstring& path) {
     std::fseek(f, 0, SEEK_END);
     const long fileLen = std::ftell(f);
     std::fseek(f, 0, SEEK_SET);
-    if (fileLen < 44 || fileLen > 16 * 1024 * 1024) {
+    if (fileLen < 44 || fileLen > 32 * 1024 * 1024) {
         std::fclose(f);
         irLoaded_ = false;
         return false;
@@ -214,6 +217,10 @@ bool Convolver::loadWavFile(const std::wstring& path) {
             numChannels = readU16(chunk + 10);
             wavSampleRate = readU32(chunk + 12);
             bitsPerSample = readU16(chunk + 22);
+            // Support WAVE_FORMAT_EXTENSIBLE (0xFFFE) by inspecting SubFormat GUID first 2 bytes
+            if (audioFormat == 0xFFFE && chunkSize >= 40) {
+                audioFormat = readU16(chunk + 32);
+            }
         } else if (std::memcmp(chunk, "data", 4) == 0) {
             dataPtr = chunk + 8;
             dataSize = chunkSize;
@@ -221,7 +228,8 @@ bool Convolver::loadWavFile(const std::wstring& path) {
         offset += 8 + chunkSize + (chunkSize & 1u);
     }
 
-    if (!dataPtr || dataSize == 0 || numChannels < 1 || numChannels > 2 || wavSampleRate < 8000) {
+    const bool validCh = (numChannels == 1 || numChannels == 2 || numChannels == 4);
+    if (!dataPtr || dataSize == 0 || !validCh || wavSampleRate < 8000) {
         irLoaded_ = false;
         return false;
     }
@@ -237,8 +245,15 @@ bool Convolver::loadWavFile(const std::wstring& path) {
         return false;
     }
 
-    std::vector<float> irL(totalFrames);
-    std::vector<float> irR(totalFrames);
+    const bool is4Ch = (numChannels == 4);
+    std::vector<float> irLL(totalFrames);
+    std::vector<float> irRR(totalFrames);
+    std::vector<float> irLR;
+    std::vector<float> irRL;
+    if (is4Ch) {
+        irLR.resize(totalFrames);
+        irRL.resize(totalFrames);
+    }
 
     auto decodeSample = [&](const uint8_t* p) -> float {
         if (audioFormat == 3 && bitsPerSample == 32) {
@@ -265,45 +280,81 @@ bool Convolver::loadWavFile(const std::wstring& path) {
 
     for (size_t i = 0; i < totalFrames; ++i) {
         const uint8_t* framePtr = dataPtr + i * bytesPerSample * numChannels;
-        irL[i] = decodeSample(framePtr);
-        irR[i] = (numChannels == 2) ? decodeSample(framePtr + bytesPerSample) : irL[i];
+        if (is4Ch) {
+            // Standard True Stereo 4ch layout: [LL, LR, RL, RR]
+            irLL[i] = decodeSample(framePtr + 0 * bytesPerSample);
+            irLR[i] = decodeSample(framePtr + 1 * bytesPerSample);
+            irRL[i] = decodeSample(framePtr + 2 * bytesPerSample);
+            irRR[i] = decodeSample(framePtr + 3 * bytesPerSample);
+        } else {
+            irLL[i] = decodeSample(framePtr);
+            irRR[i] = (numChannels == 2) ? decodeSample(framePtr + bytesPerSample) : irLL[i];
+        }
     }
 
     // Resample IR automatically to current DAC sample rate (e.g., 48k -> 192k/384k)
-    irL = resampleMono(irL, static_cast<double>(wavSampleRate), sampleRate_);
-    irR = resampleMono(irR, static_cast<double>(wavSampleRate), sampleRate_);
+    irLL = resampleMono(irLL, static_cast<double>(wavSampleRate), sampleRate_);
+    irRR = resampleMono(irRR, static_cast<double>(wavSampleRate), sampleRate_);
+    if (is4Ch) {
+        irLR = resampleMono(irLR, static_cast<double>(wavSampleRate), sampleRate_);
+        irRL = resampleMono(irRL, static_cast<double>(wavSampleRate), sampleRate_);
+    }
 
     // Trim to max supported partitions
     const size_t maxSamples = kMaxPartitions * kBlockSize;
-    if (irL.size() > maxSamples) irL.resize(maxSamples);
-    if (irR.size() > maxSamples) irR.resize(maxSamples);
+    if (irLL.size() > maxSamples) irLL.resize(maxSamples);
+    if (irRR.size() > maxSamples) irRR.resize(maxSamples);
+    if (is4Ch) {
+        if (irLR.size() > maxSamples) irLR.resize(maxSamples);
+        if (irRL.size() > maxSamples) irRL.resize(maxSamples);
+    }
 
     // Normalize IR energy safely so loudness stays consistent across different .irs files
     double energyL = 0.0, energyR = 0.0;
-    for (float s : irL) energyL += static_cast<double>(s) * static_cast<double>(s);
-    for (float s : irR) energyR += static_cast<double>(s) * static_cast<double>(s);
+    for (float s : irLL) energyL += static_cast<double>(s) * static_cast<double>(s);
+    for (float s : irRR) energyR += static_cast<double>(s) * static_cast<double>(s);
+    if (is4Ch) {
+        for (float s : irRL) energyL += static_cast<double>(s) * static_cast<double>(s);
+        for (float s : irLR) energyR += static_cast<double>(s) * static_cast<double>(s);
+    }
     const double norm = std::sqrt(std::max({energyL, energyR, 1e-6}));
     if (norm > 1.0) {
         const float invNorm = static_cast<float>(1.0 / norm);
-        for (float& s : irL) s *= invNorm;
-        for (float& s : irR) s *= invNorm;
+        for (float& s : irLL) s *= invNorm;
+        for (float& s : irRR) s *= invNorm;
+        if (is4Ch) {
+            for (float& s : irLR) s *= invNorm;
+            for (float& s : irRL) s *= invNorm;
+        }
     }
 
-    numPartitions_ = std::min(kMaxPartitions, (irL.size() + kBlockSize - 1) / kBlockSize);
+    numPartitions_ = std::min(kMaxPartitions, (irLL.size() + kBlockSize - 1) / kBlockSize);
     for (size_t p = 0; p < numPartitions_; ++p) {
         std::fill(irSpecL_[p].begin(), irSpecL_[p].end(), Complex{0.0f, 0.0f});
         std::fill(irSpecR_[p].begin(), irSpecR_[p].end(), Complex{0.0f, 0.0f});
         const size_t start = p * kBlockSize;
-        const size_t count = std::min(kBlockSize, irL.size() - start);
+        const size_t count = std::min(kBlockSize, irLL.size() - start);
         for (size_t k = 0; k < count; ++k) {
-            irSpecL_[p][k] = Complex{irL[start + k], 0.0f};
-            irSpecR_[p][k] = Complex{irR[start + k], 0.0f};
+            irSpecL_[p][k] = Complex{irLL[start + k], 0.0f};
+            irSpecR_[p][k] = Complex{irRR[start + k], 0.0f};
         }
         fft(irSpecL_[p], false);
         fft(irSpecR_[p], false);
+
+        if (is4Ch) {
+            std::fill(irSpecLR_[p].begin(), irSpecLR_[p].end(), Complex{0.0f, 0.0f});
+            std::fill(irSpecRL_[p].begin(), irSpecRL_[p].end(), Complex{0.0f, 0.0f});
+            for (size_t k = 0; k < count; ++k) {
+                irSpecLR_[p][k] = Complex{irLR[start + k], 0.0f};
+                irSpecRL_[p][k] = Complex{irRL[start + k], 0.0f};
+            }
+            fft(irSpecLR_[p], false);
+            fft(irSpecRL_[p], false);
+        }
     }
 
     reset();
+    trueStereo_ = is4Ch;
     irLoaded_ = (numPartitions_ > 0);
     return irLoaded_;
 }
@@ -325,16 +376,33 @@ void Convolver::processBlock() noexcept {
     std::fill(accumSpecL_.begin(), accumSpecL_.end(), Complex{0.0f, 0.0f});
     std::fill(accumSpecR_.begin(), accumSpecR_.end(), Complex{0.0f, 0.0f});
 
-    for (size_t p = 0; p < numPartitions_; ++p) {
-        const size_t histIdx = (fdlIndex_ + kMaxPartitions - p) % kMaxPartitions;
-        const auto& xL = fdlL_[histIdx];
-        const auto& xR = fdlR_[histIdx];
-        const auto& hL = irSpecL_[p];
-        const auto& hR = irSpecR_[p];
+    if (trueStereo_) {
+        for (size_t p = 0; p < numPartitions_; ++p) {
+            const size_t histIdx = (fdlIndex_ + kMaxPartitions - p) % kMaxPartitions;
+            const auto& xL = fdlL_[histIdx];
+            const auto& xR = fdlR_[histIdx];
+            const auto& hLL = irSpecL_[p];
+            const auto& hRR = irSpecR_[p];
+            const auto& hLR = irSpecLR_[p];
+            const auto& hRL = irSpecRL_[p];
 
-        for (size_t k = 0; k < kFftSize; ++k) {
-            accumSpecL_[k] += xL[k] * hL[k];
-            accumSpecR_[k] += xR[k] * hR[k];
+            for (size_t k = 0; k < kFftSize; ++k) {
+                accumSpecL_[k] += xL[k] * hLL[k] + xR[k] * hRL[k];
+                accumSpecR_[k] += xL[k] * hLR[k] + xR[k] * hRR[k];
+            }
+        }
+    } else {
+        for (size_t p = 0; p < numPartitions_; ++p) {
+            const size_t histIdx = (fdlIndex_ + kMaxPartitions - p) % kMaxPartitions;
+            const auto& xL = fdlL_[histIdx];
+            const auto& xR = fdlR_[histIdx];
+            const auto& hL = irSpecL_[p];
+            const auto& hR = irSpecR_[p];
+
+            for (size_t k = 0; k < kFftSize; ++k) {
+                accumSpecL_[k] += xL[k] * hL[k];
+                accumSpecR_[k] += xR[k] * hR[k];
+            }
         }
     }
 

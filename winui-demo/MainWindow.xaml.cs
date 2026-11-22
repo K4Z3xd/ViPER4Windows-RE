@@ -1534,7 +1534,7 @@ public sealed partial class MainWindow : Window
         static bool Close(float[] a, float[] b) => a.Length == b.Length && a.Zip(b).All(p => MathF.Abs(p.First - p.Second) < 0.05f);
         foreach (var ep in _allEqPresets)
         {
-            if (eqMode == 1)
+            if ((eqMode & 1) == 1)
             {
                 var t18 = ep.EqBands18Db is { Length: 18 } ? ep.EqBands18Db : (ep.EqBandsDb is { Length: 10 } ? Interpolate10To18(ep.EqBandsDb) : null);
                 if (t18 != null && Close(b18, t18)) return ep.Name;
@@ -1596,7 +1596,7 @@ public sealed partial class MainWindow : Window
         _eqSliders.Clear();
         _eqValueLabels.Clear();
 
-        bool is18 = _liveParams.EqMode == 1;
+        bool is18 = (_liveParams.EqMode & 1u) == 1u;
         var labels = is18 ? EqLabels18 : EqLabels10;
         var values = is18 ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
         EqTitleText.Text = "Equalizer";
@@ -1621,7 +1621,7 @@ public sealed partial class MainWindow : Window
             slider.ValueChanged += (_, e) =>
             {
                 if (_isUpdating) return;
-                if (_liveParams.EqMode == 1)
+                if ((_liveParams.EqMode & 1u) == 1u)
                 {
                     _liveParams.EqBands18Db[bandIdx] = (float)e.NewValue;
                     _liveParams.EqBandsDb = Downsample18To10(_liveParams.EqBands18Db);
@@ -1667,7 +1667,7 @@ public sealed partial class MainWindow : Window
         if (w < 20 || h < 20) return;
 
         bool active = _liveParams.MasterEnabled && _liveParams.EqEnabled;
-        var values = _liveParams.EqMode == 1 ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
+        var values = (_liveParams.EqMode & 1u) == 1u ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
         double padX = 16, padY = 10;
         double usableW = w - padX * 2, usableH = h - padY * 2;
         double midY = padY + usableH / 2.0;
@@ -1775,7 +1775,7 @@ public sealed partial class MainWindow : Window
         SetResponsiveWrap(EqActionsPanel, EqActionsCol, eqExpanded && _currentWindowWidth < 900);
         EqSlidersGrid.Opacity = eqActive ? 1.0 : 0.5;
 
-        var eqVals = _liveParams.EqMode == 1 ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
+        var eqVals = (_liveParams.EqMode & 1u) == 1u ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
         for (int i = 0; i < _eqValueLabels.Count && i < eqVals.Length; i++)
             _eqValueLabels[i].Foreground = MathF.Abs(eqVals[i]) > 0.01f && eqActive ? AccentLightBrush : TextSecondaryBrush;
 
@@ -1833,11 +1833,16 @@ public sealed partial class MainWindow : Window
 
     private void UpdateEqModeButtons()
     {
-        bool is18 = _liveParams.EqMode == 1;
+        bool is18 = (_liveParams.EqMode & 1u) == 1u;
+        bool isFir = (_liveParams.EqMode & 2u) == 2u;
         Eq10Btn.Background = !is18 ? MutedBgBrush : TransparentBrush;
         Eq10Btn.Foreground = !is18 ? AccentLightBrush : TextSecondaryBrush;
         Eq18Btn.Background = is18 ? MutedBgBrush : TransparentBrush;
         Eq18Btn.Foreground = is18 ? AccentLightBrush : TextSecondaryBrush;
+        EqIirBtn.Background = !isFir ? MutedBgBrush : TransparentBrush;
+        EqIirBtn.Foreground = !isFir ? AccentLightBrush : TextSecondaryBrush;
+        EqFirBtn.Background = isFir ? MutedBgBrush : TransparentBrush;
+        EqFirBtn.Foreground = isFir ? AccentLightBrush : TextSecondaryBrush;
     }
 
     // ==================== RESPONSIVE & EVENT HANDLERS ====================
@@ -2116,15 +2121,30 @@ public sealed partial class MainWindow : Window
     {
         if (sender is Button btn && int.TryParse(btn.Tag?.ToString(), out int mode))
         {
-            uint targetMode = mode == 18 ? 1u : 0u;
+            uint bandBit = mode == 18 ? 1u : 0u;
+            uint phaseBit = _liveParams.EqMode & 2u;
+            uint targetMode = bandBit | phaseBit;
             if (targetMode == _liveParams.EqMode) return;
             _liveParams.EqMode = targetMode;
-            if (targetMode == 1) _liveParams.EqBands18Db = Interpolate10To18(_liveParams.EqBandsDb);
+            if (bandBit == 1u) _liveParams.EqBands18Db = Interpolate10To18(_liveParams.EqBandsDb);
             else _liveParams.EqBandsDb = Downsample18To10(_liveParams.EqBands18Db);
 
             _isUpdating = true;
             RebuildEqSliders();
             _isUpdating = false;
+            PushLiveParams();
+        }
+    }
+
+    private void EqPhaseBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && uint.TryParse(btn.Tag?.ToString(), out uint phaseBit))
+        {
+            uint bandBit = _liveParams.EqMode & 1u;
+            uint targetMode = bandBit | (phaseBit & 2u);
+            if (targetMode == _liveParams.EqMode) return;
+            _liveParams.EqMode = targetMode;
+            UpdateEqModeButtons();
             PushLiveParams();
         }
     }

@@ -13,9 +13,10 @@ enum class DynamicDeviceType : uint32_t {
     StudioMonitor = 3
 };
 
-// Hi-Res ViPER Dynamic System:
-// Transient-aware envelope follower that dynamically boosts sub-bass & impact
-// scaled cleanly across 44.1kHz - 384kHz.
+// Hi-Res ViPER Dynamic System (2-Band Dynamic Processor):
+// - Low-band transient envelope follower + enclosure resonance voicing
+// - High-band transient presence lifter for crisp, lively dynamics
+// Scaled accurately across 44.1kHz - 384kHz.
 class DynamicSystem {
 public:
     void prepare(double sampleRate) noexcept;
@@ -28,12 +29,25 @@ private:
     double sampleRate_ = 48000.0;
     DynamicDeviceType device_ = DynamicDeviceType::CommonEarphone;
     double strength_ = 0.25;
-    double attackCoeff_ = 0.0;
-    double releaseCoeff_ = 0.0;
-    double env_ = 0.0;
+
+    // Low-band & high-band transient envelopes
+    double lowAttackCoeff_ = 0.0;
+    double lowReleaseCoeff_ = 0.0;
+    double highAttackCoeff_ = 0.0;
+    double highReleaseCoeff_ = 0.0;
+    double envLow_ = 0.0;
+    double envHigh_ = 0.0;
+
+    // Device-tuned scaling factors
+    double lowPunchScale_ = 1.25;
+    double highPunchScale_ = 0.30;
 
     BiquadFilter lowBandL_{};
     BiquadFilter lowBandR_{};
+    BiquadFilter lowResPeakL_{};
+    BiquadFilter lowResPeakR_{};
+    BiquadFilter highBandL_{};
+    BiquadFilter highBandR_{};
     BiquadFilter highShelfL_{};
     BiquadFilter highShelfR_{};
 };

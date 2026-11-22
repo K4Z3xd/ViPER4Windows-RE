@@ -7,9 +7,9 @@
 namespace viper {
 
 // Hi-Res ViPER Clarity processor:
-// - Natural: Smooth high-frequency presence lift without harsh sibilance
-// - OZone+: Parallel high-band harmonic exciter (adds air & detail)
-// - XHiFi: Crisp transient/treble reconstruction scaled accurately up to 384kHz
+// - Natural: Gentle anti-mud mid-bass cleanup + smooth vocal/air presence lift
+// - OZone+: Anti-mud de-masking + envelope-scaled high-band harmonic exciter
+// - XHiFi: Anti-mud cleanup + transient-aware micro-detail enhancer + extended Hi-Res air
 class ViperClarity {
 public:
     void prepare(double sampleRate) noexcept;
@@ -24,6 +24,16 @@ private:
     float gainDb_ = 0.0f;
     double exciterMix_ = 0.0;
 
+    // Fast & slow envelopes for transient micro-detail extraction (XHiFi / OZone+)
+    double fastCoeff_ = 0.0;
+    double slowCoeff_ = 0.0;
+    double fastEnvL_ = 0.0;
+    double slowEnvL_ = 0.0;
+    double fastEnvR_ = 0.0;
+    double slowEnvR_ = 0.0;
+
+    BiquadFilter antiMudL_{};
+    BiquadFilter antiMudR_{};
     BiquadFilter highPassL_{};
     BiquadFilter highPassR_{};
     BiquadFilter highShelfL_{};
