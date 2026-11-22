@@ -29,14 +29,11 @@ public sealed partial class MainWindow : Window
         public Border IconBox { get; init; } = null!;
         public FontIcon Icon { get; init; } = null!;
         public Button PinBtn { get; init; } = null!;
-        public Button ExpandBtn { get; init; } = null!;
-        public FontIcon ExpandIcon { get; init; } = null!;
         public Button? PowerBtn { get; init; }
         public FontIcon? PowerIcon { get; init; }
         public Func<bool> GetEnabled { get; set; } = () => true;
         public Func<bool> IsActive { get; set; } = () => false;
-        public bool? ManualExpanded { get; set; } = null;
-        public bool IsExpanded => ManualExpanded ?? GetEnabled();
+        public bool IsExpanded => GetEnabled();
         public Action<bool> RefreshVisual { get; set; } = _ => { };
     }
 
@@ -69,7 +66,6 @@ public sealed partial class MainWindow : Window
     private readonly List<TextBlock> _eqValueLabels = new();
     private readonly List<DspCardEntry> _cards = new();
     private readonly List<StackPanel> _masonryColumns = new();
-    private bool? _eqManualExpanded = null;
     private bool _isUpdating = true;
     private bool _settingsOpen = false;
     private string _activeSettingsCategory = "Appearance";
@@ -1026,28 +1022,10 @@ public sealed partial class MainWindow : Window
             RefreshVisualStates();
         };
 
-        var expandIcon = new FontIcon { Glyph = "\uE70D", FontSize = 11.5, Foreground = TextSecondaryBrush };
-        var expandBtn = new Button
-        {
-            Content = expandIcon,
-            Padding = new Thickness(0), Width = 30, Height = 30, CornerRadius = new CornerRadius(4),
-            Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1)
-        };
-        ToolTipService.SetToolTip(expandBtn, $"Expand / Collapse {title}");
-
         Button? powerBtn = null;
         FontIcon? powerIcon = null;
         var rightHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         rightHeader.Children.Add(pinBtn);
-        rightHeader.Children.Add(expandBtn);
-
-        DspCardEntry? entryRef = null;
-        expandBtn.Click += (_, _) =>
-        {
-            if (entryRef == null) return;
-            entryRef.ManualExpanded = !entryRef.IsExpanded;
-            RefreshVisualStates();
-        };
 
         if (getEnabled != null && setEnabled != null)
         {
@@ -1061,7 +1039,6 @@ public sealed partial class MainWindow : Window
             ToolTipService.SetToolTip(powerBtn, $"Toggle {title} (On / Off)");
             powerBtn.Click += (_, _) =>
             {
-                if (entryRef != null) entryRef.ManualExpanded = null; // Auto expand on ON, collapse on OFF
                 setEnabled(!getEnabled());
                 PushLiveParams();
             };
@@ -1091,11 +1068,10 @@ public sealed partial class MainWindow : Window
         var entry = new DspCardEntry
         {
             Id = id, DefaultOrder = order, Root = root, BodyContent = bodyContent, IconBox = iconBox, Icon = icon,
-            PinBtn = pinBtn, ExpandBtn = expandBtn, ExpandIcon = expandIcon, PowerBtn = powerBtn, PowerIcon = powerIcon,
+            PinBtn = pinBtn, PowerBtn = powerBtn, PowerIcon = powerIcon,
             GetEnabled = getEnabled ?? (() => true),
             IsActive = () => _liveParams.MasterEnabled && (getEnabled == null || getEnabled())
         };
-        entryRef = entry;
 
         buildBody(bodyContent, entry);
         _cards.Add(entry);
@@ -1606,9 +1582,6 @@ public sealed partial class MainWindow : Window
         _uiSettingsModel.SelectedPresetName = name;
         _bridge.SaveUiSettings(_uiSettingsModel);
 
-        _eqManualExpanded = null;
-        foreach (var card in _cards) card.ManualExpanded = null;
-
         RefreshIrsAndDdcCombos();
         RebuildPresetCombo();
         RebuildPinnedPresets();
@@ -1792,14 +1765,13 @@ public sealed partial class MainWindow : Window
         PinPresetBtn.Foreground = isPinnedPreset ? AccentTextBrush : TextDimBrush;
 
         bool eqActive = master && _liveParams.EqEnabled;
-        bool eqExpanded = _eqManualExpanded ?? _liveParams.EqEnabled;
+        bool eqExpanded = _liveParams.EqEnabled;
         EqIcon.Foreground = eqActive ? AccentLightBrush : MutedBrush;
         EqIconBox.Background = eqActive ? MakeAccentBgBrush() : SubtleBgBrush;
         EqIconBox.BorderBrush = eqActive ? MakeAccentBorderBrush() : CardBorderBrush;
         EqBodyPanel.Visibility = eqExpanded ? Visibility.Visible : Visibility.Collapsed;
         EqPresetToolbar.Visibility = eqExpanded ? Visibility.Visible : Visibility.Collapsed;
         EqModeSwitchBox.Visibility = eqExpanded ? Visibility.Visible : Visibility.Collapsed;
-        EqExpandIcon.Glyph = eqExpanded ? "\uE70E" : "\uE70D";
         SetResponsiveWrap(EqActionsPanel, EqActionsCol, eqExpanded && _currentWindowWidth < 900);
         EqSlidersGrid.Opacity = eqActive ? 1.0 : 0.5;
 
@@ -1812,7 +1784,6 @@ public sealed partial class MainWindow : Window
             bool active = card.IsActive();
             bool expanded = card.IsExpanded;
             card.BodyContent.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-            card.ExpandIcon.Glyph = expanded ? "\uE70E" : "\uE70D";
             card.Icon.Foreground = active ? AccentLightBrush : MutedBrush;
             card.IconBox.Background = active ? MakeAccentBgBrush() : SubtleBgBrush;
             card.IconBox.BorderBrush = active ? MakeAccentBorderBrush() : CardBorderBrush;
@@ -1904,8 +1875,7 @@ public sealed partial class MainWindow : Window
 
         SetResponsiveWrap(SignalBadgesPanel, SignalBadgesCol, w < 760);
         SetResponsiveWrap(PresetActionsPanel, PresetActionsCol, w < 620);
-        bool eqExpanded = _eqManualExpanded ?? _liveParams.EqEnabled;
-        SetResponsiveWrap(EqActionsPanel, EqActionsCol, eqExpanded && w < 900);
+        SetResponsiveWrap(EqActionsPanel, EqActionsCol, _liveParams.EqEnabled && w < 900);
 
         bool compactSidebar = w < 760;
         double sideW = compactSidebar ? 54 : 220;
@@ -1933,8 +1903,7 @@ public sealed partial class MainWindow : Window
     private void SettingsBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(!_settingsOpen);
     private void BackToDspBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(false);
     private void MasterPowerBtn_Click(object sender, RoutedEventArgs e) { _liveParams.MasterEnabled = !_liveParams.MasterEnabled; PushLiveParams(); }
-    private void EqPowerBtn_Click(object sender, RoutedEventArgs e) { _eqManualExpanded = null; _liveParams.EqEnabled = !_liveParams.EqEnabled; PushLiveParams(); }
-    private void EqExpandBtn_Click(object sender, RoutedEventArgs e) { _eqManualExpanded = !(_eqManualExpanded ?? _liveParams.EqEnabled); RefreshVisualStates(); }
+    private void EqPowerBtn_Click(object sender, RoutedEventArgs e) { _liveParams.EqEnabled = !_liveParams.EqEnabled; PushLiveParams(); }
 
     private void SettingsNav_Click(object sender, RoutedEventArgs e)
     {

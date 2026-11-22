@@ -17,10 +17,9 @@
             <TextBlock Text="ViPER4Windows RE" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold" Foreground="#B3F4F4F5" VerticalAlignment="Center" />
         </Grid>
 
-        <!-- Top Studio Header (Aligned pixel-for-pixel with card inner edges: 20 + 2 + 14 = 36px) -->
-        <Border x:Name="TopHeaderBorder" Grid.Row="1" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="0,0,0,2"
-                Background="{StaticResource V4WaHeaderBgBrush}" Padding="36,10">
-            <Grid HorizontalAlignment="Stretch" ColumnSpacing="12">
+        <!-- Top Studio Header (Seamless, no split line, 20px edges aligned with cards & identical height in DSP/Settings) -->
+        <Border x:Name="TopHeaderBorder" Grid.Row="1" BorderThickness="0" Background="Transparent" Padding="20,8,20,8">
+            <Grid HorizontalAlignment="Stretch" MinHeight="40" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -43,14 +42,14 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- Left (Settings Mode): Back Arrow + Settings Title -->
+                <!-- Left (Settings Mode): Back Arrow + Settings Title (Exact same 36x36 badge & 40px row height) -->
                 <StackPanel x:Name="HeaderSettingsPanel" Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center" Visibility="Collapsed">
-                    <Button Click="BackToDspBtn_Click" Width="34" Height="34" Padding="0" CornerRadius="4"
+                    <Button Click="BackToDspBtn_Click" Width="36" Height="36" Padding="0" CornerRadius="6"
                             Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1"
                             ToolTipService.ToolTip="Back to DSP">
-                        <FontIcon Glyph="&#xE72B;" FontSize="14" Foreground="White" />
+                        <FontIcon Glyph="&#xE72B;" FontSize="15" Foreground="White" />
                     </Button>
-                    <TextBlock Text="Settings" FontFamily="Segoe UI" FontSize="19" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+                    <TextBlock Text="Settings" FontFamily="Segoe UI" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
                 </StackPanel>
 
                 <!-- Right: Settings Gear + WORKING Pill + Master Power Icon Button -->
@@ -82,7 +81,7 @@
         </Border>
 
         <!-- DSP CONSOLE VIEW (Fluid full-width Masonry layout for 1..5 columns) -->
-        <ScrollViewer x:Name="DspScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="20,14,20,28">
+        <ScrollViewer x:Name="DspScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="20,6,20,28">
             <StackPanel HorizontalAlignment="Stretch" Spacing="12">
 
                 <!-- Live Signal Path Card (Aligned 36px left & right with Top Studio Header) -->
@@ -213,12 +212,6 @@
                                     <Button Content="Load" Style="{StaticResource V4WaToolbarButtonStyle}" Click="LoadEqPresetBtn_Click" />
                                     <Button Content="Reset" Style="{StaticResource V4WaToolbarButtonStyle}" Click="ResetEqBtn_Click" />
                                 </StackPanel>
-                                <Button x:Name="EqExpandBtn" Click="EqExpandBtn_Click"
-                                        Width="32" Height="32" Padding="0" CornerRadius="4" BorderThickness="1"
-                                        Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}"
-                                        ToolTipService.ToolTip="Expand / Collapse Equalizer">
-                                    <FontIcon x:Name="EqExpandIcon" Glyph="&#xE70E;" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
-                                </Button>
                                 <Button x:Name="EqPowerBtn" Click="EqPowerBtn_Click"
                                         Width="32" Height="32" Padding="0" CornerRadius="4" BorderThickness="1"
                                         Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}"
@@ -243,8 +236,8 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- SETTINGS VIEW (Fluid responsive layout) -->
-        <Grid x:Name="SettingsSplitGrid" Grid.Row="2" Visibility="Collapsed" HorizontalAlignment="Stretch" Padding="16,14,16,20">
+        <!-- SETTINGS VIEW (Fluid responsive layout aligned 20px left/right with Header) -->
+        <Grid x:Name="SettingsSplitGrid" Grid.Row="2" Visibility="Collapsed" HorizontalAlignment="Stretch" Padding="20,6,20,20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="SettingsSidebarCol" Width="220" />
                 <ColumnDefinition Width="*" />
@@ -550,51 +543,73 @@
                         <StackPanel x:Name="DevicesListPanel" Spacing="12" />
                     </StackPanel>
 
-                    <!-- PAGE 3: ABOUT (Another ViPER4Windows RE + AI-Powered Credits, foobar2000 removed) -->
+                    <!-- PAGE 3: ABOUT (Friendly, clear & beautifully formatted) -->
                     <StackPanel x:Name="SettingsAboutPage" Spacing="14" Visibility="Collapsed">
                         <TextBlock Text="About" FontFamily="Segoe UI" FontSize="22" FontWeight="Bold" Foreground="White" Margin="2,0,0,4" />
 
-                        <Border x:Name="AboutCard" Style="{StaticResource V4WaCardStyle}">
+                        <Border x:Name="AboutCard" Style="{StaticResource V4WaCardStyle}" Padding="18,16">
                             <StackPanel Spacing="12">
                                 <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                                    <TextBlock Text="Another ViPER4Windows RE" FontFamily="Segoe UI" FontSize="18" FontWeight="Bold" Foreground="White" />
+                                    <TextBlock Text="Another ViPER4Windows RE" FontFamily="Segoe UI" FontSize="19" FontWeight="Bold" Foreground="White" />
                                     <Border Height="22" Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
                                         <TextBlock Text="AI-POWERED" FontFamily="Segoe UI" FontSize="10.5" FontWeight="Bold" Foreground="{StaticResource V4WaAccentTextBrush}" VerticalAlignment="Center" />
                                     </Border>
                                 </StackPanel>
-                                <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" Foreground="#FFE4E4E7"
-                                           Text="This application, its C++23 Hi-Res DSP engine, Windows 11 MFX Audio Processing Object, and native WinUI 3 interface were architected and built entirely with AI (Google DeepMind / Antigravity)." />
+
+                                <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13.5" LineHeight="22" Foreground="#FFF0F0F5"
+                                           Text="A modern, system-wide sound enhancer for Windows 10 and 11. Customize bass punch, vocal clarity, surround depth, headphone tuning, and a full 10 or 18-band equalizer across all your music, games, movies, headphones, speakers, and Bluetooth audio." />
+
+                                <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12,10">
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" LineHeight="20" Foreground="#FFD4D4DC">
+                                        <Run Text="Built with AI: " FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text="Designed, written, and refined entirely with AI (Google DeepMind / Antigravity) — bringing the beloved ViPER audio experience to modern Windows with zero clutter and instant real-time control." />
+                                    </TextBlock>
+                                </Border>
                             </StackPanel>
                         </Border>
 
                         <!-- Credits & Acknowledgements -->
-                        <Border Style="{StaticResource V4WaCardStyle}">
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="Credits &amp; Acknowledgements" FontFamily="Segoe UI" FontSize="15" FontWeight="SemiBold" Foreground="White" />
-                                <StackPanel Spacing="6">
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• ViPER4Windows &amp; ViPER4Android FX (ViPER's Audio / Euphy Wong / Team DeWitt) — original audio DSP concepts, module designs, and .irs / .vdc ecosystem." />
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• AutoEQ (Jaakko Pasanen) — open-source headphone frequency response correction and ViPER-DDC (.vdc) profile ecosystem." />
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• Microsoft Windows App SDK &amp; Fluent Design System — WinUI 3 native controls, Acrylic backdrop, and Core Audio APO framework." />
+                        <Border Style="{StaticResource V4WaCardStyle}" Padding="18,16">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Credits &amp; Acknowledgements" FontFamily="Segoe UI" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                <StackPanel Spacing="10">
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" LineHeight="20" Foreground="#FFC8C8D2">
+                                        <Run Text="•  ViPER4Windows &amp; ViPER4Android FX" FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text=" (ViPER's Audio / Euphy Wong / Team DeWitt) — original sound effect ideas, module designs, and the .irs / .vdc audio profile ecosystem." />
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" LineHeight="20" Foreground="#FFC8C8D2">
+                                        <Run Text="•  AutoEQ" FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text=" (Jaakko Pasanen) — open-source headphone tuning database and ViPER-DDC (.vdc) correction profiles." />
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" LineHeight="20" Foreground="#FFC8C8D2">
+                                        <Run Text="•  Microsoft Windows App SDK &amp; Fluent Design" FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text=" — native Windows 11 interface controls, Acrylic translucency, and system audio processing framework." />
+                                    </TextBlock>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
 
                         <!-- Tools & Programming Languages -->
-                        <Border Style="{StaticResource V4WaCardStyle}">
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="Tools &amp; Technologies" FontFamily="Segoe UI" FontSize="15" FontWeight="SemiBold" Foreground="White" />
-                                <StackPanel Spacing="6">
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• C++23 (MSVC) — 64-bit internal DSP engine (17 modules, 44.1–384 kHz), COM MFX APO (ViPERHiResAPO.dll), Core Audio CLI (viper_ctl), and native GUI launcher." />
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• C# &amp; .NET 8 + WinUI 3 (Windows App SDK 1.7) — native Windows 11 desktop console with lock-free binary seqlock IPC." />
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• CMake &amp; Ninja — native C++ compilation pipeline." />
-                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="12.5" Foreground="#FFD4D4D8"
-                                               Text="• PowerShell &amp; Inno Setup 6 — elevated MFX APO registration, factory Registry backup/restore, and standalone Windows installer." />
+                        <Border Style="{StaticResource V4WaCardStyle}" Padding="18,16">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="Tools &amp; Technologies" FontFamily="Segoe UI" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
+                                <StackPanel Spacing="10">
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" LineHeight="20" Foreground="#FFC8C8D2">
+                                        <Run Text="•  C++23 (MSVC)" FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text=" — high-precision 64-bit audio engine (17 sound effects, up to 384 kHz), Windows audio driver module, and fast native launcher." />
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" LineHeight="20" Foreground="#FFC8C8D2">
+                                        <Run Text="•  C# &amp; .NET 8 + WinUI 3" FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text=" — smooth, responsive Windows 11 desktop app with instant real-time slider response." />
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" LineHeight="20" Foreground="#FFC8C8D2">
+                                        <Run Text="•  CMake &amp; Ninja" FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text=" — clean native C++ build system." />
+                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontFamily="Segoe UI" FontSize="13" LineHeight="20" Foreground="#FFC8C8D2">
+                                        <Run Text="•  PowerShell &amp; Inno Setup 6" FontWeight="SemiBold" Foreground="White" />
+                                        <Run Text=" — safe audio driver installation, automatic factory backup &amp; restore, and standalone Windows installer." />
+                                    </TextBlock>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
