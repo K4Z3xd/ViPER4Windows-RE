@@ -38,13 +38,13 @@
             <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#FFFFFFFF" />
             <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#FF34D399" />
 
-            <!-- Windows 11 Fluent Card Style (8px corners, crisp continuous border) -->
+            <!-- Windows 11 Fluent Card Style (8px corners, crisp 2px continuous border) -->
             <Style x:Key="V4WaCardStyle" TargetType="Border">
                 <Setter Property="Background" Value="{StaticResource V4WaCardBgBrush}" />
                 <Setter Property="BorderBrush" Value="{StaticResource V4WaCardBorderBrush}" />
-                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="BorderThickness" Value="2" />
                 <Setter Property="CornerRadius" Value="8" />
-                <Setter Property="Padding" Value="16" />
+                <Setter Property="Padding" Value="14,12" />
             </Style>
 
             <!-- Unified Toolbar Button Style (34px height, 4px Windows 11 corners, Segoe UI) -->

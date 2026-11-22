@@ -25,13 +25,18 @@ public sealed partial class MainWindow : Window
         public string Id { get; init; } = "";
         public int DefaultOrder { get; init; }
         public Border Root { get; init; } = null!;
+        public StackPanel BodyContent { get; init; } = null!;
         public Border IconBox { get; init; } = null!;
         public FontIcon Icon { get; init; } = null!;
         public Button PinBtn { get; init; } = null!;
+        public Button ExpandBtn { get; init; } = null!;
+        public FontIcon ExpandIcon { get; init; } = null!;
         public Button? PowerBtn { get; init; }
         public FontIcon? PowerIcon { get; init; }
         public Func<bool> GetEnabled { get; set; } = () => true;
         public Func<bool> IsActive { get; set; } = () => false;
+        public bool? ManualExpanded { get; set; } = null;
+        public bool IsExpanded => ManualExpanded ?? GetEnabled();
         public Action<bool> RefreshVisual { get; set; } = _ => { };
     }
 
@@ -63,6 +68,8 @@ public sealed partial class MainWindow : Window
     private readonly List<Slider> _eqSliders = new();
     private readonly List<TextBlock> _eqValueLabels = new();
     private readonly List<DspCardEntry> _cards = new();
+    private readonly List<StackPanel> _masonryColumns = new();
+    private bool? _eqManualExpanded = null;
     private bool _isUpdating = true;
     private bool _settingsOpen = false;
     private string _activeSettingsCategory = "Appearance";
@@ -681,7 +688,7 @@ public sealed partial class MainWindow : Window
 
             DevicesListPanel.Children.Add(new Border
             {
-                Background = CardBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16),
+                Background = CardBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(8), Padding = new Thickness(14, 12, 14, 12),
                 Child = cardStack
             });
         }
@@ -1019,10 +1026,28 @@ public sealed partial class MainWindow : Window
             RefreshVisualStates();
         };
 
+        var expandIcon = new FontIcon { Glyph = "\uE70D", FontSize = 11.5, Foreground = TextSecondaryBrush };
+        var expandBtn = new Button
+        {
+            Content = expandIcon,
+            Padding = new Thickness(0), Width = 30, Height = 30, CornerRadius = new CornerRadius(4),
+            Background = SubtleBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1)
+        };
+        ToolTipService.SetToolTip(expandBtn, $"Expand / Collapse {title}");
+
         Button? powerBtn = null;
         FontIcon? powerIcon = null;
         var rightHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         rightHeader.Children.Add(pinBtn);
+        rightHeader.Children.Add(expandBtn);
+
+        DspCardEntry? entryRef = null;
+        expandBtn.Click += (_, _) =>
+        {
+            if (entryRef == null) return;
+            entryRef.ManualExpanded = !entryRef.IsExpanded;
+            RefreshVisualStates();
+        };
 
         if (getEnabled != null && setEnabled != null)
         {
@@ -1036,6 +1061,7 @@ public sealed partial class MainWindow : Window
             ToolTipService.SetToolTip(powerBtn, $"Toggle {title} (On / Off)");
             powerBtn.Click += (_, _) =>
             {
+                if (entryRef != null) entryRef.ManualExpanded = null; // Auto expand on ON, collapse on OFF
                 setEnabled(!getEnabled());
                 PushLiveParams();
             };
@@ -1050,24 +1076,28 @@ public sealed partial class MainWindow : Window
         headerGrid.Children.Add(leftHeader);
         headerGrid.Children.Add(rightHeader);
 
-        var bodyStack = new StackPanel { Spacing = 12 };
-        bodyStack.Children.Add(headerGrid);
+        var bodyContent = new StackPanel { Spacing = 10 };
+        var outerStack = new StackPanel { Spacing = 10 };
+        outerStack.Children.Add(headerGrid);
+        outerStack.Children.Add(bodyContent);
 
         var root = new Border
         {
-            Background = CardBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16),
-            Child = bodyStack
+            Background = CardBgBrush, BorderBrush = CardBorderBrush, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(8), Padding = new Thickness(14, 12, 14, 12),
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = outerStack
         };
 
         var entry = new DspCardEntry
         {
-            Id = id, DefaultOrder = order, Root = root, IconBox = iconBox, Icon = icon,
-            PinBtn = pinBtn, PowerBtn = powerBtn, PowerIcon = powerIcon,
+            Id = id, DefaultOrder = order, Root = root, BodyContent = bodyContent, IconBox = iconBox, Icon = icon,
+            PinBtn = pinBtn, ExpandBtn = expandBtn, ExpandIcon = expandIcon, PowerBtn = powerBtn, PowerIcon = powerIcon,
             GetEnabled = getEnabled ?? (() => true),
             IsActive = () => _liveParams.MasterEnabled && (getEnabled == null || getEnabled())
         };
+        entryRef = entry;
 
-        buildBody(bodyStack, entry);
+        buildBody(bodyContent, entry);
         _cards.Add(entry);
         return entry;
     }
@@ -1399,19 +1429,30 @@ public sealed partial class MainWindow : Window
         ShowToast($"Imported & activated DDC: {file.Name}");
     }
 
-    private static int ComputeModuleCols(double width) => Math.Clamp((int)((width - 40) / 370), 1, 5);
+    private static int ComputeModuleCols(double width) => Math.Clamp((int)((width - 40) / 340), 1, 5);
 
     private void LayoutDspCards()
     {
         int cols = ComputeModuleCols(_currentWindowWidth);
         _lastModuleCols = cols;
 
+        // Detach cards cleanly from previous masonry columns before re-parenting
+        foreach (var col in _masonryColumns)
+            col.Children.Clear();
+        _masonryColumns.Clear();
+
         ModulesGrid.Children.Clear();
         ModulesGrid.ColumnDefinitions.Clear();
         ModulesGrid.RowDefinitions.Clear();
 
         for (int c = 0; c < cols; c++)
+        {
             ModulesGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var colPanel = new StackPanel { Spacing = 12, VerticalAlignment = VerticalAlignment.Top };
+            Grid.SetColumn(colPanel, c);
+            ModulesGrid.Children.Add(colPanel);
+            _masonryColumns.Add(colPanel);
+        }
 
         var ordered = _cards
             .OrderBy(c =>
@@ -1421,16 +1462,18 @@ public sealed partial class MainWindow : Window
             })
             .ToList();
 
-        int rows = (ordered.Count + cols - 1) / cols;
-        for (int r = 0; r < rows; r++)
-            ModulesGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        for (int i = 0; i < ordered.Count; i++)
+        // Shortest-column masonry placement (no forced row symmetry, zero wasted void space!)
+        var colHeights = new double[cols];
+        foreach (var card in ordered)
         {
-            var card = ordered[i];
-            Grid.SetRow(card.Root, i / cols);
-            Grid.SetColumn(card.Root, i % cols);
-            ModulesGrid.Children.Add(card.Root);
+            int bestCol = 0;
+            for (int c = 1; c < cols; c++)
+            {
+                if (colHeights[c] < colHeights[bestCol]) bestCol = c;
+            }
+            _masonryColumns[bestCol].Children.Add(card.Root);
+            double estHeight = card.IsExpanded ? (74 + card.BodyContent.Children.Count * 54) : 58;
+            colHeights[bestCol] += estHeight + 12;
         }
     }
 
@@ -1473,7 +1516,7 @@ public sealed partial class MainWindow : Window
             var btn = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(14, 10, 14, 10), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+                Padding = new Thickness(14, 10, 14, 10), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(2),
                 Background = active ? MakeAccentBgBrush() : CardBgBrush,
                 BorderBrush = active ? MakeAccentBorderBrush() : CardBorderBrush
             };
@@ -1563,9 +1606,13 @@ public sealed partial class MainWindow : Window
         _uiSettingsModel.SelectedPresetName = name;
         _bridge.SaveUiSettings(_uiSettingsModel);
 
+        _eqManualExpanded = null;
+        foreach (var card in _cards) card.ManualExpanded = null;
+
         RefreshIrsAndDdcCombos();
         RebuildPresetCombo();
         RebuildPinnedPresets();
+        LayoutDspCards();
         HydrateUiFromLiveParams();
     }
 
@@ -1745,9 +1792,15 @@ public sealed partial class MainWindow : Window
         PinPresetBtn.Foreground = isPinnedPreset ? AccentTextBrush : TextDimBrush;
 
         bool eqActive = master && _liveParams.EqEnabled;
+        bool eqExpanded = _eqManualExpanded ?? _liveParams.EqEnabled;
         EqIcon.Foreground = eqActive ? AccentLightBrush : MutedBrush;
         EqIconBox.Background = eqActive ? MakeAccentBgBrush() : SubtleBgBrush;
         EqIconBox.BorderBrush = eqActive ? MakeAccentBorderBrush() : CardBorderBrush;
+        EqBodyPanel.Visibility = eqExpanded ? Visibility.Visible : Visibility.Collapsed;
+        EqPresetToolbar.Visibility = eqExpanded ? Visibility.Visible : Visibility.Collapsed;
+        EqModeSwitchBox.Visibility = eqExpanded ? Visibility.Visible : Visibility.Collapsed;
+        EqExpandIcon.Glyph = eqExpanded ? "\uE70E" : "\uE70D";
+        SetResponsiveWrap(EqActionsPanel, EqActionsCol, eqExpanded && _currentWindowWidth < 900);
         EqSlidersGrid.Opacity = eqActive ? 1.0 : 0.5;
 
         var eqVals = _liveParams.EqMode == 1 ? _liveParams.EqBands18Db : _liveParams.EqBandsDb;
@@ -1757,6 +1810,9 @@ public sealed partial class MainWindow : Window
         foreach (var card in _cards)
         {
             bool active = card.IsActive();
+            bool expanded = card.IsExpanded;
+            card.BodyContent.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+            card.ExpandIcon.Glyph = expanded ? "\uE70E" : "\uE70D";
             card.Icon.Foreground = active ? AccentLightBrush : MutedBrush;
             card.IconBox.Background = active ? MakeAccentBgBrush() : SubtleBgBrush;
             card.IconBox.BorderBrush = active ? MakeAccentBorderBrush() : CardBorderBrush;
@@ -1848,7 +1904,8 @@ public sealed partial class MainWindow : Window
 
         SetResponsiveWrap(SignalBadgesPanel, SignalBadgesCol, w < 760);
         SetResponsiveWrap(PresetActionsPanel, PresetActionsCol, w < 620);
-        SetResponsiveWrap(EqActionsPanel, EqActionsCol, w < 900);
+        bool eqExpanded = _eqManualExpanded ?? _liveParams.EqEnabled;
+        SetResponsiveWrap(EqActionsPanel, EqActionsCol, eqExpanded && w < 900);
 
         bool compactSidebar = w < 760;
         double sideW = compactSidebar ? 54 : 220;
@@ -1876,7 +1933,8 @@ public sealed partial class MainWindow : Window
     private void SettingsBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(!_settingsOpen);
     private void BackToDspBtn_Click(object sender, RoutedEventArgs e) => SetSettingsOpen(false);
     private void MasterPowerBtn_Click(object sender, RoutedEventArgs e) { _liveParams.MasterEnabled = !_liveParams.MasterEnabled; PushLiveParams(); }
-    private void EqPowerBtn_Click(object sender, RoutedEventArgs e) { _liveParams.EqEnabled = !_liveParams.EqEnabled; PushLiveParams(); }
+    private void EqPowerBtn_Click(object sender, RoutedEventArgs e) { _eqManualExpanded = null; _liveParams.EqEnabled = !_liveParams.EqEnabled; PushLiveParams(); }
+    private void EqExpandBtn_Click(object sender, RoutedEventArgs e) { _eqManualExpanded = !(_eqManualExpanded ?? _liveParams.EqEnabled); RefreshVisualStates(); }
 
     private void SettingsNav_Click(object sender, RoutedEventArgs e)
     {

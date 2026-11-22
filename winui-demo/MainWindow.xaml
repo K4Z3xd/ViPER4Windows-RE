@@ -13,13 +13,13 @@
         </Grid.RowDefinitions>
 
         <!-- Minimalist Title Bar -->
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="18,0,140,0" Background="Transparent">
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="20,0,140,0" Background="Transparent">
             <TextBlock Text="ViPER4Windows RE" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold" Foreground="#B3F4F4F5" VerticalAlignment="Center" />
         </Grid>
 
-        <!-- Top Studio Header (Fluid full-width) -->
-        <Border x:Name="TopHeaderBorder" Grid.Row="1" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="0,0,0,1"
-                Background="{StaticResource V4WaHeaderBgBrush}" Padding="20,10">
+        <!-- Top Studio Header (Aligned pixel-for-pixel with card inner edges: 20 + 2 + 14 = 36px) -->
+        <Border x:Name="TopHeaderBorder" Grid.Row="1" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="0,0,0,2"
+                Background="{StaticResource V4WaHeaderBgBrush}" Padding="36,10">
             <Grid HorizontalAlignment="Stretch" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -32,9 +32,9 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border x:Name="SpeakerBadge" Grid.Column="0" Width="38" Height="38" CornerRadius="6"
+                    <Border x:Name="SpeakerBadge" Grid.Column="0" Width="36" Height="36" CornerRadius="6"
                             Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1">
-                        <FontIcon x:Name="HeaderSpeakerIcon" Glyph="&#xE767;" FontSize="18" Foreground="{StaticResource V4WaAccentLightBrush}" />
+                        <FontIcon x:Name="HeaderSpeakerIcon" Glyph="&#xE767;" FontSize="17" Foreground="{StaticResource V4WaAccentLightBrush}" />
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                         <TextBlock x:Name="HeaderDeviceNameText" Text="Loading audio device..." FontFamily="Segoe UI" FontSize="15" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis" />
@@ -81,12 +81,12 @@
             </Grid>
         </Border>
 
-        <!-- DSP CONSOLE VIEW (Fluid full-width for 3, 4, 5+ columns on wide monitors) -->
-        <ScrollViewer x:Name="DspScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="20,16,20,32">
-            <StackPanel HorizontalAlignment="Stretch" Spacing="14">
+        <!-- DSP CONSOLE VIEW (Fluid full-width Masonry layout for 1..5 columns) -->
+        <ScrollViewer x:Name="DspScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="20,14,20,28">
+            <StackPanel HorizontalAlignment="Stretch" Spacing="12">
 
-                <!-- Live Signal Path Card (Clean Segoe UI, no Shared/Exclusive badge) -->
-                <Border x:Name="SignalPathCard" Style="{StaticResource V4WaCardStyle}" Padding="16,12">
+                <!-- Live Signal Path Card (Aligned 36px left & right with Top Studio Header) -->
+                <Border x:Name="SignalPathCard" Style="{StaticResource V4WaCardStyle}" Padding="14,12">
                     <Grid ColumnSpacing="12" RowSpacing="10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -102,9 +102,9 @@
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Border x:Name="SignalIconBox" Grid.Column="0" Width="34" Height="34" CornerRadius="6"
+                            <Border x:Name="SignalIconBox" Grid.Column="0" Width="36" Height="36" CornerRadius="6"
                                     Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1">
-                                <FontIcon Glyph="&#xE9D9;" FontSize="15" Foreground="{StaticResource V4WaAccentLightBrush}" />
+                                <FontIcon Glyph="&#xE9D9;" FontSize="16" Foreground="{StaticResource V4WaAccentLightBrush}" />
                             </Border>
                             <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
@@ -168,9 +168,9 @@
                     </Grid>
                 </Border>
 
-                <!-- Equalizer Card (Power Icon Button replaces ToggleSwitch) -->
+                <!-- Equalizer Card (Auto-collapses cleanly when OFF; manual expand/collapse chevron) -->
                 <Border x:Name="EqCard" Style="{StaticResource V4WaCardStyle}">
-                    <StackPanel Spacing="14">
+                    <StackPanel Spacing="12">
                         <Grid ColumnSpacing="12" RowSpacing="10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -186,50 +186,60 @@
                                         Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}" BorderThickness="1">
                                     <FontIcon x:Name="EqIcon" Glyph="&#xE9E9;" FontSize="15" Foreground="{StaticResource V4WaAccentLightBrush}" />
                                 </Border>
-                                <TextBlock x:Name="EqTitleText" Text="Equalizer" FontFamily="Segoe UI" FontSize="15.5" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
-                                <FontIcon Glyph="&#xE946;" FontSize="13.5" Foreground="{StaticResource V4WaMutedBrush}" VerticalAlignment="Center"
+                                <TextBlock x:Name="EqTitleText" Text="Equalizer" FontFamily="Segoe UI" FontSize="15" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" />
+                                <FontIcon Glyph="&#xE946;" FontSize="13" Foreground="{StaticResource V4WaMutedBrush}" VerticalAlignment="Center"
                                           ToolTipService.ToolTip="64-bit Biquad parametric equalizer. Switch between 10-Band (1-octave) and 18-Band (1/2-octave) for surgical tonal shaping from 31 Hz up to 16 kHz." />
-                                <Border Height="34" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2">
+                                <Border x:Name="EqModeSwitchBox" Height="32" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="2">
                                     <StackPanel Orientation="Horizontal" Spacing="2">
-                                        <Button x:Name="Eq10Btn" Content="10-Band" Height="28" Padding="10,0" CornerRadius="3" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
+                                        <Button x:Name="Eq10Btn" Content="10-Band" Height="26" Padding="10,0" CornerRadius="3" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
                                                 Click="EqModeBtn_Click" Tag="10" BorderThickness="0" />
-                                        <Button x:Name="Eq18Btn" Content="18-Band" Height="28" Padding="10,0" CornerRadius="3" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
+                                        <Button x:Name="Eq18Btn" Content="18-Band" Height="26" Padding="10,0" CornerRadius="3" FontFamily="Segoe UI" FontSize="12" FontWeight="SemiBold"
                                                 Click="EqModeBtn_Click" Tag="18" BorderThickness="0" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
 
-                            <StackPanel x:Name="EqActionsPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <ComboBox x:Name="EqPresetCombo" Style="{StaticResource V4WaToolbarComboStyle}" Width="140" SelectionChanged="EqPresetCombo_SelectionChanged" SelectedIndex="0">
-                                    <ComboBoxItem Content="Custom" />
-                                    <ComboBoxItem Content="Flat" />
-                                    <ComboBoxItem Content="V-Shape Fun" />
-                                    <ComboBoxItem Content="Vocal Focus" />
-                                    <ComboBoxItem Content="Deep Basshead" />
-                                    <ComboBoxItem Content="Acoustic &amp; Jazz" />
-                                </ComboBox>
-                                <Button Content="Save" Style="{StaticResource V4WaToolbarButtonStyle}" Click="SaveEqPresetBtn_Click" />
-                                <Button Content="Load" Style="{StaticResource V4WaToolbarButtonStyle}" Click="LoadEqPresetBtn_Click" />
-                                <Button Content="Reset" Style="{StaticResource V4WaToolbarButtonStyle}" Click="ResetEqBtn_Click" />
+                            <StackPanel x:Name="EqActionsPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <StackPanel x:Name="EqPresetToolbar" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                    <ComboBox x:Name="EqPresetCombo" Style="{StaticResource V4WaToolbarComboStyle}" Width="140" SelectionChanged="EqPresetCombo_SelectionChanged" SelectedIndex="0">
+                                        <ComboBoxItem Content="Custom" />
+                                        <ComboBoxItem Content="Flat" />
+                                        <ComboBoxItem Content="V-Shape Fun" />
+                                        <ComboBoxItem Content="Vocal Focus" />
+                                        <ComboBoxItem Content="Deep Basshead" />
+                                        <ComboBoxItem Content="Acoustic &amp; Jazz" />
+                                    </ComboBox>
+                                    <Button Content="Save" Style="{StaticResource V4WaToolbarButtonStyle}" Click="SaveEqPresetBtn_Click" />
+                                    <Button Content="Load" Style="{StaticResource V4WaToolbarButtonStyle}" Click="LoadEqPresetBtn_Click" />
+                                    <Button Content="Reset" Style="{StaticResource V4WaToolbarButtonStyle}" Click="ResetEqBtn_Click" />
+                                </StackPanel>
+                                <Button x:Name="EqExpandBtn" Click="EqExpandBtn_Click"
+                                        Width="32" Height="32" Padding="0" CornerRadius="4" BorderThickness="1"
+                                        Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}"
+                                        ToolTipService.ToolTip="Expand / Collapse Equalizer">
+                                    <FontIcon x:Name="EqExpandIcon" Glyph="&#xE70E;" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" />
+                                </Button>
                                 <Button x:Name="EqPowerBtn" Click="EqPowerBtn_Click"
-                                        Width="34" Height="34" Padding="0" CornerRadius="4" BorderThickness="1"
+                                        Width="32" Height="32" Padding="0" CornerRadius="4" BorderThickness="1"
                                         Background="{StaticResource V4WaAccentBgBrush}" BorderBrush="{StaticResource V4WaAccentBorderBrush}"
                                         ToolTipService.ToolTip="Toggle Equalizer (On / Off)">
-                                    <FontIcon x:Name="EqPowerIcon" Glyph="&#xE7E8;" FontSize="14" Foreground="{StaticResource V4WaAccentLightBrush}" />
+                                    <FontIcon x:Name="EqPowerIcon" Glyph="&#xE7E8;" FontSize="13.5" Foreground="{StaticResource V4WaAccentLightBrush}" />
                                 </Button>
                             </StackPanel>
                         </Grid>
 
-                        <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Height="110" Padding="14,10">
-                            <Canvas x:Name="EqCurveCanvas" SizeChanged="EqCurveCanvas_SizeChanged" />
-                        </Border>
+                        <StackPanel x:Name="EqBodyPanel" Spacing="12">
+                            <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="2" CornerRadius="6" Height="104" Padding="14,8">
+                                <Canvas x:Name="EqCurveCanvas" SizeChanged="EqCurveCanvas_SizeChanged" />
+                            </Border>
 
-                        <Grid x:Name="EqSlidersGrid" />
+                            <Grid x:Name="EqSlidersGrid" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- All 16 Remaining DSP Modules (Dynamic 1 -> 2 -> 3 -> 4 -> 5 columns!) -->
-                <Grid x:Name="ModulesGrid" ColumnSpacing="14" RowSpacing="14" />
+                <!-- All 16 Remaining DSP Modules (Dynamic Masonry 1..5 columns, zero empty voids!) -->
+                <Grid x:Name="ModulesGrid" ColumnSpacing="12" />
             </StackPanel>
         </ScrollViewer>
 
@@ -309,7 +319,7 @@
 
                                     <Button x:Name="ThemeAcrylicBtn" Grid.Row="0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MinHeight="76"
                                             HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
-                                            Padding="14,12" CornerRadius="6" BorderThickness="1" Click="ThemePresetBtn_Click" Tag="Acrylic">
+                                            Padding="14,12" CornerRadius="6" BorderThickness="2" Click="ThemePresetBtn_Click" Tag="Acrylic">
                                         <StackPanel Spacing="3">
                                             <TextBlock Text="Acrylic" FontFamily="Segoe UI" FontSize="14" FontWeight="SemiBold" Foreground="White" />
                                             <TextBlock Text="Default translucent glass backdrop with high contrast" FontFamily="Segoe UI" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextWrapping="Wrap" />
@@ -318,7 +328,7 @@
 
                                     <Button x:Name="ThemeOledBtn" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" MinHeight="76"
                                             HorizontalContentAlignment="Left" VerticalContentAlignment="Center"
-                                            Padding="14,12" CornerRadius="6" BorderThickness="1" Click="ThemePresetBtn_Click" Tag="DarkOLED">
+                                            Padding="14,12" CornerRadius="6" BorderThickness="2" Click="ThemePresetBtn_Click" Tag="DarkOLED">
                                         <StackPanel Spacing="3">
                                             <TextBlock Text="Dark OLED" FontFamily="Segoe UI" FontSize="14" FontWeight="SemiBold" Foreground="White" />
                                             <TextBlock Text="Pure OLED pitch black with crisp studio borders" FontFamily="Segoe UI" FontSize="12" Foreground="{StaticResource V4WaTextSecondaryBrush}" TextWrapping="Wrap" />
@@ -437,7 +447,7 @@
                                 </StackPanel>
 
                                 <!-- Active Accent Preview + On-Demand 1–3 Color Custom Color Flyout -->
-                                <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12,10">
+                                <Border Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="2" CornerRadius="6" Padding="12,10">
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
