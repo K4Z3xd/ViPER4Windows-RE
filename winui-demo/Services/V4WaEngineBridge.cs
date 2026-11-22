@@ -532,12 +532,30 @@ public sealed class V4WaEngineBridge
         }
     }
 
+    public static bool IsHandsFreeDevice(AudioDeviceModel dev)
+    {
+        string name = dev.Name ?? "";
+        if (name.Contains("Hands-Free", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Hands Free", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("AG Audio", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("(HFP)", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (dev.Channels == 1 && dev.SampleRate > 0 && dev.SampleRate <= 24000)
+        {
+            return true;
+        }
+        return false;
+    }
+
     public async Task<List<AudioDeviceModel>> GetDevicesAsync()
     {
         try
         {
             string json = await RunViperCtlAsync("devices");
-            return JsonSerializer.Deserialize<List<AudioDeviceModel>>(json, JsonOpts) ?? new();
+            var all = JsonSerializer.Deserialize<List<AudioDeviceModel>>(json, JsonOpts) ?? new();
+            return all.Where(d => !IsHandsFreeDevice(d)).ToList();
         }
         catch { return new(); }
     }

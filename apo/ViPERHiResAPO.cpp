@@ -81,9 +81,12 @@ HRESULT checkFormatSupported(
         }
     }
 
+    // Accept 8 kHz .. 384 kHz (1..8 ch) so telephony / Bluetooth HFP / mono devices never mute;
+    // DSP runs on 44.1-384 kHz Stereo and transparently passes through all other formats.
+    constexpr float kPassThroughMinSampleRate = 8000.0f;
     const float clampedSr = std::clamp(
         target.fFramesPerSecond,
-        static_cast<float>(kMinSampleRate),
+        kPassThroughMinSampleRate,
         static_cast<float>(kMaxSampleRate));
     const DWORD clampedCh = std::clamp<DWORD>(target.dwSamplesPerFrame, 1ul, 8ul);
 
@@ -267,20 +270,28 @@ STDMETHODIMP ViPERHiResAPO::LockForProcess(
         }
     }
 
-    // Prepare Hi-Res DSP engine for exact negotiated sample rate (e.g. 48k, 96k, 192k, 384k)
-    engine_.prepare(sampleRate_);
+    // Enable Hi-Res DSP only for 44.1-384 kHz Stereo; pass through all other formats (e.g. Bluetooth HFP 8/16 kHz Mono)
+    dspEligible_ = (channelCount_ == 2) &&
+                   (sampleRate_ >= kMinSampleRate) &&
+                   (sampleRate_ <= kMaxSampleRate);
+
+    if (dspEligible_) {
+        engine_.prepare(sampleRate_);
+    }
 
     if (!sharedConfig_.isOpen()) {
         (void)sharedConfig_.open(false);
     }
     if (sharedConfig_.isOpen() && sharedConfig_.readSnapshot(cachedParams_)) {
-        engine_.setParams(cachedParams_);
+        if (dspEligible_) {
+            engine_.setParams(cachedParams_);
+        }
     }
 
     // Write lightweight non-RT diagnostic line so we can verify active sample rate & IPC status
     if (FILE* f = nullptr; _wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\apo_diag.txt", L"w") == 0 && f) {
-        std::fprintf(f, "LockForProcess OK | SR=%u Hz | Ch=%u | IPC=%d | Seq=%u | Master=%u | EQ=%u | Bass=%u\n",
-                     sampleRate_, channelCount_, sharedConfig_.isOpen() ? 1 : 0,
+        std::fprintf(f, "LockForProcess OK | SR=%u Hz | Ch=%u | DSP=%d | IPC=%d | Seq=%u | Master=%u | EQ=%u | Bass=%u\n",
+                     sampleRate_, channelCount_, dspEligible_ ? 1 : 0, sharedConfig_.isOpen() ? 1 : 0,
                      cachedParams_.sequence, cachedParams_.masterEnabled,
                      cachedParams_.eqEnabled, cachedParams_.bassEnabled);
         std::fclose(f);
@@ -336,13 +347,11 @@ STDMETHODIMP_(void) ViPERHiResAPO::APOProcess(
         std::memcpy(outSamples, inSamples, totalSamples * sizeof(float));
     }
 
-    // Lock-free poll for real-time parameter updates from UI
-    if (sharedConfig_.isOpen() && sharedConfig_.pollChanges(lastConfigSeq_, cachedParams_)) {
-        engine_.setParams(cachedParams_);
-    }
-
-    // Process stereo Hi-Res DSP (44.1kHz - 384kHz, 32-bit float)
-    if (channelCount_ == 2) {
+    // Process stereo Hi-Res DSP (44.1kHz - 384kHz, 32-bit float); pass-through untouched otherwise
+    if (dspEligible_) {
+        if (sharedConfig_.isOpen() && sharedConfig_.pollChanges(lastConfigSeq_, cachedParams_)) {
+            engine_.setParams(cachedParams_);
+        }
         engine_.processInterleavedStereo(std::span<float>{outSamples, totalSamples});
     }
 }

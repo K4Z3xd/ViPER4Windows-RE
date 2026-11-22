@@ -40,7 +40,11 @@ if (-not $DeviceGuid -and $AutoDefault) {
     if ($ctl) {
         $json = & $ctl devices 2>$null
         if ($json) {
-            $devs = $json | ConvertFrom-Json
+            $devs = @($json | ConvertFrom-Json) | Where-Object {
+                $n = [string]$_.name
+                -not ($n -match "Hands-Free|Hands Free|AG Audio|\(HFP\)") -and
+                -not ($_.channels -eq 1 -and $_.sampleRate -le 24000)
+            }
             $def = $devs | Where-Object { $_.isDefault } | Select-Object -First 1
             if (-not $def) { $def = $devs | Select-Object -First 1 }
             if ($def -and $def.guid) { $DeviceGuid = $def.guid }

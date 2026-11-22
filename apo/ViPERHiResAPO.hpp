@@ -106,6 +106,7 @@ private:
     std::atomic<ULONG> refCount_{1};
     uint32_t sampleRate_ = 48000;
     uint32_t channelCount_ = 2;
+    bool dspEligible_ = false;
     uint32_t lastConfigSeq_ = 0;
 
     DspParams cachedParams_{};
