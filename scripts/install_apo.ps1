@@ -24,16 +24,34 @@ $ModesAll = @(
 $InstallDir = "C:\Program Files\ViPERHiRes"
 $ProgramDataDir = "C:\ProgramData\ViPERHiRes"
 $BackupDir = Join-Path $ProgramDataDir "backups"
-$LogFile = Join-Path $ProgramDataDir "apo_install.log"
+$LogsDirPointer = Join-Path $ProgramDataDir "logs_dir.txt"
+
+# Place all user-accessible logs inside <InstallRoot>\logs when installed under <InstallRoot>\bin\scripts
+$parentBin = Split-Path $PSScriptRoot -Parent
+$appRoot = Split-Path $parentBin -Parent
+if ((Split-Path $parentBin -Leaf) -ieq "bin" -and $appRoot) {
+    $LogsDir = Join-Path $appRoot "logs"
+} elseif (Test-Path $LogsDirPointer) {
+    $savedLogs = (Get-Content $LogsDirPointer -Raw -ErrorAction SilentlyContinue).Trim()
+    $LogsDir = if ($savedLogs) { $savedLogs } else { $ProgramDataDir }
+} else {
+    $LogsDir = $ProgramDataDir
+}
+$LogFile = Join-Path $LogsDir "apo_install.log"
 
 function Write-Log([string]$msg) {
     $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $msg"
     Add-Content -Path $LogFile -Value $line -ErrorAction SilentlyContinue
 }
 
-# 1. Prepare ProgramData folder with permissions for LOCAL SERVICE (audiodg.exe) & Users (V4Wa UI)
+# 1. Prepare ProgramData & <InstallRoot>\logs with permissions for LOCAL SERVICE (audiodg.exe) & Users (V4Wa UI)
 New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
+New-Item -ItemType Directory -Force -Path $LogsDir | Out-Null
+[System.IO.File]::WriteAllText($LogsDirPointer, $LogsDir, [System.Text.UTF8Encoding]::new($false))
 icacls $ProgramDataDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M" /grant "BUILTIN\Users:(OI)(CI)M" /grant "Everyone:(OI)(CI)R" /T 2>$null | Out-Null
+if ($LogsDir -ine $ProgramDataDir) {
+    icacls $LogsDir /grant "NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M" /grant "BUILTIN\Users:(OI)(CI)M" /T 2>$null | Out-Null
+}
 
 if (-not $DeviceGuid -and $AutoDefault) {
     $ctlCandidates = @(

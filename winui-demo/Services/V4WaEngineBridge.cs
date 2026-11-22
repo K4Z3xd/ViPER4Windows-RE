@@ -164,7 +164,7 @@ public sealed class V4WaEngineBridge
     public string ProgramDataDir { get; } = @"C:\ProgramData\ViPERHiRes";
     public string LiveParamsPath => Path.Combine(ProgramDataDir, "live_params.bin");
     public string FoobarStatusPath => Path.Combine(ProgramDataDir, "foobar_status.json");
-    public string ApoDiagPath => Path.Combine(ProgramDataDir, "apo_diag.txt");
+    public string ApoDiagPath => Path.Combine(LogsDir, "apo_diag.txt");
     public string ActiveIrPath => Path.Combine(ProgramDataDir, "active_ir.txt");
     public string ActiveDdcPath => Path.Combine(ProgramDataDir, "active_ddc.txt");
     public string UiSettingsPath => Path.Combine(ProgramDataDir, "v4wa_ui_settings.json");
@@ -173,6 +173,7 @@ public sealed class V4WaEngineBridge
     public string DdcDir { get; }
     public string PresetsDir { get; }
     public string EqPresetsDir { get; }
+    public string LogsDir { get; }
 
     public string RepoRoot { get; }
     public string ViperCtlPath { get; }
@@ -201,12 +202,13 @@ public sealed class V4WaEngineBridge
         string localUninstall = Path.Combine(AppContext.BaseDirectory, "scripts", "uninstall_apo.ps1");
         UninstallScriptPath = File.Exists(localUninstall) ? localUninstall : Path.Combine(RepoRoot, "scripts", "uninstall_apo.ps1");
 
-        // When installed in "<InstallRoot>\bin\", use "<InstallRoot>\irs", "<InstallRoot>\vdc", "<InstallRoot>\preset" directly!
+        // When installed in "<InstallRoot>\bin\", use "<InstallRoot>\irs", "vdc", "preset", "logs" directly!
         string? installRoot = Directory.GetParent(AppContext.BaseDirectory.TrimEnd('\\', '/'))?.FullName;
         bool hasInstalledAssetFolders = !string.IsNullOrEmpty(installRoot) &&
             (Directory.Exists(Path.Combine(installRoot, "irs")) ||
              Directory.Exists(Path.Combine(installRoot, "vdc")) ||
-             Directory.Exists(Path.Combine(installRoot, "preset")));
+             Directory.Exists(Path.Combine(installRoot, "preset")) ||
+             Directory.Exists(Path.Combine(installRoot, "logs")));
 
         if (hasInstalledAssetFolders && installRoot != null)
         {
@@ -214,6 +216,7 @@ public sealed class V4WaEngineBridge
             DdcDir = Path.Combine(installRoot, "vdc");
             PresetsDir = Path.Combine(installRoot, "preset");
             EqPresetsDir = Path.Combine(installRoot, "preset", "eq");
+            LogsDir = Path.Combine(installRoot, "logs");
         }
         else
         {
@@ -221,6 +224,7 @@ public sealed class V4WaEngineBridge
             DdcDir = Path.Combine(ProgramDataDir, "ddc");
             PresetsDir = Path.Combine(ProgramDataDir, "presets");
             EqPresetsDir = Path.Combine(ProgramDataDir, "eq_presets");
+            LogsDir = ProgramDataDir;
         }
 
         Directory.CreateDirectory(ProgramDataDir);
@@ -228,6 +232,11 @@ public sealed class V4WaEngineBridge
         try { Directory.CreateDirectory(DdcDir); } catch { }
         try { Directory.CreateDirectory(PresetsDir); } catch { }
         try { Directory.CreateDirectory(EqPresetsDir); } catch { }
+        try { Directory.CreateDirectory(LogsDir); } catch { }
+        if (!string.Equals(LogsDir, ProgramDataDir, StringComparison.OrdinalIgnoreCase))
+        {
+            try { File.WriteAllText(Path.Combine(ProgramDataDir, "logs_dir.txt"), LogsDir, new UTF8Encoding(false)); } catch { }
+        }
     }
 
     private static string FindRepoRoot()
@@ -641,9 +650,10 @@ public sealed class V4WaEngineBridge
         bool apoLocked = false;
         try
         {
-            if (File.Exists(ApoDiagPath))
+            string diagFile = File.Exists(ApoDiagPath) ? ApoDiagPath : Path.Combine(ProgramDataDir, "apo_diag.txt");
+            if (File.Exists(diagFile))
             {
-                string txt = await File.ReadAllTextAsync(ApoDiagPath);
+                string txt = await File.ReadAllTextAsync(diagFile);
                 var mSr = Regex.Match(txt, @"SR=(\d+)");
                 var mCh = Regex.Match(txt, @"Ch=(\d+)");
                 if (mSr.Success) { apoSr = int.Parse(mSr.Groups[1].Value); apoLocked = true; }

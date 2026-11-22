@@ -618,7 +618,7 @@ public sealed partial class MainWindow : Window
                     RebuildDevicesListUi();
                     if (!launched) ShowToast("UAC cancelled or install script not found.");
                     else if (exitCode == 0) ShowToast("MFX APO installed successfully!");
-                    else ShowToast($"APO install failed (code {exitCode}). See apo_install.log.");
+                    else ShowToast($"APO install failed (code {exitCode}). See logs\\apo_install.log.");
                 }
                 finally { _apoOpBusy = false; }
             };
@@ -641,7 +641,7 @@ public sealed partial class MainWindow : Window
                     RebuildDevicesListUi();
                     if (!launched) ShowToast("UAC cancelled or uninstall script not found.");
                     else if (exitCode == 0) ShowToast("Factory audio restored successfully!");
-                    else ShowToast($"Restore failed (code {exitCode}). See apo_install.log.");
+                    else ShowToast($"Restore failed (code {exitCode}). See logs\\apo_install.log.");
                 }
                 finally { _apoOpBusy = false; }
             };

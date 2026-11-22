@@ -21,8 +21,13 @@
 
 #include <atomic>
 #include <cstdint>
+#include <string>
 
 namespace viper::apo {
+
+// Resolves <InstallRoot>\logs\<filename> (from C:\ProgramData\ViPERHiRes\logs_dir.txt),
+// falling back to C:\ProgramData\ViPERHiRes\<filename> in dev/standalone mode.
+std::wstring getApoLogPath(const wchar_t* filename) noexcept;
 
 // Unique CLSID for ViPERHiRes APO: {8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}
 // clang-format off

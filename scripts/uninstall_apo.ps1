@@ -13,7 +13,19 @@ Set-Location -Path $env:SystemRoot
 
 $ProgramDataDir = "C:\ProgramData\ViPERHiRes"
 $BackupDir = Join-Path $ProgramDataDir "backups"
-$LogFile = Join-Path $ProgramDataDir "apo_install.log"
+$LogsDirPointer = Join-Path $ProgramDataDir "logs_dir.txt"
+
+$parentBin = Split-Path $PSScriptRoot -Parent
+$appRoot = Split-Path $parentBin -Parent
+if ((Split-Path $parentBin -Leaf) -ieq "bin" -and $appRoot -and (Test-Path (Join-Path $appRoot "logs"))) {
+    $LogsDir = Join-Path $appRoot "logs"
+} elseif (Test-Path $LogsDirPointer) {
+    $savedLogs = (Get-Content $LogsDirPointer -Raw -ErrorAction SilentlyContinue).Trim()
+    $LogsDir = if ($savedLogs -and (Test-Path $savedLogs)) { $savedLogs } else { $ProgramDataDir }
+} else {
+    $LogsDir = $ProgramDataDir
+}
+$LogFile = Join-Path $LogsDir "apo_install.log"
 
 function Write-Log([string]$msg) {
     $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $msg"

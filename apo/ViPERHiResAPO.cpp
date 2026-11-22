@@ -11,11 +11,53 @@ namespace viper::apo {
 
 std::atomic<long> g_dllRefCount{0};
 
+std::wstring getApoLogPath(const wchar_t* filename) noexcept {
+    try {
+        HANDLE h = CreateFileW(L"C:\\ProgramData\\ViPERHiRes\\logs_dir.txt",
+                               GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                               nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (h != INVALID_HANDLE_VALUE) {
+            char buf[1024]{};
+            DWORD read = 0;
+            BOOL ok = ReadFile(h, buf, sizeof(buf) - 1, &read, nullptr);
+            CloseHandle(h);
+            if (ok && read > 0) {
+                std::string utf8(buf, read);
+                // Strip optional UTF-8 BOM
+                if (utf8.size() >= 3 &&
+                    static_cast<unsigned char>(utf8[0]) == 0xEF &&
+                    static_cast<unsigned char>(utf8[1]) == 0xBB &&
+                    static_cast<unsigned char>(utf8[2]) == 0xBF) {
+                    utf8.erase(0, 3);
+                }
+                while (!utf8.empty() && (utf8.back() == '\r' || utf8.back() == '\n' ||
+                                         utf8.back() == ' ' || utf8.back() == '\\' || utf8.back() == '/')) {
+                    utf8.pop_back();
+                }
+                if (!utf8.empty()) {
+                    const int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+                    if (wlen > 1) {
+                        std::wstring dir(static_cast<size_t>(wlen - 1), L'\0');
+                        MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, dir.data(), wlen);
+                        const DWORD attrs = GetFileAttributesW(dir.c_str());
+                        if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+                            return dir + L"\\" + filename;
+                        }
+                    }
+                }
+            }
+        }
+    } catch (...) {
+    }
+    return std::wstring(L"C:\\ProgramData\\ViPERHiRes\\") + filename;
+}
+
 namespace {
 
 void traceLog(const char* fmt, ...) noexcept {
+    const std::wstring path = getApoLogPath(L"apo_trace.txt");
     FILE* f = nullptr;
-    if (_wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\apo_trace.txt", L"a") == 0 && f) {
+    if (_wfopen_s(&f, path.c_str(), L"a") == 0 && f) {
         va_list args;
         va_start(args, fmt);
         std::vfprintf(f, fmt, args);
@@ -289,7 +331,8 @@ STDMETHODIMP ViPERHiResAPO::LockForProcess(
     }
 
     // Write lightweight non-RT diagnostic line so we can verify active sample rate & IPC status
-    if (FILE* f = nullptr; _wfopen_s(&f, L"C:\\ProgramData\\ViPERHiRes\\apo_diag.txt", L"w") == 0 && f) {
+    const std::wstring diagPath = getApoLogPath(L"apo_diag.txt");
+    if (FILE* f = nullptr; _wfopen_s(&f, diagPath.c_str(), L"w") == 0 && f) {
         std::fprintf(f, "LockForProcess OK | SR=%u Hz | Ch=%u | DSP=%d | IPC=%d | Seq=%u | Master=%u | EQ=%u | Bass=%u\n",
                      sampleRate_, channelCount_, dspEligible_ ? 1 : 0, sharedConfig_.isOpen() ? 1 : 0,
                      cachedParams_.sequence, cachedParams_.masterEnabled,

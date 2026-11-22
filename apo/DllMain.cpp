@@ -7,7 +7,8 @@
 namespace {
 
 void dllLog(const char* msg) noexcept {
-    HANDLE h = CreateFileW(L"C:\\ProgramData\\ViPERHiRes\\apo_dll.txt",
+    const std::wstring path = viper::apo::getApoLogPath(L"apo_dll.txt");
+    HANDLE h = CreateFileW(path.c_str(),
                            FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE,
                            nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (h != INVALID_HANDLE_VALUE) {

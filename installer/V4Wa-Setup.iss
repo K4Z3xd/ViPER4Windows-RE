@@ -5,6 +5,7 @@
 ;   {app}\vdc\                 (ViPER-DDC headphone correction .vdc profiles)
 ;   {app}\irs\                 (Convolver impulse response .irs / .wav files)
 ;   {app}\preset\              (Custom user full presets & EQ presets)
+;   {app}\logs\                (All APO, installer & diagnostic logs for easy access)
 ;   {app}\unins000.exe         (Windows uninstaller)
 
 #define MyAppName "ViPER4Windows RE"
@@ -41,11 +42,12 @@ Name: "attachapo"; Description: "Attach ViPER4Windows RE Hi-Res MFX APO to defau
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Dirs]
-; User-accessible asset folders right in the installation root
+; User-accessible asset & log folders right in the installation root
 Name: "{app}\vdc"; Permissions: users-modify
 Name: "{app}\irs"; Permissions: users-modify
 Name: "{app}\preset"; Permissions: users-modify
 Name: "{app}\preset\eq"; Permissions: users-modify
+Name: "{app}\logs"; Permissions: users-modify
 
 [Files]
 ; Clean top-level launcher in {app}\ViPER4WindowsRE.exe
@@ -70,6 +72,8 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 [Run]
 Filename: "icacls.exe"; Parameters: """{app}\irs"" /grant ""NT AUTHORITY\LOCAL SERVICE:(OI)(CI)R"" /T"; Flags: runhidden waituntilterminated
 Filename: "icacls.exe"; Parameters: """{app}\vdc"" /grant ""NT AUTHORITY\LOCAL SERVICE:(OI)(CI)R"" /T"; Flags: runhidden waituntilterminated
+Filename: "icacls.exe"; Parameters: """{app}\logs"" /grant ""NT AUTHORITY\LOCAL SERVICE:(OI)(CI)M"" /grant ""BUILTIN\Users:(OI)(CI)M"" /T"; Flags: runhidden waituntilterminated
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command ""New-Item -ItemType Directory -Force -Path 'C:\ProgramData\ViPERHiRes' | Out-Null; [System.IO.File]::WriteAllText('C:\ProgramData\ViPERHiRes\logs_dir.txt', '{app}\logs', [System.Text.UTF8Encoding]::new($false))"""; Flags: runhidden waituntilterminated
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{app}\bin\scripts\install_apo.ps1"" -AutoDefault"; StatusMsg: "Registering ViPER4Windows RE Hi-Res MFX APO and attaching to default audio device..."; Flags: runhidden waituntilterminated; Tasks: attachapo
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 
