@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 
-namespace V4Wa.Demo;
+namespace ViPER4WindowsRE;
 
 public partial class App : Application
 {
@@ -13,8 +13,12 @@ public partial class App : Application
         {
             try
             {
+                string? root = Directory.GetParent(AppContext.BaseDirectory.TrimEnd('\\', '/'))?.FullName;
+                string logDir = (root != null && Directory.Exists(Path.Combine(root, "logs")))
+                    ? Path.Combine(root, "logs")
+                    : AppContext.BaseDirectory;
                 File.WriteAllText(
-                    Path.Combine(AppContext.BaseDirectory, "crash.log"),
+                    Path.Combine(logDir, "crash.log"),
                     $"{DateTime.Now}\n{e.Message}\n{e.Exception}\n"
                 );
             }

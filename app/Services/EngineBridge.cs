@@ -1,11 +1,14 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Globalization;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
-namespace V4Wa.Demo.Services;
+namespace ViPER4WindowsRE.Services;
 
 public sealed class DspParamsModel
 {
@@ -141,11 +144,25 @@ public sealed class LiveSourceStatusModel
     public List<string> ExtraApps { get; set; } = new();
 }
 
+public sealed class UpdateCheckResult
+{
+    public bool Success { get; set; }
+    public bool HasUpdate { get; set; }
+    public string CurrentVersion { get; set; } = EngineBridge.AppVersion;
+    public string LatestVersion { get; set; } = EngineBridge.AppVersion;
+    public string DownloadUrl { get; set; } = "";
+    public string AssetName { get; set; } = "";
+    public long AssetSizeBytes { get; set; }
+    public string ReleaseNotes { get; set; } = "";
+    public string ReleasePageUrl { get; set; } = "";
+    public string ErrorMessage { get; set; } = "";
+}
+
 public sealed class UiSettingsModel
 {
-    public string SelectedPresetName { get; set; } = "Flat Reference";
+    public string SelectedPresetName { get; set; } = "Flat";
     public string SelectedEqPresetName { get; set; } = "Flat";
-    public List<string> PinnedPresets { get; set; } = new() { "Flat Reference", "Hi-Res Audiophile", "Deep Bass Boost", "Warm Tube Studio" };
+    public List<string> PinnedPresets { get; set; } = new() { "Flat", "Hi-Res", "Bass Boost" };
     public List<string> PinnedModules { get; set; } = new();
     public string Theme { get; set; } = "Acrylic";
     public bool AutoAccent { get; set; } = false;
@@ -155,8 +172,10 @@ public sealed class UiSettingsModel
     public string? AccentGradientEndHex { get; set; } = null;
 }
 
-public sealed class V4WaEngineBridge
+public sealed class EngineBridge
 {
+    public const string AppVersion = "1.1.0";
+    public const string GitHubRepo = "K4Z3xd/ViPER4Windows-RE";
     private const uint MagicVphr = 0x56504852; // 'VPHR'
     private const uint ParamsVersion = 5;
     private const int BlockSize = 348; // 4-byte seqlock + 344-byte DspParams
@@ -189,7 +208,7 @@ public sealed class V4WaEngineBridge
 
     private readonly object _ipcLock = new();
 
-    public V4WaEngineBridge()
+    public EngineBridge()
     {
         RepoRoot = FindRepoRoot();
 
@@ -762,7 +781,7 @@ public sealed class V4WaEngineBridge
         return ListDdcFiles();
     }
 
-    // ==================== PRESETS & EQ PRESETS ====================
+    // ==================== PRESETS & COMMUNITY IMPORTER (Native JSON, V4A JSON v1/v2, XML) ====================
 
     private static string SanitizeName(string name)
     {
@@ -770,21 +789,470 @@ public sealed class V4WaEngineBridge
         return string.IsNullOrWhiteSpace(s) ? "Custom Preset" : s;
     }
 
+    public static float[] ResampleEqBands(float[] src, int targetLen)
+    {
+        var dst = new float[targetLen];
+        if (src == null || src.Length == 0) return dst;
+        if (src.Length == targetLen)
+        {
+            for (int i = 0; i < targetLen; i++) dst[i] = Math.Clamp(src[i], -12f, 12f);
+            return dst;
+        }
+        if (src.Length == 1)
+        {
+            Array.Fill(dst, Math.Clamp(src[0], -12f, 12f));
+            return dst;
+        }
+        for (int i = 0; i < targetLen; i++)
+        {
+            double pos = (double)i * (src.Length - 1) / (targetLen - 1);
+            int lo = (int)Math.Floor(pos);
+            int hi = Math.Min(src.Length - 1, lo + 1);
+            double frac = pos - lo;
+            float val = (float)(src[lo] * (1.0 - frac) + src[hi] * frac);
+            dst[i] = MathF.Round(Math.Clamp(val, -12f, 12f) * 2f) / 2f;
+        }
+        return dst;
+    }
+
+    private static float[] ParseSemicolonFloats(string? s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return Array.Empty<float>();
+        var list = new List<float>();
+        foreach (var tok in s.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (float.TryParse(tok, NumberStyles.Float, CultureInfo.InvariantCulture, out float v))
+                list.Add(v);
+        }
+        return list.ToArray();
+    }
+
+    private static float V4aVolumeToDb(double pct) =>
+        pct <= 1 ? -24f : (float)Math.Clamp(20.0 * Math.Log10(pct / 100.0), -24.0, 12.0);
+
+    private static float V4aLimiterToDb(double pct) =>
+        pct >= 100 ? -0.3f : (float)Math.Clamp(20.0 * Math.Log10(Math.Max(pct, 1.0) / 100.0), -6.0, 0.0);
+
+    private static float V4aBassGainToDb(double val) =>
+        val <= 15.0 ? (float)Math.Clamp(val, 0.0, 15.0) : (float)Math.Clamp(val * 0.03, 0.0, 15.0);
+
+    private static float V4aClarityGainToDb(double val) =>
+        val <= 15.0 ? (float)Math.Clamp(val, 0.0, 15.0) : (float)Math.Clamp(val * 0.045, 0.0, 15.0);
+
+    public PresetModel? ParsePresetFile(string filePath)
+    {
+        if (!File.Exists(filePath)) return null;
+        string ext = Path.GetExtension(filePath);
+        string fallbackName = Path.GetFileNameWithoutExtension(filePath);
+        string content = File.ReadAllText(filePath);
+
+        if (ext.Equals(".xml", StringComparison.OrdinalIgnoreCase))
+            return ParseV4aXmlPreset(content, fallbackName);
+
+        using var doc = JsonDocument.Parse(content);
+        var root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Object) return null;
+
+        // 1. Native ViPER4Windows RE format (has "params" object)
+        if (root.TryGetProperty("params", out var paramsEl) && paramsEl.ValueKind == JsonValueKind.Object)
+        {
+            var native = JsonSerializer.Deserialize<PresetModel>(content, JsonOpts);
+            if (native != null)
+            {
+                if (string.IsNullOrWhiteSpace(native.Name)) native.Name = fallbackName;
+                native.Params ??= new DspParamsModel();
+                return native;
+            }
+        }
+
+        // 2. ViPER4Android Community JSON v2 ("schemaVersion": 2)
+        if (root.TryGetProperty("schemaVersion", out var sv) && sv.ValueKind == JsonValueKind.Number && sv.GetInt32() >= 2)
+            return ParseV4aJsonV2(root, fallbackName);
+
+        // 3. ViPER4Android Community JSON v1 (flat keys — headset/bluetooth or spk* speaker keys)
+        if (root.TryGetProperty("eqBands", out _) || root.TryGetProperty("spkEqBands", out _) ||
+            root.TryGetProperty("bassEnabled", out _) || root.TryGetProperty("spkBassEnabled", out _) ||
+            root.TryGetProperty("convolverKernel", out _) || root.TryGetProperty("spkConvolverKernel", out _) ||
+            root.TryGetProperty("ddcDevice", out _) || root.TryGetProperty("masterEnabled", out _) ||
+            root.TryGetProperty("spkMasterEnabled", out _))
+            return ParseV4aJsonV1(root, fallbackName);
+
+        return null;
+    }
+
+    private static bool TryGetV1Prop(JsonElement obj, string prop, out JsonElement el)
+    {
+        if (obj.TryGetProperty(prop, out el)) return true;
+        if (prop.Length > 0)
+        {
+            string spkProp = "spk" + char.ToUpperInvariant(prop[0]) + prop[1..];
+            if (obj.TryGetProperty(spkProp, out el)) return true;
+        }
+        el = default;
+        return false;
+    }
+
+    private static bool GetBool(JsonElement obj, string prop, bool def = false) =>
+        TryGetV1Prop(obj, prop, out var el) && (el.ValueKind == JsonValueKind.True || el.ValueKind == JsonValueKind.False)
+            ? el.GetBoolean() : def;
+
+    private static double GetNum(JsonElement obj, string prop, double def = 0)
+    {
+        if (!TryGetV1Prop(obj, prop, out var el)) return def;
+        if (el.ValueKind == JsonValueKind.Number) return el.GetDouble();
+        if (el.ValueKind == JsonValueKind.String && double.TryParse(el.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double v)) return v;
+        return def;
+    }
+
+    private static string? GetStr(JsonElement obj, string prop) =>
+        TryGetV1Prop(obj, prop, out var el) && el.ValueKind == JsonValueKind.String ? el.GetString() : null;
+
+    private static PresetModel ParseV4aJsonV1(JsonElement r, string name)
+    {
+        var p = new DspParamsModel
+        {
+            MasterEnabled = GetBool(r, "masterEnabled", true),
+            MasterGainDb = V4aVolumeToDb(GetNum(r, "outputVolume", 100)),
+            OutputPan = (float)Math.Clamp(GetNum(r, "channelPan", 0) / 100.0, -1.0, 1.0),
+            LimiterEnabled = true,
+            LimiterThresholdDb = V4aLimiterToDb(GetNum(r, "limiter", 100)),
+
+            EqEnabled = GetBool(r, "eqEnabled"),
+            BassEnabled = GetBool(r, "bassEnabled"),
+            BassMode = (uint)Math.Clamp((int)GetNum(r, "bassMode", 0), 0, 2),
+            BassFrequencyHz = (float)Math.Clamp(GetNum(r, "bassFrequency", 60), 30, 120),
+            BassGainDb = V4aBassGainToDb(GetNum(r, "bassGain", 100)),
+
+            ClarityEnabled = GetBool(r, "clarityEnabled"),
+            ClarityMode = (uint)Math.Clamp((int)GetNum(r, "clarityMode", 0), 0, 2),
+            ClarityGainDb = V4aClarityGainToDb(GetNum(r, "clarityGain", 100)),
+
+            TubeEnabled = GetBool(r, "tubeSimulatorEnabled"),
+            TubeDrive = 0.35f,
+            AnalogXEnabled = GetBool(r, "analogxEnabled"),
+            AnalogXLevel = (uint)Math.Clamp((int)GetNum(r, "analogxMode", 0), 0, 2),
+
+            DdcEnabled = GetBool(r, "ddcEnabled"),
+            ConvolverEnabled = GetBool(r, "convolverEnabled"),
+            ConvolverCrossChannel = (float)Math.Clamp(GetNum(r, "convolverCrossChannel", 0) / 100.0, 0.0, 1.0),
+            ConvolverWetMix = 1.0f,
+
+            VseEnabled = GetBool(r, "vseEnabled"),
+            VseStrength = (float)Math.Clamp(GetNum(r, "vseStrength", 5000) / (GetNum(r, "vseStrength", 5000) > 100 ? 10000.0 : 100.0), 0.0, 1.0),
+
+            DynamicEnabled = GetBool(r, "dynamicSystemEnabled"),
+            DynamicDevice = (uint)Math.Clamp((int)GetNum(r, "dynamicSystemDevice", 0), 0, 3),
+            DynamicBass = (float)Math.Clamp(GetNum(r, "dynamicSystemStrength", 25), 0, 100),
+
+            FieldSurroundEnabled = GetBool(r, "fieldSurroundEnabled"),
+            FieldSurroundStrength = (float)Math.Clamp(GetNum(r, "fieldSurroundWidening", 3) / 8.0, 0.0, 1.0),
+            FieldSurroundMidImage = (float)Math.Clamp(GetNum(r, "fieldSurroundMidImage", 5) / 10.0, 0.0, 1.0),
+
+            SurroundEnabled = GetBool(r, "diffSurroundEnabled"),
+            SurroundDelayMs = (float)Math.Clamp(GetNum(r, "diffSurroundDelay", 6), 0, 20),
+            StereoWidth = 1.0f,
+
+            VhsEnabled = GetBool(r, "vheEnabled"),
+            VhsLevel = (uint)Math.Clamp((int)GetNum(r, "vheQuality", 1) + 1, 1, 5),
+
+            ReverbEnabled = GetBool(r, "reverbEnabled"),
+            ReverbRoomSize = (float)Math.Clamp(GetNum(r, "reverbRoomSize", 35) / 100.0, 0.0, 1.0),
+            ReverbWidth = (float)Math.Clamp(GetNum(r, "reverbWidth", 50) / 100.0, 0.0, 1.0),
+            ReverbDamping = (float)Math.Clamp(GetNum(r, "reverbDampening", 25) / 100.0, 0.0, 1.0),
+            ReverbWet = (float)Math.Clamp(GetNum(r, "reverbWet", 20) / 100.0, 0.0, 1.0),
+            ReverbDry = (float)Math.Clamp(GetNum(r, "reverbDry", 85) / 100.0, 0.0, 1.0),
+
+            CompEnabled = GetBool(r, "fetEnabled"),
+            CompThresholdDb = (float)Math.Clamp(GetNum(r, "fetThreshold", -18), -40, 0),
+            CompRatio = (float)Math.Clamp(Math.Max(1.0, GetNum(r, "fetRatio", 30) / 10.0), 1, 20),
+            CompAttackMs = (float)Math.Clamp(GetNum(r, "fetAttack", 10), 1, 100),
+            CompReleaseMs = (float)Math.Clamp(GetNum(r, "fetRelease", 120), 20, 500),
+            CompMakeupDb = (float)Math.Clamp(GetNum(r, "fetGain", 0), 0, 18),
+
+            AgcEnabled = GetBool(r, "agcEnabled"),
+            AgcStrength = (float)Math.Clamp(GetNum(r, "agcStrength", 50) / 100.0, 0.0, 1.0),
+            AgcMaxGainDb = (float)Math.Clamp(GetNum(r, "agcMaxGain", 100) * 0.12, 0, 24),
+            AgcOutputThreshDb = V4aLimiterToDb(GetNum(r, "agcOutputThreshold", 100)),
+
+            CureEnabled = GetBool(r, "cureEnabled"),
+            CureLevel = (uint)Math.Clamp((int)GetNum(r, "cureStrength", 0), 0, 2)
+        };
+
+        var eqArr = ParseSemicolonFloats(GetStr(r, "eqBands"));
+        if (eqArr.Length > 0)
+        {
+            p.EqMode = eqArr.Length > 12 ? 1u : 0u;
+            p.EqBandsDb = ResampleEqBands(eqArr, 10);
+            p.EqBands18Db = ResampleEqBands(eqArr, 18);
+        }
+
+        string? irs = GetStr(r, "convolverKernel");
+        string? ddc = GetStr(r, "ddcDevice");
+        return new PresetModel
+        {
+            Name = name,
+            Subtitle = "Imported V4A JSON v1 preset",
+            Params = p,
+            ActiveIrs = string.IsNullOrWhiteSpace(irs) ? null : Path.GetFileName(irs),
+            ActiveDdc = string.IsNullOrWhiteSpace(ddc) ? null : Path.GetFileName(ddc)
+        };
+    }
+
+    private static PresetModel ParseV4aJsonV2(JsonElement r, string name)
+    {
+        var p = new DspParamsModel { MasterEnabled = GetBool(r, "masterEnable", true), LimiterEnabled = true };
+        string? irs = null, ddc = null;
+
+        if (r.TryGetProperty("masterLimiter", out var ml) && ml.ValueKind == JsonValueKind.Object)
+        {
+            p.MasterGainDb = V4aVolumeToDb(GetNum(ml, "outputVolume", 100));
+            p.OutputPan = (float)Math.Clamp(GetNum(ml, "channelPan", 0) / 100.0, -1.0, 1.0);
+            p.LimiterThresholdDb = V4aLimiterToDb(GetNum(ml, "threshold", 100));
+        }
+        if (r.TryGetProperty("equalizer", out var eq) && eq.ValueKind == JsonValueKind.Object)
+        {
+            p.EqEnabled = GetBool(eq, "enable");
+            if (eq.TryGetProperty("bands", out var bEl) && bEl.ValueKind == JsonValueKind.Array)
+            {
+                var arr = bEl.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => (float)x.GetDouble()).ToArray();
+                if (arr.Length > 0)
+                {
+                    p.EqMode = arr.Length > 12 ? 1u : 0u;
+                    p.EqBandsDb = ResampleEqBands(arr, 10);
+                    p.EqBands18Db = ResampleEqBands(arr, 18);
+                }
+            }
+        }
+        if (r.TryGetProperty("ddc", out var dEl) && dEl.ValueKind == JsonValueKind.Object)
+        {
+            p.DdcEnabled = GetBool(dEl, "enable");
+            ddc = GetStr(dEl, "device");
+        }
+        if (r.TryGetProperty("convolver", out var cEl) && cEl.ValueKind == JsonValueKind.Object)
+        {
+            p.ConvolverEnabled = GetBool(cEl, "enable");
+            p.ConvolverCrossChannel = (float)Math.Clamp(GetNum(cEl, "crossChannel", 0) / 100.0, 0.0, 1.0);
+            irs = GetStr(cEl, "kernelFile");
+        }
+        if (r.TryGetProperty("bass", out var b) && b.ValueKind == JsonValueKind.Object)
+        {
+            p.BassEnabled = GetBool(b, "enable");
+            p.BassMode = (uint)Math.Clamp((int)GetNum(b, "mode", 0), 0, 2);
+            p.BassFrequencyHz = (float)Math.Clamp(GetNum(b, "frequency", 60), 30, 120);
+            p.BassGainDb = V4aBassGainToDb(GetNum(b, "gain", 100));
+        }
+        if (r.TryGetProperty("clarity", out var cl) && cl.ValueKind == JsonValueKind.Object)
+        {
+            p.ClarityEnabled = GetBool(cl, "enable");
+            p.ClarityMode = (uint)Math.Clamp((int)GetNum(cl, "mode", 0), 0, 2);
+            p.ClarityGainDb = V4aClarityGainToDb(GetNum(cl, "gain", 100));
+        }
+        if (r.TryGetProperty("spectrumExtension", out var vse) && vse.ValueKind == JsonValueKind.Object)
+        {
+            p.VseEnabled = GetBool(vse, "enable");
+            double s = GetNum(vse, "strength", 5000);
+            p.VseStrength = (float)Math.Clamp(s / (s > 100 ? 10000.0 : 100.0), 0.0, 1.0);
+        }
+        if (r.TryGetProperty("tubeSimulator", out var tb) && tb.ValueKind == JsonValueKind.Object)
+        {
+            p.TubeEnabled = GetBool(tb, "enable");
+            p.TubeDrive = 0.35f;
+        }
+        if (r.TryGetProperty("analogX", out var ax) && ax.ValueKind == JsonValueKind.Object)
+        {
+            p.AnalogXEnabled = GetBool(ax, "enable");
+            p.AnalogXLevel = (uint)Math.Clamp((int)GetNum(ax, "mode", 0), 0, 2);
+        }
+        if (r.TryGetProperty("dynamicSystem", out var ds) && ds.ValueKind == JsonValueKind.Object)
+        {
+            p.DynamicEnabled = GetBool(ds, "enable");
+            p.DynamicDevice = (uint)Math.Clamp((int)GetNum(ds, "device", 0), 0, 3);
+            p.DynamicBass = (float)Math.Clamp(GetNum(ds, "strength", 25), 0, 100);
+        }
+        if (r.TryGetProperty("fieldSurround", out var fs) && fs.ValueKind == JsonValueKind.Object)
+        {
+            p.FieldSurroundEnabled = GetBool(fs, "enable");
+            p.FieldSurroundStrength = (float)Math.Clamp(GetNum(fs, "widening", 3) / 8.0, 0.0, 1.0);
+            p.FieldSurroundMidImage = (float)Math.Clamp(GetNum(fs, "midImage", 5) / 10.0, 0.0, 1.0);
+        }
+        if (r.TryGetProperty("diffSurround", out var df) && df.ValueKind == JsonValueKind.Object)
+        {
+            p.SurroundEnabled = GetBool(df, "enable");
+            p.SurroundDelayMs = (float)Math.Clamp(GetNum(df, "delay", 6), 0, 20);
+        }
+        if (r.TryGetProperty("headphoneSurround", out var vhs) && vhs.ValueKind == JsonValueKind.Object)
+        {
+            p.VhsEnabled = GetBool(vhs, "enable");
+            p.VhsLevel = (uint)Math.Clamp((int)GetNum(vhs, "quality", 1) + 1, 1, 5);
+        }
+        if (r.TryGetProperty("reverb", out var rv) && rv.ValueKind == JsonValueKind.Object)
+        {
+            p.ReverbEnabled = GetBool(rv, "enable");
+            p.ReverbRoomSize = (float)Math.Clamp(GetNum(rv, "roomSize", 35) / 100.0, 0.0, 1.0);
+            p.ReverbWidth = (float)Math.Clamp(GetNum(rv, "width", 50) / 100.0, 0.0, 1.0);
+            p.ReverbDamping = (float)Math.Clamp(GetNum(rv, "damp", 25) / 100.0, 0.0, 1.0);
+            p.ReverbWet = (float)Math.Clamp(GetNum(rv, "wet", 20) / 100.0, 0.0, 1.0);
+            p.ReverbDry = (float)Math.Clamp(GetNum(rv, "dry", 85) / 100.0, 0.0, 1.0);
+        }
+        if (r.TryGetProperty("fetCompressor", out var fc) && fc.ValueKind == JsonValueKind.Object)
+        {
+            p.CompEnabled = GetBool(fc, "enable");
+            p.CompThresholdDb = (float)Math.Clamp(GetNum(fc, "threshold", -18), -40, 0);
+            p.CompRatio = (float)Math.Clamp(Math.Max(1.0, GetNum(fc, "ratio", 30) / 10.0), 1, 20);
+            p.CompAttackMs = (float)Math.Clamp(GetNum(fc, "attack", 10), 1, 100);
+            p.CompReleaseMs = (float)Math.Clamp(GetNum(fc, "release", 120), 20, 500);
+            p.CompMakeupDb = (float)Math.Clamp(GetNum(fc, "gain", 0), 0, 18);
+        }
+        if (r.TryGetProperty("playbackGainControl", out var agc) && agc.ValueKind == JsonValueKind.Object)
+        {
+            p.AgcEnabled = GetBool(agc, "enable");
+            p.AgcStrength = (float)Math.Clamp(GetNum(agc, "strength", 50) / 100.0, 0.0, 1.0);
+            p.AgcMaxGainDb = (float)Math.Clamp(GetNum(agc, "maxGain", 100) * 0.12, 0, 24);
+            p.AgcOutputThreshDb = V4aLimiterToDb(GetNum(agc, "outputThreshold", 100));
+        }
+        if (r.TryGetProperty("cure", out var cu) && cu.ValueKind == JsonValueKind.Object)
+        {
+            p.CureEnabled = GetBool(cu, "enable");
+            p.CureLevel = (uint)Math.Clamp((int)GetNum(cu, "crossfeedPreset", 0), 0, 2);
+        }
+
+        return new PresetModel
+        {
+            Name = name,
+            Subtitle = "Imported V4A JSON v2 preset",
+            Params = p,
+            ActiveIrs = string.IsNullOrWhiteSpace(irs) ? null : Path.GetFileName(irs),
+            ActiveDdc = string.IsNullOrWhiteSpace(ddc) ? null : Path.GetFileName(ddc)
+        };
+    }
+
+    private static PresetModel? ParseV4aXmlPreset(string xmlContent, string name)
+    {
+        var doc = XDocument.Parse(xmlContent);
+        var map = doc.Root;
+        if (map == null || map.Name.LocalName != "map") return null;
+
+        var bools = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var ints = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        var strs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var el in map.Elements())
+        {
+            string? k = el.Attribute("name")?.Value;
+            if (string.IsNullOrWhiteSpace(k)) continue;
+            string tag = el.Name.LocalName;
+            if (tag == "boolean" && bool.TryParse(el.Attribute("value")?.Value, out bool bv)) bools[k] = bv;
+            else if ((tag == "int" || tag == "long" || tag == "float") && double.TryParse(el.Attribute("value")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double nv)) ints[k] = nv;
+            else if (tag == "string") strs[k] = el.Value.Trim();
+        }
+
+        bool B(string numKey, string namedKey, bool def = false) =>
+            bools.TryGetValue(numKey, out bool v1) ? v1 : (bools.TryGetValue(namedKey, out bool v2) ? v2 : def);
+        double N(string numKey, string namedKey, double def = 0)
+        {
+            if (ints.TryGetValue(numKey, out double v1)) return v1;
+            if (strs.TryGetValue(numKey, out string? s1) && double.TryParse(s1, NumberStyles.Float, CultureInfo.InvariantCulture, out double sv1)) return sv1;
+            if (ints.TryGetValue(namedKey, out double v2)) return v2;
+            if (strs.TryGetValue(namedKey, out string? s2) && double.TryParse(s2, NumberStyles.Float, CultureInfo.InvariantCulture, out double sv2)) return sv2;
+            return def;
+        }
+        string? S(string numKey, string namedKey) =>
+            strs.TryGetValue(numKey, out string? v1) ? v1 : (strs.TryGetValue(namedKey, out string? v2) ? v2 : null);
+
+        var p = new DspParamsModel
+        {
+            MasterEnabled = B("36868", "viper4android.headphonefx.enable", true),
+            LimiterEnabled = true,
+            EqEnabled = B("65551", "viper4android.headphonefx.fireq.enable"),
+            DdcEnabled = B("65546", "viper4android.headphonefx.viperddc.enable"),
+            VseEnabled = B("65548", "viper4android.headphonefx.vse.enable"),
+            VseStrength = (float)Math.Clamp(N("65549;65550", "viper4android.headphonefx.vse.value", 10) / 100.0, 0.0, 1.0),
+            ConvolverEnabled = B("65538", "viper4android.headphonefx.convolver.enable"),
+            ConvolverCrossChannel = (float)Math.Clamp(N("65543", "viper4android.headphonefx.convolver.crosschannel", 0) / 100.0, 0.0, 1.0),
+            FieldSurroundEnabled = B("65553", "viper4android.headphonefx.colorfulmusic.enable"),
+            FieldSurroundStrength = (float)Math.Clamp(N("65554;65556", "viper4android.headphonefx.colorfulmusic.coeffs", 3) / 8.0, 0.0, 1.0),
+            FieldSurroundMidImage = (float)Math.Clamp(N("65555", "viper4android.headphonefx.colorfulmusic.midimage", 5) / 10.0, 0.0, 1.0),
+            SurroundEnabled = B("65557", "viper4android.headphonefx.diffsurr.enable"),
+            SurroundDelayMs = (float)Math.Clamp(N("65558", "viper4android.headphonefx.diffsurr.delay", 4) * 2.0, 0.0, 20.0),
+            VhsEnabled = B("65544", "viper4android.headphonefx.vhs.enable"),
+            VhsLevel = (uint)Math.Clamp((int)N("65545", "viper4android.headphonefx.vhs.qual", 1) + 1, 1, 5),
+            ReverbEnabled = B("65559", "viper4android.headphonefx.reverb.enable"),
+            ReverbRoomSize = (float)Math.Clamp(N("65560", "viper4android.headphonefx.reverb.roomsize", 35) / 100.0, 0.0, 1.0),
+            ReverbWidth = (float)Math.Clamp(N("65561", "viper4android.headphonefx.reverb.roomwidth", 50) / 100.0, 0.0, 1.0),
+            ReverbDamping = (float)Math.Clamp(N("65562", "viper4android.headphonefx.reverb.damp", 25) / 100.0, 0.0, 1.0),
+            ReverbWet = (float)Math.Clamp(N("65563", "viper4android.headphonefx.reverb.wet", 20) / 100.0, 0.0, 1.0),
+            ReverbDry = (float)Math.Clamp(N("65564", "viper4android.headphonefx.reverb.dry", 85) / 100.0, 0.0, 1.0),
+            DynamicEnabled = B("65569", "viper4android.headphonefx.dynamicsystem.enable"),
+            DynamicBass = (float)Math.Clamp(N("65573", "viper4android.headphonefx.dynamicsystem.bass", 25), 0, 100),
+            TubeEnabled = B("65583", "viper4android.headphonefx.tube.enable"),
+            TubeDrive = 0.35f,
+            BassEnabled = B("65574", "viper4android.headphonefx.fidelity.bass.enable"),
+            BassMode = (uint)Math.Clamp((int)N("65575", "viper4android.headphonefx.fidelity.bass.mode", 0), 0, 2),
+            BassFrequencyHz = (float)Math.Clamp(N("65576", "viper4android.headphonefx.fidelity.bass.freq", 60), 30, 120),
+            BassGainDb = Math.Clamp((float)N("65577", "viper4android.headphonefx.fidelity.bass.gain", 2) * 1.5f + 2.0f, 0f, 15f),
+            ClarityEnabled = B("65578", "viper4android.headphonefx.fidelity.clarity.enable"),
+            ClarityMode = (uint)Math.Clamp((int)N("65579", "viper4android.headphonefx.fidelity.clarity.mode", 0), 0, 2),
+            ClarityGainDb = Math.Clamp((float)N("65580", "viper4android.headphonefx.fidelity.clarity.gain", 2) * 1.5f + 2.0f, 0f, 15f),
+            CureEnabled = B("65581", "viper4android.headphonefx.cure.enable"),
+            CureLevel = (uint)Math.Clamp((int)N("65582", "viper4android.headphonefx.cure.crossfeed", 0), 0, 2),
+            AnalogXEnabled = B("65584", "viper4android.headphonefx.analogx.enable"),
+            AnalogXLevel = (uint)Math.Clamp((int)N("65585", "viper4android.headphonefx.analogx.mode", 0), 0, 2),
+            AgcEnabled = B("65565", "viper4android.headphonefx.playbackgain.enable"),
+            CompEnabled = B("65610", "viper4android.headphonefx.fetcompressor.enable")
+        };
+
+        var eqArr = ParseSemicolonFloats(S("65552", "viper4android.headphonefx.fireq.custom"));
+        if (eqArr.Length > 0)
+        {
+            p.EqMode = eqArr.Length > 12 ? 1u : 0u;
+            p.EqBandsDb = ResampleEqBands(eqArr, 10);
+            p.EqBands18Db = ResampleEqBands(eqArr, 18);
+        }
+
+        string? irs = S("65540;65541;65542", "viper4android.headphonefx.convolver.kernel");
+        string? ddc = S("65547", "viper4android.headphonefx.viperddc.device");
+        return new PresetModel
+        {
+            Name = name,
+            Subtitle = "Imported V4A XML preset",
+            Params = p,
+            ActiveIrs = string.IsNullOrWhiteSpace(irs) ? null : Path.GetFileName(irs),
+            ActiveDdc = string.IsNullOrWhiteSpace(ddc) ? null : Path.GetFileName(ddc)
+        };
+    }
+
+    public void EnsureDefaultPresetsSeeded(IEnumerable<PresetModel> defaults, IEnumerable<EqPresetModel> eqDefaults)
+    {
+        try
+        {
+            Directory.CreateDirectory(PresetsDir);
+            if (!Directory.EnumerateFiles(PresetsDir, "*.json").Any())
+            {
+                foreach (var p in defaults) SaveCustomPreset(p);
+            }
+            Directory.CreateDirectory(EqPresetsDir);
+            if (!Directory.EnumerateFiles(EqPresetsDir, "*.json").Any())
+            {
+                foreach (var ep in eqDefaults) SaveCustomEqPreset(ep);
+            }
+        }
+        catch { }
+    }
+
     public List<PresetModel> ListCustomPresets()
     {
         Directory.CreateDirectory(PresetsDir);
         var list = new List<PresetModel>();
-        foreach (var file in Directory.GetFiles(PresetsDir, "*.json").OrderBy(f => f))
+        var files = Directory.GetFiles(PresetsDir, "*.json")
+            .Concat(Directory.GetFiles(PresetsDir, "*.xml"))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var file in files)
         {
             try
             {
-                var p = JsonSerializer.Deserialize<PresetModel>(File.ReadAllText(file), JsonOpts);
-                if (p != null)
-                {
-                    if (string.IsNullOrWhiteSpace(p.Name)) p.Name = Path.GetFileNameWithoutExtension(file);
-                    p.Params ??= new DspParamsModel();
-                    list.Add(p);
-                }
+                var p = ParsePresetFile(file);
+                if (p != null) list.Add(p);
             }
             catch { }
         }
@@ -804,7 +1272,7 @@ public sealed class V4WaEngineBridge
     {
         Directory.CreateDirectory(EqPresetsDir);
         var list = new List<EqPresetModel>();
-        foreach (var file in Directory.GetFiles(EqPresetsDir, "*.json").OrderBy(f => f))
+        foreach (var file in Directory.GetFiles(EqPresetsDir, "*.json").OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
         {
             try
             {
@@ -827,6 +1295,124 @@ public sealed class V4WaEngineBridge
         preset.Name = safe;
         File.WriteAllText(Path.Combine(EqPresetsDir, $"{safe}.json"), JsonSerializer.Serialize(preset, JsonOpts));
         return safe;
+    }
+
+    // ==================== IN-APP GITHUB UPDATE CHECKER & INSTALLER ====================
+
+    private static readonly HttpClient UpdateHttp = CreateUpdateHttpClient();
+
+    private static HttpClient CreateUpdateHttpClient()
+    {
+        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        c.DefaultRequestHeaders.UserAgent.ParseAdd($"ViPER4Windows-RE/{AppVersion}");
+        c.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        return c;
+    }
+
+    public async Task<UpdateCheckResult> CheckForUpdatesAsync()
+    {
+        var res = new UpdateCheckResult { CurrentVersion = AppVersion };
+        try
+        {
+            string url = $"https://api.github.com/repos/{GitHubRepo}/releases/latest";
+            using var resp = await UpdateHttp.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+            {
+                res.ErrorMessage = $"GitHub API returned HTTP {(int)resp.StatusCode}";
+                return res;
+            }
+
+            string json = await resp.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            string tag = (root.TryGetProperty("tag_name", out var tEl) ? tEl.GetString() : "") ?? "";
+            string cleanVer = tag.Trim().TrimStart('v', 'V');
+            res.LatestVersion = string.IsNullOrWhiteSpace(cleanVer) ? AppVersion : cleanVer;
+            res.ReleasePageUrl = (root.TryGetProperty("html_url", out var hEl) ? hEl.GetString() : "") ?? $"https://github.com/{GitHubRepo}/releases";
+            res.ReleaseNotes = (root.TryGetProperty("body", out var bEl) ? bEl.GetString() : "") ?? "";
+
+            if (root.TryGetProperty("assets", out var assetsEl) && assetsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var a in assetsEl.EnumerateArray())
+                {
+                    string aName = (a.TryGetProperty("name", out var nEl) ? nEl.GetString() : "") ?? "";
+                    if (aName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        res.AssetName = aName;
+                        res.DownloadUrl = (a.TryGetProperty("browser_download_url", out var uEl) ? uEl.GetString() : "") ?? "";
+                        res.AssetSizeBytes = a.TryGetProperty("size", out var sEl) ? sEl.GetInt64() : 0;
+                        break;
+                    }
+                }
+            }
+
+            if (Version.TryParse(AppVersion, out var curV) && Version.TryParse(res.LatestVersion, out var latV))
+                res.HasUpdate = latV > curV;
+            else
+                res.HasUpdate = !string.Equals(AppVersion, res.LatestVersion, StringComparison.OrdinalIgnoreCase);
+
+            res.Success = true;
+        }
+        catch (Exception ex)
+        {
+            res.ErrorMessage = ex.Message;
+        }
+        return res;
+    }
+
+    public async Task<(bool Ok, string Message)> DownloadAndLaunchUpdateAsync(string downloadUrl, IProgress<int>? progressPercent = null)
+    {
+        if (string.IsNullOrWhiteSpace(downloadUrl))
+            return (false, "No installer asset found in this release.");
+
+        try
+        {
+            string tempInstaller = Path.Combine(Path.GetTempPath(), "ViPER4Windows-RE-Update-Setup.exe");
+            using var dlClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            dlClient.DefaultRequestHeaders.UserAgent.ParseAdd($"ViPER4Windows-RE/{AppVersion}");
+
+            using var resp = await dlClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            resp.EnsureSuccessStatusCode();
+
+            long total = resp.Content.Headers.ContentLength ?? -1L;
+            await using var netStream = await resp.Content.ReadAsStreamAsync();
+            await using (var fs = File.Create(tempInstaller))
+            {
+                var buffer = new byte[81920];
+                long readTotal = 0;
+                int lastPct = -1;
+                int read;
+                while ((read = await netStream.ReadAsync(buffer)) > 0)
+                {
+                    await fs.WriteAsync(buffer.AsMemory(0, read));
+                    readTotal += read;
+                    if (total > 0)
+                    {
+                        int pct = (int)Math.Clamp(readTotal * 100 / total, 0, 100);
+                        if (pct != lastPct)
+                        {
+                            lastPct = pct;
+                            progressPercent?.Report(pct);
+                        }
+                    }
+                }
+            }
+
+            // Launch downloaded installer in seamless in-place upgrade mode
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = tempInstaller,
+                Arguments = "/SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /NORESTART",
+                Verb = "runas",
+                UseShellExecute = true
+            });
+            return (true, "Installer launched — updating ViPER4Windows RE...");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Update failed: {ex.Message}");
+        }
     }
 
     // ==================== UI SETTINGS & APO SCRIPTS ====================

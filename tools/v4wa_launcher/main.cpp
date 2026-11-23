@@ -14,7 +14,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR lpCmdLine, int nCmdShow) {
     if (slash != std::wstring::npos) dir.resize(slash);
 
     const std::wstring binDir = dir + L"\\bin";
-    const std::wstring targetExe = binDir + L"\\V4Wa.exe";
+    const std::wstring targetExe = binDir + L"\\ViPER4WindowsRE.exe";
 
     std::wstring cmdLine = L"\"" + targetExe + L"\"";
     if (lpCmdLine && *lpCmdLine) {
@@ -30,7 +30,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR lpCmdLine, int nCmdShow) {
 
     if (!CreateProcessW(targetExe.c_str(), cmdLine.data(), nullptr, nullptr, FALSE,
                         0, nullptr, binDir.c_str(), &si, &pi)) {
-        MessageBoxW(nullptr, L"Could not launch V4Wa runtime (bin\\V4Wa.exe).", L"V4Wa", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, L"Could not launch ViPER4Windows RE runtime (bin\\ViPER4WindowsRE.exe).",
+                    L"ViPER4Windows RE", MB_OK | MB_ICONERROR);
         return 1;
     }
 

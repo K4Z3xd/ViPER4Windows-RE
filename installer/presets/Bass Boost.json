@@ -1,0 +1,50 @@
+{
+    "name":  "Bass Boost",
+    "subtitle":  "Deep sub-octave punch for headphones \u0026 speakers",
+    "params":  {
+                   "masterEnabled":  true,
+                   "limiterEnabled":  true,
+                   "limiterThresholdDb":  -0.3,
+                   "eqEnabled":  true,
+                   "eqMode":  0,
+                   "eqBandsDb":  [
+                                     4.5,
+                                     5,
+                                     2.5,
+                                     0.5,
+                                     -1,
+                                     -0.5,
+                                     0.5,
+                                     1.5,
+                                     2,
+                                     1.5
+                                 ],
+                   "eqBands18Db":  [
+                                       4.5,
+                                       5,
+                                       5,
+                                       4,
+                                       2.5,
+                                       1.5,
+                                       0.5,
+                                       0,
+                                       -1,
+                                       -1,
+                                       -0.5,
+                                       0,
+                                       0.5,
+                                       1,
+                                       1.5,
+                                       2,
+                                       2,
+                                       1.5
+                                   ],
+                   "bassEnabled":  true,
+                   "bassMode":  2,
+                   "bassFrequencyHz":  65,
+                   "bassGainDb":  7.5,
+                   "clarityEnabled":  true,
+                   "clarityMode":  0,
+                   "clarityGainDb":  2.5
+               }
+}

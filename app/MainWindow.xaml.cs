@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
-using V4Wa.Demo.Services;
+using ViPER4WindowsRE.Services;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
@@ -16,7 +16,7 @@ using Windows.UI;
 using Windows.UI.ViewManagement;
 using WinRT.Interop;
 
-namespace V4Wa.Demo;
+namespace ViPER4WindowsRE;
 
 public sealed partial class MainWindow : Window
 {
@@ -47,10 +47,12 @@ public sealed partial class MainWindow : Window
 
     private static readonly FontFamily UiFont = new("Segoe UI");
 
-    private readonly V4WaEngineBridge _bridge = new();
+    private readonly EngineBridge _bridge = new();
     private DspParamsModel _liveParams = new();
     private UiSettingsModel _uiSettingsModel = new();
     private LiveSourceStatusModel _liveStatus = new();
+    private UpdateCheckResult? _latestUpdateResult = null;
+    private bool _updateBusy = false;
     private List<AudioDeviceModel> _devices = new();
     private List<PresetModel> _allPresets = new();
     private List<EqPresetModel> _allEqPresets = new();
@@ -143,6 +145,13 @@ public sealed partial class MainWindow : Window
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
+        try
+        {
+            string icoPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+            if (File.Exists(icoPath)) AppWindow.SetIcon(icoPath);
+        }
+        catch { }
+        AppVersionBadgeText.Text = $"v{EngineBridge.AppVersion}";
         // Wide default window showing 3 crisp columns immediately
         AppWindow.Resize(new SizeInt32(1320, 880));
 
@@ -275,17 +284,21 @@ public sealed partial class MainWindow : Window
         icon.Foreground = isOn ? AccentLightBrush : MutedBrush;
     }
 
-    // ==================== BUILT-IN PRESETS ====================
+    // ==================== DEFAULT PRESETS (Stored as real .json files in preset\ & preset\eq\) ====================
 
-    private static List<PresetModel> CreateBuiltinPresets() => new()
+    private static List<PresetModel> CreateDefaultPresets() => new()
     {
-        new PresetModel { Name = "Flat Reference", Subtitle = "Transparent bit-clean studio baseline", IsBuiltin = true, Params = new DspParamsModel() },
         new PresetModel
         {
-            Name = "Hi-Res Audiophile", Subtitle = "Extended sub-bass + XHiFi micro-detail", IsBuiltin = true,
+            Name = "Flat", Subtitle = "Neutral baseline with all effects off",
+            Params = new DspParamsModel()
+        },
+        new PresetModel
+        {
+            Name = "Hi-Res", Subtitle = "Balanced detail, clean bass & airy treble",
             Params = new DspParamsModel
             {
-                EqEnabled = true,
+                EqEnabled = true, EqMode = 2,
                 EqBandsDb = new[] { 1.5f, 2.0f, 0.5f, 0f, -0.5f, 0f, 0.5f, 1.5f, 2.5f, 2.0f },
                 EqBands18Db = Interpolate10To18(new[] { 1.5f, 2.0f, 0.5f, 0f, -0.5f, 0f, 0.5f, 1.5f, 2.5f, 2.0f }),
                 BassEnabled = true, BassMode = 1, BassFrequencyHz = 55f, BassGainDb = 3.5f,
@@ -295,57 +308,70 @@ public sealed partial class MainWindow : Window
         },
         new PresetModel
         {
-            Name = "Deep Bass Boost", Subtitle = "Subwoofer harmonic punch for IEMs", IsBuiltin = true,
+            Name = "Bass Boost", Subtitle = "Deep sub-octave punch for headphones & speakers",
             Params = new DspParamsModel
             {
-                EqEnabled = true,
+                EqEnabled = true, EqMode = 0,
                 EqBandsDb = new[] { 4.5f, 5.0f, 2.5f, 0.5f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f },
                 EqBands18Db = Interpolate10To18(new[] { 4.5f, 5.0f, 2.5f, 0.5f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f }),
                 BassEnabled = true, BassMode = 2, BassFrequencyHz = 65f, BassGainDb = 7.5f,
                 ClarityEnabled = true, ClarityMode = 0, ClarityGainDb = 2.5f
             }
-        },
-        new PresetModel
-        {
-            Name = "Warm Tube Studio", Subtitle = "6N1J analog warmth + vocal focus", IsBuiltin = true,
-            Params = new DspParamsModel
-            {
-                EqEnabled = true,
-                EqBandsDb = new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0.5f, 1.0f, 1.5f, 1.0f, 0.5f, 0f },
-                EqBands18Db = Interpolate10To18(new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0.5f, 1.0f, 1.5f, 1.0f, 0.5f, 0f }),
-                BassEnabled = true, BassMode = 0, BassFrequencyHz = 60f, BassGainDb = 2.5f,
-                ClarityEnabled = true, ClarityMode = 1, ClarityGainDb = 2.0f,
-                TubeEnabled = true, TubeDrive = 0.42f,
-                SurroundEnabled = true, SurroundDelayMs = 5.0f, StereoWidth = 1.10f
-            }
         }
     };
 
-    private static List<EqPresetModel> CreateBuiltinEqPresets() => new()
+    private static List<EqPresetModel> CreateDefaultEqPresets()
     {
-        new EqPresetModel { Name = "Flat", EqMode = 0, IsBuiltin = true, EqBandsDb = new float[10], EqBands18Db = new float[18] },
-        new EqPresetModel { Name = "V-Shape Fun", EqMode = 0, IsBuiltin = true, EqBandsDb = new[] { 3.5f, 4.0f, 2.0f, 0f, -1.5f, -1.0f, 0.5f, 2.0f, 3.5f, 3.0f }, EqBands18Db = Interpolate10To18(new[] { 3.5f, 4.0f, 2.0f, 0f, -1.5f, -1.0f, 0.5f, 2.0f, 3.5f, 3.0f }) },
-        new EqPresetModel { Name = "Vocal Focus", EqMode = 0, IsBuiltin = true, EqBandsDb = new[] { -1.0f, -0.5f, 0f, 1.0f, 2.0f, 3.0f, 3.5f, 2.0f, 0.5f, 0f }, EqBands18Db = Interpolate10To18(new[] { -1.0f, -0.5f, 0f, 1.0f, 2.0f, 3.0f, 3.5f, 2.0f, 0.5f, 0f }) },
-        new EqPresetModel { Name = "Deep Basshead", EqMode = 1, IsBuiltin = true, EqBandsDb = new[] { 5.5f, 6.0f, 3.5f, 1.0f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f }, EqBands18Db = Interpolate10To18(new[] { 5.5f, 6.0f, 3.5f, 1.0f, -1.0f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f }) },
-        new EqPresetModel { Name = "Acoustic & Jazz", EqMode = 1, IsBuiltin = true, EqBandsDb = new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0f, 0.5f, 1.5f, 2.0f, 2.5f, 2.0f }, EqBands18Db = Interpolate10To18(new[] { 1.0f, 1.5f, 1.0f, 0.5f, 0f, 0.5f, 1.5f, 2.0f, 2.5f, 2.0f }) }
-    };
+        EqPresetModel Make(string name, float[] b10) => new()
+        {
+            Name = name, EqMode = 0, EqBandsDb = b10, EqBands18Db = Interpolate10To18(b10)
+        };
+        return new()
+        {
+            Make("Flat",       new[] {  0.0f,  0.0f, 0.0f,  0.0f,  0.0f,  0.0f, 0.0f, 0.0f, 0.0f, 0.0f }),
+            Make("Pop",        new[] { -1.0f,  1.5f, 3.0f,  2.5f,  0.5f, -0.5f, 0.5f, 1.5f, 2.0f, 1.5f }),
+            Make("Rock",       new[] {  3.5f,  2.5f, 1.0f, -1.0f, -1.5f, -0.5f, 1.5f, 3.0f, 3.5f, 3.0f }),
+            Make("Acoustic",   new[] {  1.5f,  2.0f, 1.5f,  0.5f,  0.0f,  1.0f, 2.0f, 2.5f, 2.0f, 1.5f }),
+            Make("Jazz",       new[] {  2.0f,  1.5f, 0.5f,  1.0f, -0.5f,  0.0f, 1.0f, 1.5f, 2.5f, 2.0f }),
+            Make("Classical",  new[] {  2.5f,  1.5f, 0.5f,  0.0f, -0.5f,  0.0f, 0.5f, 1.5f, 2.5f, 3.0f }),
+            Make("Electronic", new[] {  4.5f,  4.0f, 1.5f,  0.0f, -1.5f,  0.5f, 1.5f, 2.5f, 3.5f, 3.0f }),
+            Make("Hip-Hop",    new[] {  5.0f,  4.5f, 2.0f,  0.5f, -1.0f, -0.5f, 1.0f, 1.5f, 2.0f, 2.5f }),
+            Make("Vocal",      new[] { -1.5f, -1.0f, 0.0f,  1.5f,  3.0f,  3.5f, 3.0f, 1.5f, 0.5f, 0.0f }),
+            Make("R&B",        new[] {  3.0f,  4.0f, 2.0f,  0.5f, -1.0f,  0.5f, 1.5f, 2.0f, 2.5f, 2.0f })
+        };
+    }
 
     private void ReloadPresetsLists()
     {
-        var builtins = CreateBuiltinPresets();
-        var customs = _bridge.ListCustomPresets();
-        _allPresets = builtins
-            .Concat(customs.Where(c => !builtins.Any(b => b.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase))))
-            .ToList();
+        var defaults = CreateDefaultPresets();
+        var eqDefaults = CreateDefaultEqPresets();
+        _bridge.EnsureDefaultPresetsSeeded(defaults, eqDefaults);
 
-        var builtinEq = CreateBuiltinEqPresets();
-        var customEq = _bridge.ListCustomEqPresets();
-        _allEqPresets = builtinEq
-            .Concat(customEq.Where(c => !builtinEq.Any(b => b.Name.Equals(c.Name, StringComparison.OrdinalIgnoreCase))))
+        var diskPresets = _bridge.ListCustomPresets();
+        var priorityOrder = new[] { "Flat", "Hi-Res", "Bass Boost" };
+        _allPresets = diskPresets
+            .OrderBy(p =>
+            {
+                int idx = Array.FindIndex(priorityOrder, x => x.Equals(p.Name, StringComparison.OrdinalIgnoreCase));
+                return idx >= 0 ? idx : 100;
+            })
+            .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        if (_allPresets.Count == 0) _allPresets = defaults;
+
+        var diskEq = _bridge.ListCustomEqPresets();
+        _allEqPresets = diskEq
+            .OrderBy(e => e.Name.Equals("Flat", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (_allEqPresets.Count == 0) _allEqPresets = eqDefaults;
 
         if (!_allPresets.Any(p => p.Name == _uiSettingsModel.SelectedPresetName))
-            _uiSettingsModel.SelectedPresetName = "Flat Reference";
+            _uiSettingsModel.SelectedPresetName = _allPresets[0].Name;
+
+        // Clean up any stale legacy preset pins so the 3 core presets appear cleanly
+        if (!_uiSettingsModel.PinnedPresets.Any(n => _allPresets.Any(p => p.Name == n)))
+            _uiSettingsModel.PinnedPresets = _allPresets.Take(3).Select(p => p.Name).ToList();
 
         RebuildPresetCombo();
         RebuildEqPresetCombo();
@@ -2049,7 +2075,7 @@ public sealed partial class MainWindow : Window
 
     private async void LoadPresetBtn_Click(object sender, RoutedEventArgs e)
     {
-        var files = await CreateFilePicker(".json").PickMultipleFilesAsync();
+        var files = await CreateFilePicker(".json", ".xml").PickMultipleFilesAsync();
         if (files == null || files.Count == 0) return;
         int imported = 0;
         string? lastImported = null;
@@ -2057,7 +2083,7 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                var p = JsonSerializer.Deserialize<PresetModel>(await File.ReadAllTextAsync(f.Path), V4WaEngineBridge.JsonOpts);
+                var p = _bridge.ParsePresetFile(f.Path);
                 if (p != null)
                 {
                     if (string.IsNullOrWhiteSpace(p.Name)) p.Name = System.IO.Path.GetFileNameWithoutExtension(f.Name);
@@ -2073,6 +2099,10 @@ public sealed partial class MainWindow : Window
             if (lastImported != null) ApplyPresetByName(lastImported);
             ShowToast($"Imported {imported} preset(s)");
         }
+        else
+        {
+            ShowToast("Unsupported preset format.");
+        }
     }
 
     private async void SaveEqPresetBtn_Click(object sender, RoutedEventArgs e)
@@ -2081,7 +2111,7 @@ public sealed partial class MainWindow : Window
         if (name == null) return;
         string saved = _bridge.SaveCustomEqPreset(new EqPresetModel
         {
-            Name = name, EqMode = (int)_liveParams.EqMode,
+            Name = name, EqMode = (int)(_liveParams.EqMode & 1u),
             EqBandsDb = (float[])_liveParams.EqBandsDb.Clone(),
             EqBands18Db = (float[])_liveParams.EqBands18Db.Clone()
         });
@@ -2093,14 +2123,34 @@ public sealed partial class MainWindow : Window
 
     private async void LoadEqPresetBtn_Click(object sender, RoutedEventArgs e)
     {
-        var files = await CreateFilePicker(".json").PickMultipleFilesAsync();
+        var files = await CreateFilePicker(".json", ".xml").PickMultipleFilesAsync();
         if (files == null || files.Count == 0) return;
         int imported = 0;
         foreach (var f in files)
         {
             try
             {
-                var ep = JsonSerializer.Deserialize<EqPresetModel>(await File.ReadAllTextAsync(f.Path), V4WaEngineBridge.JsonOpts);
+                EqPresetModel? ep = null;
+                if (f.Path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    var raw = JsonSerializer.Deserialize<EqPresetModel>(await File.ReadAllTextAsync(f.Path), EngineBridge.JsonOpts);
+                    if (raw != null && (raw.EqBandsDb is { Length: 10 } || raw.EqBands18Db is { Length: 18 }))
+                        ep = raw;
+                }
+                if (ep == null)
+                {
+                    var full = _bridge.ParsePresetFile(f.Path);
+                    if (full != null)
+                    {
+                        ep = new EqPresetModel
+                        {
+                            Name = full.Name,
+                            EqMode = (int)(full.Params.EqMode & 1u),
+                            EqBandsDb = (float[])full.Params.EqBandsDb.Clone(),
+                            EqBands18Db = (float[])full.Params.EqBands18Db.Clone()
+                        };
+                    }
+                }
                 if (ep != null)
                 {
                     if (string.IsNullOrWhiteSpace(ep.Name)) ep.Name = System.IO.Path.GetFileNameWithoutExtension(f.Name);
@@ -2220,6 +2270,75 @@ public sealed partial class MainWindow : Window
         await PollLiveTelemetrySafeAsync();
         RebuildDevicesListUi();
         ShowToast("Audio devices refreshed");
+    }
+
+    private async void CheckUpdateBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updateBusy) return;
+        _updateBusy = true;
+        CheckUpdateBtn.IsEnabled = false;
+        InstallUpdateBtn.Visibility = Visibility.Collapsed;
+        UpdateStatusText.Text = "Checking GitHub Releases...";
+        try
+        {
+            var result = await _bridge.CheckForUpdatesAsync();
+            _latestUpdateResult = result;
+            if (!result.Success)
+            {
+                UpdateStatusText.Text = $"Could not check updates: {result.ErrorMessage}";
+                ShowToast("Update check failed.");
+            }
+            else if (result.HasUpdate)
+            {
+                double mb = result.AssetSizeBytes > 0 ? result.AssetSizeBytes / (1024.0 * 1024.0) : 0;
+                string sizeStr = mb > 0 ? $" ({mb:0.0} MB)" : "";
+                UpdateStatusText.Text = $"New version v{result.LatestVersion} is available{sizeStr}! Click Download & Install to update in-place.";
+                InstallUpdateBtn.Visibility = !string.IsNullOrWhiteSpace(result.DownloadUrl) ? Visibility.Visible : Visibility.Collapsed;
+                InstallUpdateBtn.Content = $"Install v{result.LatestVersion}";
+                ShowToast($"Update v{result.LatestVersion} available!");
+            }
+            else
+            {
+                UpdateStatusText.Text = $"You are up to date (v{result.CurrentVersion}).";
+                ShowToast("ViPER4Windows RE is up to date.");
+            }
+        }
+        finally
+        {
+            CheckUpdateBtn.IsEnabled = true;
+            _updateBusy = false;
+        }
+    }
+
+    private async void InstallUpdateBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_updateBusy || _latestUpdateResult == null || string.IsNullOrWhiteSpace(_latestUpdateResult.DownloadUrl)) return;
+        _updateBusy = true;
+        CheckUpdateBtn.IsEnabled = false;
+        InstallUpdateBtn.IsEnabled = false;
+        UpdateStatusText.Text = $"Downloading v{_latestUpdateResult.LatestVersion}...";
+        try
+        {
+            var progress = new Progress<int>(pct =>
+            {
+                UpdateStatusText.Text = $"Downloading v{_latestUpdateResult.LatestVersion}... {pct}%";
+                InstallUpdateBtn.Content = $"{pct}%";
+            });
+            var (ok, msg) = await _bridge.DownloadAndLaunchUpdateAsync(_latestUpdateResult.DownloadUrl, progress);
+            UpdateStatusText.Text = msg;
+            ShowToast(msg);
+            if (ok)
+            {
+                await Task.Delay(800);
+                Application.Current.Exit();
+            }
+        }
+        finally
+        {
+            CheckUpdateBtn.IsEnabled = true;
+            InstallUpdateBtn.IsEnabled = true;
+            _updateBusy = false;
+        }
     }
 
     private async void ShowToast(string msg)

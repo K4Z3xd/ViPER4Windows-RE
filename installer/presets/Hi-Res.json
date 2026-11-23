@@ -1,0 +1,53 @@
+{
+    "name":  "Hi-Res",
+    "subtitle":  "Balanced detail, clean bass \u0026 airy treble",
+    "params":  {
+                   "masterEnabled":  true,
+                   "limiterEnabled":  true,
+                   "limiterThresholdDb":  -0.3,
+                   "eqEnabled":  true,
+                   "eqMode":  2,
+                   "eqBandsDb":  [
+                                     1.5,
+                                     2,
+                                     0.5,
+                                     0,
+                                     -0.5,
+                                     0,
+                                     0.5,
+                                     1.5,
+                                     2.5,
+                                     2
+                                 ],
+                   "eqBands18Db":  [
+                                       1.5,
+                                       2,
+                                       2,
+                                       1,
+                                       0.5,
+                                       0,
+                                       0,
+                                       0,
+                                       -0.5,
+                                       0,
+                                       0,
+                                       0,
+                                       0.5,
+                                       1,
+                                       1.5,
+                                       2,
+                                       2.5,
+                                       2
+                                   ],
+                   "bassEnabled":  true,
+                   "bassMode":  1,
+                   "bassFrequencyHz":  55,
+                   "bassGainDb":  3.5,
+                   "clarityEnabled":  true,
+                   "clarityMode":  2,
+                   "clarityGainDb":  3,
+                   "surroundEnabled":  true,
+                   "surroundDelayMs":  3.5,
+                   "stereoWidth":  1.15
+               }
+}

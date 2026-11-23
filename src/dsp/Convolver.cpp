@@ -6,6 +6,15 @@
 #include <cstring>
 #include <fstream>
 #include <numbers>
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace viper {
 
@@ -170,7 +179,16 @@ bool Convolver::loadActiveIrFromDisk() {
         return false;
     }
 
-    std::wstring widePath(utf8Path.begin(), utf8Path.end());
+    std::wstring widePath;
+#ifdef _WIN32
+    const int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8Path.c_str(), -1, nullptr, 0);
+    if (wlen > 1) {
+        widePath.resize(static_cast<size_t>(wlen - 1));
+        MultiByteToWideChar(CP_UTF8, 0, utf8Path.c_str(), -1, widePath.data(), wlen);
+    }
+#else
+    widePath.assign(utf8Path.begin(), utf8Path.end());
+#endif
     return loadWavFile(widePath);
 }
 

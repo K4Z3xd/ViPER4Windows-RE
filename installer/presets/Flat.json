@@ -1,0 +1,43 @@
+{
+    "name":  "Flat",
+    "subtitle":  "Neutral baseline with all effects off",
+    "params":  {
+                   "masterEnabled":  true,
+                   "limiterEnabled":  true,
+                   "limiterThresholdDb":  -0.3,
+                   "eqEnabled":  false,
+                   "eqMode":  0,
+                   "eqBandsDb":  [
+                                     0,
+                                     0,
+                                     0,
+                                     0,
+                                     0,
+                                     0,
+                                     0,
+                                     0,
+                                     0,
+                                     0
+                                 ],
+                   "eqBands18Db":  [
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0,
+                                       0
+                                   ]
+               }
+}
