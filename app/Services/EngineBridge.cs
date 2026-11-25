@@ -174,7 +174,7 @@ public sealed class UiSettingsModel
 
 public sealed class EngineBridge
 {
-    public const string AppVersion = "1.1.0";
+    public const string AppVersion = "1.2";
     public const string GitHubRepo = "K4Z3xd/ViPER4Windows-RE";
     private const uint MagicVphr = 0x56504852; // 'VPHR'
     private const uint ParamsVersion = 5;
@@ -1348,7 +1348,10 @@ public sealed class EngineBridge
             }
 
             if (Version.TryParse(AppVersion, out var curV) && Version.TryParse(res.LatestVersion, out var latV))
-                res.HasUpdate = latV > curV;
+            {
+                static Version Norm(Version v) => new(v.Major, v.Minor, Math.Max(0, v.Build), Math.Max(0, v.Revision));
+                res.HasUpdate = Norm(latV) > Norm(curV);
+            }
             else
                 res.HasUpdate = !string.Equals(AppVersion, res.LatestVersion, StringComparison.OrdinalIgnoreCase);
 

@@ -10,7 +10,7 @@
 ;   {app}\unins000.exe         (Windows uninstaller)
 
 #define MyAppName "ViPER4Windows RE"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2"
 #define MyAppPublisher "Another ViPER4Windows RE (AI-Powered)"
 #define MyAppExeName "ViPER4WindowsRE.exe"
 

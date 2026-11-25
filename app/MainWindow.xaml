@@ -656,7 +656,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                         <TextBlock Text="Software Updates" FontFamily="Segoe UI" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
                                         <Border Height="22" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
-                                            <TextBlock x:Name="AppVersionBadgeText" Text="v1.1.0" FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="AppVersionBadgeText" Text="v1.2" FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
                                         </Border>
                                     </StackPanel>
                                     <TextBlock x:Name="UpdateStatusText" Text="Check GitHub Releases for newer versions and install updates directly in-app."
