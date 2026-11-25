@@ -19,7 +19,7 @@ public partial class App : Application
                     : AppContext.BaseDirectory;
                 File.WriteAllText(
                     Path.Combine(logDir, "crash.log"),
-                    $"{DateTime.Now}\n{e.Message}\n{e.Exception}\n"
+                    $"{DateTime.Now}\n{e.Message}\n{e.Exception}\n{e.Exception?.StackTrace}\n"
                 );
             }
             catch { }

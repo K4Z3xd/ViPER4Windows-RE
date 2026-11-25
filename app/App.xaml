@@ -73,6 +73,22 @@
                 <Setter Property="BorderBrush" Value="{StaticResource V4WaCardBorderBrush}" />
                 <Setter Property="BorderThickness" Value="1" />
             </Style>
+
+            <!-- Borderless inner TextBox style for Searchable Preset Dropdowns -->
+            <Style x:Key="V4WaSearchDropTextBoxStyle" TargetType="TextBox">
+                <Setter Property="Height" Value="32" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="10,6,6,5" />
+                <Setter Property="FontFamily" Value="Segoe UI" />
+                <Setter Property="FontSize" Value="12.5" />
+                <Setter Property="Foreground" Value="#FFF4F4F5" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="CornerRadius" Value="4,0,0,4" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="IsSpellCheckEnabled" Value="False" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

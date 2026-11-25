@@ -70,6 +70,9 @@ public sealed partial class MainWindow : Window
     private readonly List<StackPanel> _masonryColumns = new();
     private bool _isUpdating = true;
     private bool _settingsOpen = false;
+    private bool _presetSearchFocused = false;
+    private bool _eqPresetSearchFocused = false;
+    private bool _openingFromChevron = false;
     private string _activeSettingsCategory = "Appearance";
     private double _currentWindowWidth = 1280;
     private int _lastModuleCols = 3;
@@ -378,18 +381,36 @@ public sealed partial class MainWindow : Window
         RebuildPinnedPresets();
     }
 
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typed) return typed;
+            var nested = FindVisualChild<T>(child);
+            if (nested != null) return nested;
+        }
+        return null;
+    }
+
+    private static List<string> FilterPresetNames(IEnumerable<string> allNames, string? query)
+    {
+        string q = (query ?? "").Trim();
+        if (q.Length == 0) return allNames.ToList();
+        return allNames
+            .Where(n => n.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(n => n.StartsWith(q, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private void RebuildPresetCombo()
     {
         bool prev = _isUpdating;
         _isUpdating = true;
-        PresetCombo.Items.Clear();
-        int selIdx = 0;
-        for (int i = 0; i < _allPresets.Count; i++)
-        {
-            PresetCombo.Items.Add(new ComboBoxItem { Content = _allPresets[i].Name });
-            if (_allPresets[i].Name == _uiSettingsModel.SelectedPresetName) selIdx = i;
-        }
-        PresetCombo.SelectedIndex = selIdx;
+        PresetSearchBox.ItemsSource = _allPresets.Select(p => p.Name).ToList();
+        PresetSearchBox.Text = _uiSettingsModel.SelectedPresetName;
         _isUpdating = prev;
     }
 
@@ -397,15 +418,10 @@ public sealed partial class MainWindow : Window
     {
         bool prev = _isUpdating;
         _isUpdating = true;
-        EqPresetCombo.Items.Clear();
-        EqPresetCombo.Items.Add(new ComboBoxItem { Content = "Custom" });
-        int selIdx = 0;
-        for (int i = 0; i < _allEqPresets.Count; i++)
-        {
-            EqPresetCombo.Items.Add(new ComboBoxItem { Content = _allEqPresets[i].Name });
-            if (_allEqPresets[i].Name == _uiSettingsModel.SelectedEqPresetName) selIdx = i + 1;
-        }
-        EqPresetCombo.SelectedIndex = selIdx;
+        EqPresetSearchBox.ItemsSource = _allEqPresets.Select(e => e.Name).ToList();
+        EqPresetSearchBox.Text = string.IsNullOrWhiteSpace(_uiSettingsModel.SelectedEqPresetName)
+            ? "Custom"
+            : _uiSettingsModel.SelectedEqPresetName;
         _isUpdating = prev;
     }
 
@@ -1660,7 +1676,7 @@ public sealed partial class MainWindow : Window
                 valText.Text = FormatDb(e.NewValue);
                 _uiSettingsModel.SelectedEqPresetName = "";
                 _isUpdating = true;
-                EqPresetCombo.SelectedIndex = 0;
+                EqPresetSearchBox.Text = "Custom";
                 _isUpdating = false;
                 PushLiveParams();
             };
@@ -2029,10 +2045,82 @@ public sealed partial class MainWindow : Window
         ApplyAccentStops(_accentColorCount, _accentStops[0], _accentStops[1], _accentStops[2], syncPicker: false);
     }
 
-    private void PresetCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void PresetSearchBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        _presetSearchFocused = true;
+        PresetSearchBoxBorder.BorderBrush = MakeAccentBorderBrush();
+        if (!_openingFromChevron)
+        {
+            var tb = FindVisualChild<TextBox>(PresetSearchBox);
+            tb?.SelectAll();
+        }
+    }
+
+    private void PresetSearchBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        _presetSearchFocused = false;
+        PresetSearchBoxBorder.BorderBrush = CardBorderBrush;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_presetSearchFocused && !PresetSearchBox.IsSuggestionListOpen)
+            {
+                bool prev = _isUpdating;
+                _isUpdating = true;
+                PresetSearchBox.Text = _uiSettingsModel.SelectedPresetName;
+                _isUpdating = prev;
+            }
+        });
+    }
+
+    private void PresetSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (_isUpdating || args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        var filtered = FilterPresetNames(_allPresets.Select(p => p.Name), sender.Text);
+        sender.ItemsSource = filtered;
+        sender.IsSuggestionListOpen = filtered.Count > 0;
+    }
+
+    private void PresetSearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     {
         if (_isUpdating) return;
-        if (PresetCombo.SelectedItem is ComboBoxItem item && item.Content is string name) ApplyPresetByName(name);
+        string? target = args.ChosenSuggestion as string;
+        if (string.IsNullOrWhiteSpace(target) && !string.IsNullOrWhiteSpace(args.QueryText))
+        {
+            string q = args.QueryText.Trim();
+            target = _allPresets.FirstOrDefault(p => p.Name.Equals(q, StringComparison.OrdinalIgnoreCase))?.Name
+                     ?? FilterPresetNames(_allPresets.Select(p => p.Name), q).FirstOrDefault();
+        }
+        sender.IsSuggestionListOpen = false;
+        if (!string.IsNullOrWhiteSpace(target))
+        {
+            string chosenName = target;
+            DispatcherQueue.TryEnqueue(() => ApplyPresetByName(chosenName));
+        }
+    }
+
+    private void PresetDropdownBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (PresetSearchBox.IsSuggestionListOpen)
+        {
+            PresetSearchBox.IsSuggestionListOpen = false;
+            return;
+        }
+        var allNames = _allPresets.Select(p => p.Name).ToList();
+        bool prev = _isUpdating;
+        _isUpdating = true;
+        PresetSearchBox.ItemsSource = allNames;
+        _isUpdating = prev;
+
+        _openingFromChevron = true;
+        PresetSearchBox.Focus(FocusState.Programmatic);
+        _openingFromChevron = false;
+
+        PresetSearchBox.IsSuggestionListOpen = allNames.Count > 0;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_presetSearchFocused && allNames.Count > 0)
+                PresetSearchBox.IsSuggestionListOpen = true;
+        });
     }
 
     private void PinPresetBtn_Click(object sender, RoutedEventArgs e)
@@ -2199,39 +2287,116 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void EqPresetCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void ApplyEqPresetByName(string name)
+    {
+        var ep = _allEqPresets.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (ep == null) return;
+
+        if (ep.EqBands18Db is { Length: 18 } && ep.EqBandsDb is { Length: 10 })
+        {
+            _liveParams.EqBandsDb = (float[])ep.EqBandsDb.Clone();
+            _liveParams.EqBands18Db = (float[])ep.EqBands18Db.Clone();
+        }
+        else if (ep.EqBands18Db is { Length: 18 })
+        {
+            _liveParams.EqBands18Db = (float[])ep.EqBands18Db.Clone();
+            _liveParams.EqBandsDb = Downsample18To10(_liveParams.EqBands18Db);
+        }
+        else if (ep.EqBandsDb is { Length: 10 })
+        {
+            _liveParams.EqBandsDb = (float[])ep.EqBandsDb.Clone();
+            _liveParams.EqBands18Db = Interpolate10To18(_liveParams.EqBandsDb);
+        }
+
+        _liveParams.EqEnabled = true;
+        _uiSettingsModel.SelectedEqPresetName = ep.Name;
+        _bridge.SaveUiSettings(_uiSettingsModel);
+
+        _isUpdating = true;
+        RebuildEqPresetCombo();
+        RebuildEqSliders();
+        _isUpdating = false;
+        PushLiveParams();
+    }
+
+    private void EqPresetSearchBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        _eqPresetSearchFocused = true;
+        EqPresetSearchBoxBorder.BorderBrush = MakeAccentBorderBrush();
+        if (!_openingFromChevron)
+        {
+            var tb = FindVisualChild<TextBox>(EqPresetSearchBox);
+            tb?.SelectAll();
+        }
+    }
+
+    private void EqPresetSearchBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        _eqPresetSearchFocused = false;
+        EqPresetSearchBoxBorder.BorderBrush = CardBorderBrush;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_eqPresetSearchFocused && !EqPresetSearchBox.IsSuggestionListOpen)
+            {
+                bool prev = _isUpdating;
+                _isUpdating = true;
+                EqPresetSearchBox.Text = string.IsNullOrWhiteSpace(_uiSettingsModel.SelectedEqPresetName)
+                    ? "Custom"
+                    : _uiSettingsModel.SelectedEqPresetName;
+                _isUpdating = prev;
+            }
+        });
+    }
+
+    private void EqPresetSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (_isUpdating || args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        var filtered = FilterPresetNames(_allEqPresets.Select(p => p.Name), sender.Text);
+        sender.ItemsSource = filtered;
+        sender.IsSuggestionListOpen = filtered.Count > 0;
+    }
+
+    private void EqPresetSearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     {
         if (_isUpdating) return;
-        if (EqPresetCombo.SelectedItem is ComboBoxItem item && item.Content is string name && name != "Custom")
+        string? target = args.ChosenSuggestion as string;
+        if (string.IsNullOrWhiteSpace(target) && !string.IsNullOrWhiteSpace(args.QueryText))
         {
-            var ep = _allEqPresets.FirstOrDefault(x => x.Name == name);
-            if (ep == null) return;
-
-            if (ep.EqBands18Db is { Length: 18 } && ep.EqBandsDb is { Length: 10 })
-            {
-                _liveParams.EqBandsDb = (float[])ep.EqBandsDb.Clone();
-                _liveParams.EqBands18Db = (float[])ep.EqBands18Db.Clone();
-            }
-            else if (ep.EqBands18Db is { Length: 18 })
-            {
-                _liveParams.EqBands18Db = (float[])ep.EqBands18Db.Clone();
-                _liveParams.EqBandsDb = Downsample18To10(_liveParams.EqBands18Db);
-            }
-            else if (ep.EqBandsDb is { Length: 10 })
-            {
-                _liveParams.EqBandsDb = (float[])ep.EqBandsDb.Clone();
-                _liveParams.EqBands18Db = Interpolate10To18(_liveParams.EqBandsDb);
-            }
-
-            _liveParams.EqEnabled = true;
-            _uiSettingsModel.SelectedEqPresetName = name;
-            _bridge.SaveUiSettings(_uiSettingsModel);
-
-            _isUpdating = true;
-            RebuildEqSliders();
-            _isUpdating = false;
-            PushLiveParams();
+            string q = args.QueryText.Trim();
+            target = _allEqPresets.FirstOrDefault(p => p.Name.Equals(q, StringComparison.OrdinalIgnoreCase))?.Name
+                     ?? FilterPresetNames(_allEqPresets.Select(p => p.Name), q).FirstOrDefault();
         }
+        sender.IsSuggestionListOpen = false;
+        if (!string.IsNullOrWhiteSpace(target))
+        {
+            string chosenName = target;
+            DispatcherQueue.TryEnqueue(() => ApplyEqPresetByName(chosenName));
+        }
+    }
+
+    private void EqPresetDropdownBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (EqPresetSearchBox.IsSuggestionListOpen)
+        {
+            EqPresetSearchBox.IsSuggestionListOpen = false;
+            return;
+        }
+        var allNames = _allEqPresets.Select(p => p.Name).ToList();
+        bool prev = _isUpdating;
+        _isUpdating = true;
+        EqPresetSearchBox.ItemsSource = allNames;
+        _isUpdating = prev;
+
+        _openingFromChevron = true;
+        EqPresetSearchBox.Focus(FocusState.Programmatic);
+        _openingFromChevron = false;
+
+        EqPresetSearchBox.IsSuggestionListOpen = allNames.Count > 0;
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (_eqPresetSearchFocused && allNames.Count > 0)
+                EqPresetSearchBox.IsSuggestionListOpen = true;
+        });
     }
 
     private void ResetEqBtn_Click(object sender, RoutedEventArgs e)

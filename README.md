@@ -33,8 +33,33 @@ Another **ViPER4Windows RE** — a system-wide audio DSP enhancer for **Windows 
 ## Installation & Updates
 
 1. Download **`ViPER4Windows-RE-Setup-x64.exe`** from [Releases](https://github.com/K4Z3xd/ViPER4Windows-RE/releases).
-2. Run the installer (Administrator privileges are required to register the audio APO).
+2. Run the installer (Administrator privileges are required to register the audio APO). By default, setup attaches the APO to your current default Windows playback device.
 3. To update later, click **Check for Updates** in **Settings → About**, or download and run a newer installer over your existing installation — your presets, `.irs`, `.vdc`, and settings are preserved.
+
+### Installing on Other Audio Outputs
+
+If you switch to a different playback device (USB DAC, Bluetooth headphones, speakers, HDMI/DisplayPort audio, or S/PDIF), you can attach ViPER4Windows RE to it in two ways:
+
+**Option 1 — Inside the App (Recommended)**
+1. Connect or power on the audio output device you want to use.
+2. Open **ViPER4Windows RE**, click the **Settings** (gear) icon in the top-right corner, and open **Devices & APO**.
+3. Click **Refresh Devices** if the device was just connected.
+4. Locate your output device in the list and click **Install / Repair APO** (confirm the Windows Administrator prompt).
+5. Windows Audio (`Audiosrv`) restarts briefly and the device status updates to **INSTALLED** (and **ACTIVE** when it is the active playback device).
+6. You can install the APO on **multiple output devices** simultaneously. To revert any device to stock Windows audio, click **Restore Factory** on that device.
+
+**Option 2 — PowerShell Command Line (Optional)**
+Run an elevated PowerShell window and target either the current default output or a specific device GUID (displayed under each device in **Settings → Devices & APO**):
+
+```powershell
+# Attach to the current default playback device
+powershell -ExecutionPolicy Bypass -File "C:\Program Files\ViPER4Windows RE\bin\scripts\install_apo.ps1" -AutoDefault
+
+# Attach to a specific playback device by GUID
+powershell -ExecutionPolicy Bypass -File "C:\Program Files\ViPER4Windows RE\bin\scripts\install_apo.ps1" -EndpointGuid "{device-guid}"
+```
+
+> **Note:** Media players running in **WASAPI Exclusive** or **ASIO** mode bypass all Windows APOs by design. Use standard Windows Shared Mode (or WASAPI Shared) for ViPER4Windows RE processing.
 
 ### Installed Folder Layout
 ```text

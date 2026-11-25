@@ -151,11 +151,45 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <ComboBox x:Name="PresetCombo" Grid.Row="0" Grid.Column="0" Style="{StaticResource V4WaToolbarComboStyle}" HorizontalAlignment="Stretch" SelectionChanged="PresetCombo_SelectionChanged" SelectedIndex="0">
-                            <ComboBoxItem Content="Flat" />
-                            <ComboBoxItem Content="Hi-Res" />
-                            <ComboBoxItem Content="Bass Boost" />
-                        </ComboBox>
+                        <Border x:Name="PresetSearchBoxBorder" Grid.Row="0" Grid.Column="0"
+                                Height="34" CornerRadius="4" BorderThickness="1"
+                                Background="{StaticResource V4WaSubtleBgBrush}"
+                                BorderBrush="{StaticResource V4WaCardBorderBrush}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="32" />
+                                </Grid.ColumnDefinitions>
+                                <AutoSuggestBox x:Name="PresetSearchBox" Grid.Column="0"
+                                                HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                PlaceholderText="Search or select preset..."
+                                                TextBoxStyle="{StaticResource V4WaSearchDropTextBoxStyle}"
+                                                UpdateTextOnSelect="True" MaxSuggestionListHeight="320"
+                                                GotFocus="PresetSearchBox_GotFocus"
+                                                LostFocus="PresetSearchBox_LostFocus"
+                                                TextChanged="PresetSearchBox_TextChanged"
+                                                QuerySubmitted="PresetSearchBox_QuerySubmitted">
+                                    <AutoSuggestBox.Resources>
+                                        <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                        <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                        <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
+                                        <SolidColorBrush x:Key="TextControlElevationBorderBrushFocused" Color="Transparent" />
+                                    </AutoSuggestBox.Resources>
+                                </AutoSuggestBox>
+                                <Button x:Name="PresetDropdownBtn" Grid.Column="1"
+                                        Width="32" Height="32" Padding="0" CornerRadius="0,3,3,0"
+                                        BorderThickness="0" Background="Transparent"
+                                        AllowFocusOnInteraction="False" IsTabStop="False"
+                                        Click="PresetDropdownBtn_Click"
+                                        ToolTipService.ToolTip="Show all presets">
+                                    <FontIcon Glyph="&#xE70D;" FontSize="11" Foreground="#FFB4B4BE" />
+                                </Button>
+                            </Grid>
+                        </Border>
 
                         <StackPanel x:Name="PresetActionsPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="8">
                             <Button x:Name="PinPresetBtn" Content="Pinned" Style="{StaticResource V4WaToolbarButtonStyle}"
@@ -211,19 +245,44 @@
 
                             <StackPanel x:Name="EqActionsPanel" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                 <StackPanel x:Name="EqPresetToolbar" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                    <ComboBox x:Name="EqPresetCombo" Style="{StaticResource V4WaToolbarComboStyle}" Width="140" SelectionChanged="EqPresetCombo_SelectionChanged" SelectedIndex="0">
-                                        <ComboBoxItem Content="Custom" />
-                                        <ComboBoxItem Content="Flat" />
-                                        <ComboBoxItem Content="Pop" />
-                                        <ComboBoxItem Content="Rock" />
-                                        <ComboBoxItem Content="Acoustic" />
-                                        <ComboBoxItem Content="Jazz" />
-                                        <ComboBoxItem Content="Classical" />
-                                        <ComboBoxItem Content="Electronic" />
-                                        <ComboBoxItem Content="Hip-Hop" />
-                                        <ComboBoxItem Content="Vocal" />
-                                        <ComboBoxItem Content="R&amp;B" />
-                                    </ComboBox>
+                                    <Border x:Name="EqPresetSearchBoxBorder" Width="184" Height="34" CornerRadius="4" BorderThickness="1"
+                                            Background="{StaticResource V4WaSubtleBgBrush}"
+                                            BorderBrush="{StaticResource V4WaCardBorderBrush}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="30" />
+                                            </Grid.ColumnDefinitions>
+                                            <AutoSuggestBox x:Name="EqPresetSearchBox" Grid.Column="0"
+                                                            HorizontalAlignment="Stretch" VerticalAlignment="Center"
+                                                            PlaceholderText="Search EQ..."
+                                                            TextBoxStyle="{StaticResource V4WaSearchDropTextBoxStyle}"
+                                                            UpdateTextOnSelect="True" MaxSuggestionListHeight="320"
+                                                            GotFocus="EqPresetSearchBox_GotFocus"
+                                                            LostFocus="EqPresetSearchBox_LostFocus"
+                                                            TextChanged="EqPresetSearchBox_TextChanged"
+                                                            QuerySubmitted="EqPresetSearchBox_QuerySubmitted">
+                                                <AutoSuggestBox.Resources>
+                                                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                                    <SolidColorBrush x:Key="TextControlElevationBorderBrush" Color="Transparent" />
+                                                    <SolidColorBrush x:Key="TextControlElevationBorderBrushFocused" Color="Transparent" />
+                                                </AutoSuggestBox.Resources>
+                                            </AutoSuggestBox>
+                                            <Button x:Name="EqPresetDropdownBtn" Grid.Column="1"
+                                                    Width="30" Height="32" Padding="0" CornerRadius="0,3,3,0"
+                                                    BorderThickness="0" Background="Transparent"
+                                                    AllowFocusOnInteraction="False" IsTabStop="False"
+                                                    Click="EqPresetDropdownBtn_Click"
+                                                    ToolTipService.ToolTip="Show all EQ presets">
+                                                <FontIcon Glyph="&#xE70D;" FontSize="11" Foreground="#FFB4B4BE" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
                                     <Button Content="Save" Style="{StaticResource V4WaToolbarButtonStyle}" Click="SaveEqPresetBtn_Click" />
                                     <Button Content="Load" Style="{StaticResource V4WaToolbarButtonStyle}" Click="LoadEqPresetBtn_Click" />
                                     <Button Content="Reset" Style="{StaticResource V4WaToolbarButtonStyle}" Click="ResetEqBtn_Click" />
