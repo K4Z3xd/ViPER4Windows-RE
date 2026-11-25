@@ -5,6 +5,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using ViPER4WindowsRE.Services;
@@ -12,6 +13,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Storage.Pickers;
+using Windows.System;
 using Windows.UI;
 using Windows.UI.ViewManagement;
 using WinRT.Interop;
@@ -204,6 +206,11 @@ public sealed partial class MainWindow : Window
 
         ApplySurfaceTheme(_uiSettingsModel.Theme, persist: false);
         SelectSettingsCategory("Appearance");
+
+        RootBackdropGrid.AddHandler(
+            UIElement.PointerPressedEvent,
+            new PointerEventHandler(RootBackdropGrid_PointerPressed),
+            handledEventsToo: true);
 
         HydrateUiFromLiveParams();
 
@@ -2045,6 +2052,77 @@ public sealed partial class MainWindow : Window
         ApplyAccentStops(_accentColorCount, _accentStops[0], _accentStops[1], _accentStops[2], syncPicker: false);
     }
 
+    private static bool IsDescendantOf(DependencyObject? node, DependencyObject ancestor)
+    {
+        var cur = node;
+        while (cur != null)
+        {
+            if (ReferenceEquals(cur, ancestor)) return true;
+            cur = VisualTreeHelper.GetParent(cur);
+        }
+        return false;
+    }
+
+    private static bool HasInteractiveControlAncestor(DependencyObject? node)
+    {
+        var cur = node;
+        while (cur != null)
+        {
+            if (cur is ButtonBase or Slider or ComboBox or TextBox or AutoSuggestBox or ToggleSwitch or ColorPicker)
+                return true;
+            cur = VisualTreeHelper.GetParent(cur);
+        }
+        return false;
+    }
+
+    private void DismissSearchBoxes(bool moveFocusToRoot)
+    {
+        PresetSearchBox.IsSuggestionListOpen = false;
+        EqPresetSearchBox.IsSuggestionListOpen = false;
+        PresetSearchBoxBorder.BorderBrush = CardBorderBrush;
+        EqPresetSearchBoxBorder.BorderBrush = CardBorderBrush;
+
+        bool prev = _isUpdating;
+        _isUpdating = true;
+        PresetSearchBox.Text = _uiSettingsModel.SelectedPresetName;
+        EqPresetSearchBox.Text = string.IsNullOrWhiteSpace(_uiSettingsModel.SelectedEqPresetName)
+            ? "Custom"
+            : _uiSettingsModel.SelectedEqPresetName;
+        _isUpdating = prev;
+
+        _presetSearchFocused = false;
+        _eqPresetSearchFocused = false;
+
+        if (moveFocusToRoot)
+        {
+            DspScrollViewer.IsTabStop = true;
+            DspScrollViewer.Focus(FocusState.Programmatic);
+            DspScrollViewer.IsTabStop = false;
+        }
+    }
+
+    private void RootBackdropGrid_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_presetSearchFocused && !_eqPresetSearchFocused &&
+            !PresetSearchBox.IsSuggestionListOpen && !EqPresetSearchBox.IsSuggestionListOpen)
+            return;
+
+        var src = e.OriginalSource as DependencyObject;
+        if (IsDescendantOf(src, PresetSearchBoxBorder) || IsDescendantOf(src, EqPresetSearchBoxBorder))
+            return;
+
+        DismissSearchBoxes(moveFocusToRoot: !HasInteractiveControlAncestor(src));
+    }
+
+    private void SearchBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Escape)
+        {
+            DismissSearchBoxes(moveFocusToRoot: true);
+            e.Handled = true;
+        }
+    }
+
     private void PresetSearchBox_GotFocus(object sender, RoutedEventArgs e)
     {
         _presetSearchFocused = true;
@@ -2094,7 +2172,15 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(target))
         {
             string chosenName = target;
-            DispatcherQueue.TryEnqueue(() => ApplyPresetByName(chosenName));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                ApplyPresetByName(chosenName);
+                DismissSearchBoxes(moveFocusToRoot: true);
+            });
+        }
+        else
+        {
+            DismissSearchBoxes(moveFocusToRoot: true);
         }
     }
 
@@ -2370,7 +2456,15 @@ public sealed partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(target))
         {
             string chosenName = target;
-            DispatcherQueue.TryEnqueue(() => ApplyEqPresetByName(chosenName));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                ApplyEqPresetByName(chosenName);
+                DismissSearchBoxes(moveFocusToRoot: true);
+            });
+        }
+        else
+        {
+            DismissSearchBoxes(moveFocusToRoot: true);
         }
     }
 

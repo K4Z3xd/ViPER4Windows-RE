@@ -81,7 +81,7 @@
         </Border>
 
         <!-- DSP CONSOLE VIEW (Fluid full-width Masonry layout for 1..5 columns) -->
-        <ScrollViewer x:Name="DspScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="20,6,20,28">
+        <ScrollViewer x:Name="DspScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" Padding="20,6,20,28" UseSystemFocusVisuals="False" IsTabStop="False">
             <StackPanel HorizontalAlignment="Stretch" Spacing="12">
 
                 <!-- Live Signal Path Card (Aligned 36px left & right with Top Studio Header) -->
@@ -167,6 +167,7 @@
                                                 UpdateTextOnSelect="True" MaxSuggestionListHeight="320"
                                                 GotFocus="PresetSearchBox_GotFocus"
                                                 LostFocus="PresetSearchBox_LostFocus"
+                                                KeyDown="SearchBox_KeyDown"
                                                 TextChanged="PresetSearchBox_TextChanged"
                                                 QuerySubmitted="PresetSearchBox_QuerySubmitted">
                                     <AutoSuggestBox.Resources>
@@ -260,6 +261,7 @@
                                                             UpdateTextOnSelect="True" MaxSuggestionListHeight="320"
                                                             GotFocus="EqPresetSearchBox_GotFocus"
                                                             LostFocus="EqPresetSearchBox_LostFocus"
+                                                            KeyDown="SearchBox_KeyDown"
                                                             TextChanged="EqPresetSearchBox_TextChanged"
                                                             QuerySubmitted="EqPresetSearchBox_QuerySubmitted">
                                                 <AutoSuggestBox.Resources>
