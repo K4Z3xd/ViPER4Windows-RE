@@ -10,7 +10,8 @@
 ;   {app}\unins000.exe         (Windows uninstaller)
 
 #define MyAppName "ViPER4Windows RE"
-#define MyAppVersion "1.2"
+#define MyAppVersion "1.2.1"
+#define MyAppDisplayVersion "1.2 Hotfix"
 #define MyAppPublisher "Another ViPER4Windows RE (AI-Powered)"
 #define MyAppExeName "ViPER4WindowsRE.exe"
 
@@ -18,7 +19,7 @@
 AppId={{8F4E2B1A-7C3D-4E9A-B12F-6A8C4D9E105A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} {#MyAppVersion}
+AppVerName={#MyAppName} {#MyAppDisplayVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
@@ -36,7 +37,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
-UninstallDisplayName={#MyAppName} ({#MyAppVersion})
+UninstallDisplayName={#MyAppName} ({#MyAppDisplayVersion})
 CloseApplications=yes
 RestartApplications=yes
 

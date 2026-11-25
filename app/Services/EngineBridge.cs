@@ -174,7 +174,8 @@ public sealed class UiSettingsModel
 
 public sealed class EngineBridge
 {
-    public const string AppVersion = "1.2";
+    public const string AppVersion = "1.2.1";
+    public const string AppDisplayVersion = "1.2 Hotfix";
     public const string GitHubRepo = "K4Z3xd/ViPER4Windows-RE";
     private const uint MagicVphr = 0x56504852; // 'VPHR'
     private const uint ParamsVersion = 5;

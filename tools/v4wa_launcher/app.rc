@@ -3,8 +3,8 @@
 1 ICON "..\\..\\app\\Assets\\app.ico"
 
 1 VERSIONINFO
-FILEVERSION     1,2,0,0
-PRODUCTVERSION  1,2,0,0
+FILEVERSION     1,2,1,0
+PRODUCTVERSION  1,2,1,0
 FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
 FILEFLAGS       0
 FILEOS          VOS_NT_WINDOWS32
@@ -17,11 +17,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "ViPER4Windows RE"
             VALUE "FileDescription",  "ViPER4Windows RE Audio Console"
-            VALUE "FileVersion",      "1.2.0.0"
+            VALUE "FileVersion",      "1.2.1.0"
             VALUE "InternalName",     "ViPER4WindowsRE"
             VALUE "OriginalFilename", "ViPER4WindowsRE.exe"
             VALUE "ProductName",      "ViPER4Windows RE"
-            VALUE "ProductVersion",   "1.2"
+            VALUE "ProductVersion",   "1.2 Hotfix"
         END
     END
     BLOCK "VarFileInfo"

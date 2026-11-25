@@ -156,7 +156,7 @@ public sealed partial class MainWindow : Window
             if (File.Exists(icoPath)) AppWindow.SetIcon(icoPath);
         }
         catch { }
-        AppVersionBadgeText.Text = $"v{EngineBridge.AppVersion}";
+        AppVersionBadgeText.Text = $"v{EngineBridge.AppDisplayVersion}";
         // Wide default window showing 3 crisp columns immediately
         AppWindow.Resize(new SizeInt32(1320, 880));
 
@@ -211,6 +211,15 @@ public sealed partial class MainWindow : Window
             UIElement.PointerPressedEvent,
             new PointerEventHandler(RootBackdropGrid_PointerPressed),
             handledEventsToo: true);
+        PresetSearchBox.AddHandler(
+            UIElement.PointerPressedEvent,
+            new PointerEventHandler(PresetSearchBox_PointerPressed),
+            handledEventsToo: true);
+        EqPresetSearchBox.AddHandler(
+            UIElement.PointerPressedEvent,
+            new PointerEventHandler(EqPresetSearchBox_PointerPressed),
+            handledEventsToo: true);
+        RootBackdropGrid.Loaded += (_, _) => DismissSearchBoxes(moveFocusToRoot: true);
 
         HydrateUiFromLiveParams();
 
@@ -1506,6 +1515,14 @@ public sealed partial class MainWindow : Window
 
     private void RebuildPinnedPresets()
     {
+        // Prevent WinUI FocusManager from jumping focus to PresetSearchBox when a focused pinned button is removed
+        if (RootBackdropGrid.XamlRoot != null &&
+            FocusManager.GetFocusedElement(RootBackdropGrid.XamlRoot) is DependencyObject focused &&
+            IsDescendantOf(focused, PinnedPresetsGrid))
+        {
+            DismissSearchBoxes(moveFocusToRoot: true);
+        }
+
         PinnedPresetsGrid.Children.Clear();
         PinnedPresetsGrid.ColumnDefinitions.Clear();
         PinnedPresetsGrid.RowDefinitions.Clear();
@@ -1550,7 +1567,11 @@ public sealed partial class MainWindow : Window
             stack.Children.Add(new TextBlock { Text = name, FontFamily = UiFont, FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = TextPrimaryBrush });
             stack.Children.Add(new TextBlock { Text = meta.Subtitle ?? "Custom preset", FontFamily = UiFont, FontSize = 11.5, Foreground = TextSecondaryBrush, TextTrimming = TextTrimming.CharacterEllipsis });
             btn.Content = stack;
-            btn.Click += (_, _) => ApplyPresetByName(name);
+            btn.Click += (_, _) =>
+            {
+                DismissSearchBoxes(moveFocusToRoot: true);
+                ApplyPresetByName(name);
+            };
 
             Grid.SetRow(btn, i / cols);
             Grid.SetColumn(btn, i % cols);
@@ -2127,11 +2148,36 @@ public sealed partial class MainWindow : Window
     {
         _presetSearchFocused = true;
         PresetSearchBoxBorder.BorderBrush = MakeAccentBorderBrush();
-        if (!_openingFromChevron)
+        if (_openingFromChevron) return;
+
+        var allNames = _allPresets.Select(p => p.Name).ToList();
+        bool prev = _isUpdating;
+        _isUpdating = true;
+        PresetSearchBox.Text = "";
+        PresetSearchBox.ItemsSource = allNames;
+        _isUpdating = prev;
+
+        if (allNames.Count > 0)
         {
-            var tb = FindVisualChild<TextBox>(PresetSearchBox);
-            tb?.SelectAll();
+            PresetSearchBox.IsSuggestionListOpen = true;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_presetSearchFocused)
+                    PresetSearchBox.IsSuggestionListOpen = true;
+            });
         }
+    }
+
+    private void PresetSearchBox_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_presetSearchFocused || PresetSearchBox.IsSuggestionListOpen) return;
+        var filtered = FilterPresetNames(_allPresets.Select(p => p.Name), PresetSearchBox.Text);
+        if (filtered.Count == 0) return;
+        bool prev = _isUpdating;
+        _isUpdating = true;
+        PresetSearchBox.ItemsSource = filtered;
+        _isUpdating = prev;
+        PresetSearchBox.IsSuggestionListOpen = true;
     }
 
     private void PresetSearchBox_LostFocus(object sender, RoutedEventArgs e)
@@ -2409,11 +2455,36 @@ public sealed partial class MainWindow : Window
     {
         _eqPresetSearchFocused = true;
         EqPresetSearchBoxBorder.BorderBrush = MakeAccentBorderBrush();
-        if (!_openingFromChevron)
+        if (_openingFromChevron) return;
+
+        var allNames = _allEqPresets.Select(p => p.Name).ToList();
+        bool prev = _isUpdating;
+        _isUpdating = true;
+        EqPresetSearchBox.Text = "";
+        EqPresetSearchBox.ItemsSource = allNames;
+        _isUpdating = prev;
+
+        if (allNames.Count > 0)
         {
-            var tb = FindVisualChild<TextBox>(EqPresetSearchBox);
-            tb?.SelectAll();
+            EqPresetSearchBox.IsSuggestionListOpen = true;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_eqPresetSearchFocused)
+                    EqPresetSearchBox.IsSuggestionListOpen = true;
+            });
         }
+    }
+
+    private void EqPresetSearchBox_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_eqPresetSearchFocused || EqPresetSearchBox.IsSuggestionListOpen) return;
+        var filtered = FilterPresetNames(_allEqPresets.Select(p => p.Name), EqPresetSearchBox.Text);
+        if (filtered.Count == 0) return;
+        bool prev = _isUpdating;
+        _isUpdating = true;
+        EqPresetSearchBox.ItemsSource = filtered;
+        _isUpdating = prev;
+        EqPresetSearchBox.IsSuggestionListOpen = true;
     }
 
     private void EqPresetSearchBox_LostFocus(object sender, RoutedEventArgs e)
@@ -2558,7 +2629,7 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                UpdateStatusText.Text = $"You are up to date (v{result.CurrentVersion}).";
+                UpdateStatusText.Text = $"You are up to date (v{EngineBridge.AppDisplayVersion}).";
                 ShowToast("ViPER4Windows RE is up to date.");
             }
         }

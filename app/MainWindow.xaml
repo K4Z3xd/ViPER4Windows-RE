@@ -164,7 +164,8 @@
                                                 HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                                 PlaceholderText="Search or select preset..."
                                                 TextBoxStyle="{StaticResource V4WaSearchDropTextBoxStyle}"
-                                                UpdateTextOnSelect="True" MaxSuggestionListHeight="320"
+                                                ItemContainerStyle="{StaticResource V4WaSearchDropItemStyle}"
+                                                UpdateTextOnSelect="True" MaxSuggestionListHeight="226"
                                                 GotFocus="PresetSearchBox_GotFocus"
                                                 LostFocus="PresetSearchBox_LostFocus"
                                                 KeyDown="SearchBox_KeyDown"
@@ -258,7 +259,8 @@
                                                             HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                                             PlaceholderText="Search EQ..."
                                                             TextBoxStyle="{StaticResource V4WaSearchDropTextBoxStyle}"
-                                                            UpdateTextOnSelect="True" MaxSuggestionListHeight="320"
+                                                            ItemContainerStyle="{StaticResource V4WaSearchDropItemStyle}"
+                                                            UpdateTextOnSelect="True" MaxSuggestionListHeight="226"
                                                             GotFocus="EqPresetSearchBox_GotFocus"
                                                             LostFocus="EqPresetSearchBox_LostFocus"
                                                             KeyDown="SearchBox_KeyDown"
@@ -656,7 +658,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                                         <TextBlock Text="Software Updates" FontFamily="Segoe UI" FontSize="15.5" FontWeight="SemiBold" Foreground="White" />
                                         <Border Height="22" Background="{StaticResource V4WaSubtleBgBrush}" BorderBrush="{StaticResource V4WaCardBorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,0">
-                                            <TextBlock x:Name="AppVersionBadgeText" Text="v1.2" FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="AppVersionBadgeText" Text="v1.2 Hotfix" FontFamily="Segoe UI" FontSize="11" FontWeight="SemiBold" Foreground="#FFE4E4E7" VerticalAlignment="Center" />
                                         </Border>
                                     </StackPanel>
                                     <TextBlock x:Name="UpdateStatusText" Text="Check GitHub Releases for newer versions and install updates directly in-app."
